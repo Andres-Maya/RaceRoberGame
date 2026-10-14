@@ -44,7 +44,10 @@ La banda sonora es brutal death metal sintetizado en tiempo real con WebAudio (`
 
 - Dos guitarras afinadas muy grave con distorsión, abiertas a izquierda y derecha: trémolo, *palm mutes* y acordes de quinta. El bajo dobla la tónica.
 - Batería con blast beats, doble bombo, crash y china. Cada pieza se sintetiza una vez en un buffer para que el costo por golpe sea mínimo.
-- Coro épico con reverberación en el menú, los *breakdowns* y la pantalla de victoria.
+- Coro épico con reverberación en la historia de cada nivel, los *breakdowns* y la pantalla de victoria.
+- **Menú principal:** una pieza tranquila en La menor, con arpegios de guitarra limpia, coro suave y percusión mínima.
+- **Al morir:** cuando caen todas las motos, el metal se corta y entra un réquiem lento en Re menor (campana, coro trágico y timbal) que sigue en la pantalla de derrota.
+- Los cambios de pieza tienen una transición suave.
 - Cada nivel tiene su tonalidad, tempo (de 176 a 222 BPM) y escala (frigia, frigia dominante, locria, cromática). Los riffs se generan con semilla, así que se repiten como en una canción.
 - La intensidad sigue a la acción: en calma suenan *chugs* y *breakdowns*; con muchos perseguidores, la tormenta cerca o la meta a la vista, entran los blast beats.
 
