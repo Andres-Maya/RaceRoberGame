@@ -103,7 +103,10 @@ Notas técnicas:
 - **Render:** Three.js con cámara en perspectiva mirando hacia abajo. Así los edificios ganan algo de paralaje, como en GTA 1.
 - **Física:** Rapier 3D con la traslación en Y y las rotaciones bloqueadas. El juego ocurre en el plano XZ y todos los colliders tienen la misma altura física, así que los contactos siempre son horizontales.
 - **Controlador arcade:** el acelerador cambia directamente la velocidad longitudinal, y el agarre solo amortigua la velocidad lateral. Por eso, sobre aceite la moto derrapa y conserva su inercia.
-- **Mapa:** se genera por delante de los jugadores y se libera por detrás, lo que mantiene estable la cantidad de cuerpos físicos y mallas.
+- **Mapa:** se genera por delante de los jugadores y se libera por detrás, lo que mantiene estable la cantidad de cuerpos físicos y mallas. Cada partida tiene un trazado distinto (frecuencias y amplitudes de curva aleatorias).
+- **Contenido diferido:** el paisaje se crea con anticipación, pero los obstáculos, el tráfico, los zombis y los retenes aparecen cuando la moto está a ~85 m. Así nada los choca antes de que llegues, y los autos de los cruces se programan para atravesarse justo delante de ti.
+- **Formaciones de obstáculos:** además del reparto suelto hay slaloms, muros con un hueco reservado, chicanes, derrames de carga, filas de autos estacionados, hordas de zombis y tramos de respiro. Los huecos siempre dejan paso.
+- **Ciudad variable:** cruces a intervalos irregulares y parques o estacionamientos entre los edificios. En el desierto aparecen mesetas y oasis.
 
 ## Próximos pasos sugeridos
 
