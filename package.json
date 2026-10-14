@@ -1,10 +1,12 @@
 {
   "name": "racerobergame",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Escape en moto tras un robo: juego 2D cenital estilo GTA 1 con Three.js, Rapier y dificultad adaptativa por IA",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
@@ -13,15 +15,18 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/Andres-Maya/RaceRoberGame/issues"
   },
   "homepage": "https://github.com/Andres-Maya/RaceRoberGame#readme",
   "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "~5.9",
     "vite": "^8.3.4"
   }
 }
