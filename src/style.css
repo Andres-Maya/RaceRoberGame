@@ -538,10 +538,6 @@ button small {
   margin-left: 6px;
 }
 
-.level-row.locked {
-  opacity: 0.45;
-}
-
 .controls-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

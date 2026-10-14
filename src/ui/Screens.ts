@@ -58,7 +58,6 @@ export class Screens {
   // ------------------------------------------------------------ menú
 
   menu(save: SaveData, a: { one: Action; two: Action; select: Action; controls: Action; stats: Action; mute: Action }): void {
-    const canSelect = save.profile !== null && save.unlocked > 0;
     this.show(
       `
       <div class="logo">
@@ -70,16 +69,17 @@ export class Screens {
       <div class="menu-buttons">
         <button data-action="one" class="primary">1 JUGADOR <kbd>1</kbd></button>
         <button data-action="two">2 JUGADORES · mismo teclado <kbd>2</kbd></button>
-        <button data-action="select" ${canSelect ? '' : 'disabled'}>SELECCIONAR NIVEL ${canSelect ? '' : '<small>(completa el nivel 0)</small>'}</button>
+        <button data-action="select">SELECCIONAR NIVEL <kbd>3</kbd></button>
         <button data-action="controls">CONTROLES</button>
         <button data-action="stats">PERFIL DE LA IA Y ESTADÍSTICAS</button>
-        <button data-action="mute" class="ghost">${save.muted ? '🔇 Sonido apagado' : '🔊 Sonido encendido'} <kbd>M</kbd></button>
+        <button data-action="mute" class="ghost">${save.muted ? 'SONIDO: APAGADO' : 'SONIDO: ENCENDIDO'} <kbd>M</kbd></button>
       </div>
       <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)}</div>`,
       a,
       [
         [['Digit1', 'Numpad1', 'Enter'], 'one'],
         [['Digit2', 'Numpad2'], 'two'],
+        [['Digit3', 'Numpad3'], 'select'],
         [['KeyM'], 'mute'],
       ],
       'menu',
@@ -89,20 +89,21 @@ export class Screens {
   levelSelect(save: SaveData, start: (level: number, players: number) => void, back: Action): void {
     const names = ['La Ruta del Polvo', 'El Golpe', 'Avenida en Llamas', 'Último Cerco'];
     const rows = names
-      .map((n, i) => {
-        const ok = i === 0 || (save.profile !== null && save.unlocked >= i);
-        return `<div class="level-row ${ok ? '' : 'locked'}">
+      .map(
+        (n, i) => `<div class="level-row">
           <div><b>Nivel ${i}</b> — ${n}</div>
-          <div>${ok ? `<button data-action="l${i}p1">1J</button><button data-action="l${i}p2">2J</button>` : '🔒'}</div>
-        </div>`;
-      })
+          <div><button data-action="l${i}p1">1 jugador</button><button data-action="l${i}p2">2 jugadores</button></div>
+        </div>`,
+      )
       .join('');
     const actions: Record<string, Action> = { back };
     for (let i = 0; i < 4; i++) {
       actions[`l${i}p1`] = () => start(i, 1);
       actions[`l${i}p2`] = () => start(i, 2);
     }
-    const prof = save.profile ? `Perfil actual: <b>${save.profile.tier}</b> (${Math.round(save.profile.skill * 100)}%)` : '';
+    const prof = save.profile
+      ? `Perfil de la IA: <b>${save.profile.tier}</b> (${Math.round(save.profile.skill * 100)}%). Los niveles 1-3 se adaptan a este perfil.`
+      : 'Aún no hay perfil de la IA: los niveles 1-3 usarán dificultad media. Juega el nivel 0 para que El Analista te evalúe.';
     this.show(`<h2>Seleccionar nivel</h2><p class="muted">${prof}</p>${rows}<div class="menu-buttons"><button data-action="back" class="ghost">Volver <kbd>Esc</kbd></button></div>`, actions, [[['Escape', 'Backspace'], 'back']]);
   }
 
@@ -175,7 +176,7 @@ export class Screens {
   intro(cfg: LevelConfig, players: number, start: Action, back: Action): void {
     const story = cfg.intro.map((t) => `<p>${esc(t)}</p>`).join('');
     const notes = cfg.adaptiveNotes.length
-      ? `<div class="ai-notes"><h3>🤖 El Analista ajustó este nivel</h3><ul>${cfg.adaptiveNotes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`
+      ? `<div class="ai-notes"><h3>El Analista ajustó este nivel</h3><ul>${cfg.adaptiveNotes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`
       : '';
     const goal =
       cfg.index === 0
