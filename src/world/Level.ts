@@ -4,7 +4,7 @@ import { buildProfile, type SkillClassifier, type SkillProfile } from '../ai/Ski
 import type { Biome, LevelConfig } from '../config/types';
 import type { Audio } from '../core/Audio';
 import type { DriveInput } from '../core/Input';
-import { clamp, clamp01, damp } from '../core/math';
+import { clamp, clamp01, damp, wrapAngle } from '../core/math';
 import { Rng } from '../core/Rng';
 import { Civilian } from '../entities/Civilian';
 import { Helicopter } from '../entities/Helicopter';
@@ -30,6 +30,9 @@ const MOODS = {
   sunset: { bg: 0x7a5468, sky: 0xffc7a0, ground: 0x6a4a5a, hemi: 1.4, sun: 0xff9d5c, sunI: 2.2 },
   dusk: { bg: 0x1d2438, sky: 0x8fa2d6, ground: 0x2a2a3a, hemi: 1.0, sun: 0x9db4ff, sunI: 1.2 },
 };
+
+/** Duración del salto al salir del banco (s). */
+const JUMP_TIME = 0.8;
 
 const OBSTACLE_HARDNESS: Record<string, number> = {
   rock: 1.6,
@@ -134,10 +137,17 @@ export class Level {
     );
     this.chunks.update(0, -Infinity, 0);
 
-    const startD = config.index === 0 ? 6 : 5;
+    // En los niveles 1-3 las motos esperan dentro del banco y salen saltando por la puerta.
+    const startD = config.index === 0 ? 6 : -9;
+    const spacing = config.index === 0 ? 2.2 : 1.3;
     for (let i = 0; i < playerCount; i++) {
-      const off = playerCount === 1 ? 0 : i === 0 ? -2.2 : 2.2;
+      const off = playerCount === 1 ? 0 : i === 0 ? -spacing : spacing;
       const p = new Player(this.physics, i, this.track.centerX(startD) + off, -startD, 0);
+      if (config.index > 0) {
+        p.setGhost(true);
+        p.cutscene = 'exitBank';
+        p.mesh.visible = false;
+      }
       this.scene.add(p.mesh);
       this.players.push(p);
     }
@@ -311,6 +321,11 @@ export class Level {
       this.audio.explosion();
       this.shake = 1.6;
       this.hooks.message('¡BOOM! ¡Salgan de ahí!', '#ff7a45');
+      for (const p of this.players) {
+        p.vehicle.vx = 0;
+        p.vehicle.vz = -28;
+        p.invuln = Math.max(p.invuln, 2.5);
+      }
     }
   }
 
@@ -331,6 +346,10 @@ export class Level {
         if (left <= 0) this.respawn(p);
         else this.respawnTimers.set(p, left);
       }
+      return;
+    }
+    if (p.cutscene) {
+      this.updateCutscene(p, dt);
       return;
     }
     if (!input) {
@@ -421,6 +440,54 @@ export class Level {
         this.hooks.message(`J${p.index + 1}: ¡Rezagado!`, p.color, 1.2);
       }
     }
+  }
+
+  /** Escenas automáticas: salida del banco con salto y entrada al banco final. */
+  private updateCutscene(p: Player, dt: number): void {
+    const v = p.vehicle;
+    if (p.cutscene === 'exitBank') {
+      if (v.d > -5) p.mesh.visible = true;
+      if (p.airTime <= 0 && v.d < -3.5) {
+        v.drive(dt, 1, 0, 0, { speedMul: 1, accelMul: 3, gripMul: 1 });
+        return;
+      }
+      if (p.airTime <= 0) {
+        // Despegue sobre la escalinata
+        p.airTime = JUMP_TIME;
+        this.fx.dust(v.px, v.pz, 0x9a9a9a, 6, 2);
+        this.audio.blip(420);
+      }
+      p.airTime -= dt;
+      const t = clamp01(1 - p.airTime / JUMP_TIME);
+      const h = Math.sin(t * Math.PI);
+      p.mesh.position.y = h * 3.4;
+      p.mesh.scale.setScalar(1 + h * 0.4);
+      p.mesh.rotation.x = (0.5 - t) * 0.9;
+      v.drive(dt, 1, 0, 0);
+      if (p.airTime <= 0) {
+        // Aterrizaje
+        p.mesh.position.y = 0;
+        p.mesh.scale.setScalar(1);
+        p.mesh.rotation.x = 0;
+        p.setGhost(false);
+        p.cutscene = null;
+        this.fx.dust(v.px, v.pz, 0x8a8a8a, 10, 2.4);
+        this.fx.sparks(v.px, v.pz, 8);
+        this.audio.crash(0.4);
+        this.shake = Math.max(this.shake, 0.5);
+      }
+      return;
+    }
+
+    // Entrada al banco: rumbo a la puerta, sin colisiones, hasta perderse bajo el techo.
+    const door = this.chunks.bankDoor;
+    if (!door) return;
+    const aimD = door.d + 14;
+    const desired = Math.atan2(-(door.x - v.px), -(-aimD - v.pz));
+    const steer = clamp(-wrapAngle(desired - v.heading) * 3, -1, 1);
+    if (v.d > door.d + 18) v.halt(dt, 30);
+    else v.drive(dt, 1, 0, steer, { speedMul: 0.6, accelMul: 1, gripMul: 2 });
+    if (v.d > door.d + 4.5) p.mesh.visible = false;
   }
 
   private damagePlayer(p: Player, amount: number, _cause: string): void {
@@ -568,7 +635,8 @@ export class Level {
     if (b.kind === 'player' && a.kind !== 'player') [a, b] = [b, a];
     if (a.kind === 'player') {
       const p = a.ref as Player;
-      if (!p.alive) return;
+      if (!p.alive || p.ghost) return;
+      if (b.kind === 'player' && (b.ref as Player).ghost) return;
       const impact = p.vehicle.impact();
       let dmg = 0;
       let key: unknown = b.ref ?? b;
@@ -656,7 +724,10 @@ export class Level {
         if (o.passMask & bit || p.vehicle.d < o.d + 2.5) continue;
         o.passMask |= bit;
         const hit = (o.hitMask & bit) !== 0;
-        const near = Math.abs(p.vehicle.px - o.x) < 3.2;
+        const lateral = Math.abs(p.vehicle.px - o.x);
+        // Solo cuentan los obstáculos que realmente estaban en la trayectoria.
+        if (!hit && lateral > 6) continue;
+        const near = lateral < 2.6 && p.vehicle.speed > 22;
         this.tracker.obstacle(hit, near);
         if (!hit && near) this.score += 150;
       }
@@ -694,7 +765,7 @@ export class Level {
   /** Estimación en vivo del nivel 0 ("El Analista"). */
   private updateAnalysis(dt: number): void {
     if (this.config.index !== 0) return;
-    this.aiProgress = clamp01(this.elapsed / this.config.duration);
+    this.aiProgress = Math.max(this.aiProgress, clamp01(this.elapsed / this.config.duration));
     this.liveTimer -= dt;
     if (this.liveTimer <= 0) {
       this.liveTimer = 0.5;
@@ -707,7 +778,7 @@ export class Level {
       [1, 'Análisis completo. ¡Entra al Banco Central!'],
     ];
     for (const [at, text] of marks) {
-      if (this.aiProgress >= at && !this.analysisAnnounced.has(at)) {
+      if (this.state === 'running' && this.aiProgress >= at && !this.analysisAnnounced.has(at)) {
         this.analysisAnnounced.add(at);
         this.hooks.message(text, '#9be7a1', 2.5);
       }
@@ -722,12 +793,11 @@ export class Level {
     this.score += dt * 40 * this.alivePlayers.length;
     if (this.config.index === 0) {
       const door = this.chunks.bankDoor;
-      if (door && this.aiProgress >= 1) {
+      if (door) {
         for (const p of this.alivePlayers) {
           const v = p.vehicle;
           if (Math.abs(v.d - door.d) < door.hd && Math.abs(v.px - door.x) < door.hw) {
-            this.hooks.message('Entrando al Banco Central...', '#f4d03f', 2);
-            this.finish('complete', 1.8);
+            this.enterBank();
             return;
           }
         }
@@ -737,6 +807,21 @@ export class Level {
       this.hooks.message('¡Los perdiste! Escapaste de la persecución', '#9be7a1', 2.5);
       this.finish('complete', 2.2);
     }
+  }
+
+  private enterBank(): void {
+    const door = this.chunks.bankDoor!;
+    this.aiProgress = 1;
+    this.analysisAnnounced.add(1);
+    this.chunks.openBankDoor();
+    for (const p of this.alivePlayers) {
+      // Solo entran las motos cercanas; las lejanas simplemente frenan.
+      if (Math.hypot(p.vehicle.px - door.x, p.vehicle.d - door.d) > 30) continue;
+      p.setGhost(true);
+      p.cutscene = 'enterBank';
+    }
+    this.hooks.message('Entrando al Banco Central...', '#f4d03f', 2);
+    this.finish('complete', 2.2);
   }
 
   private finish(outcome: 'complete' | 'failed', delay: number): void {

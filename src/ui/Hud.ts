@@ -82,7 +82,8 @@ export class Hud {
       if (gap !== null) {
         this.set(this.storm, gap > 0 ? `Tormenta a ${Math.round(gap)} m` : '¡DENTRO DE LA TORMENTA!');
         this.storm.classList.toggle('danger', gap < 20);
-        this.stormOverlay.style.opacity = String(Math.max(0, Math.min(0.75, (12 - gap) / 25)));
+        const stormAlpha = level.state === 'running' ? Math.max(0, Math.min(0.75, (12 - gap) / 25)) : 0;
+        this.stormOverlay.style.opacity = String(stormAlpha);
       }
     } else {
       this.set(this.timerLabel, 'RESISTE');

@@ -114,6 +114,7 @@ export class ChunkManager {
   finished = false;
   bankDoor: { x: number; d: number; hw: number; hd: number } | null = null;
   bankFront: { x: number; d: number } | null = null;
+  private bankDoorMesh: THREE.Mesh | null = null;
   /** Puntos de aparición de patrullas en calles laterales de la plaza. */
   sideSpawns: { x: number; d: number; heading: number }[] = [];
 
@@ -186,6 +187,11 @@ export class ChunkManager {
     const c = this.chunks.get(Math.floor(d / CHUNK));
     if (!c) return true;
     return c.placed.every((p) => Math.hypot(p.x - x, p.d - d) > p.r + radius);
+  }
+
+  /** Abre la puerta del banco final: queda un hueco oscuro por donde entra la moto. */
+  openBankDoor(): void {
+    if (this.bankDoorMesh) this.bankDoorMesh.material = mat(0x0a0a0a);
   }
 
   dispose(): void {
@@ -541,6 +547,7 @@ export class ChunkManager {
     const depth = 24;
     const bank = bankBuilding(70, depth, false, true);
     this.add(c, bank, facade + depth / 2, 0, Math.PI);
+    this.bankDoorMesh = bank.getObjectByName('bankDoor') as THREE.Mesh;
     this.solid(c, facade + depth / 2, 0, 35, depth / 2);
     this.bounds(c, BOUND);
     this.bankDoor = { x: this.track.centerX(facade), d: facade - 4, hw: 6, hd: 4 };

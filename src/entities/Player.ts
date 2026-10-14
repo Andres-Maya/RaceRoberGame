@@ -39,6 +39,12 @@ export class Player {
   sinceHit = 0;
   steer = 0;
   offroad = false;
+  /** Escena automática en curso: entrar al banco (nivel 0) o salir saltando (niveles 1-3). */
+  cutscene: 'enterBank' | 'exitBank' | null = null;
+  /** Segundos de vuelo restantes durante el salto de salida. */
+  airTime = 0;
+  /** Sin colisiones: la moto atraviesa puertas y escombros durante las escenas. */
+  ghost = false;
   /** Enfriamiento de daño por cada objeto contra el que choca. */
   readonly hitCooldown = new Map<unknown, number>();
 
@@ -58,6 +64,11 @@ export class Player {
 
   get color(): string {
     return PLAYER_COLORS[this.index].css;
+  }
+
+  setGhost(on: boolean): void {
+    this.ghost = on;
+    this.vehicle.body.collider(0).setSensor(on);
   }
 
   canTakeHit(source: unknown, now: number, cooldown = 0.45): boolean {

@@ -331,11 +331,14 @@ export function bankBuilding(width: number, depth: number, damaged: boolean, fli
   dome.scale.y = 3;
   g.add(dome);
   // Columnas y escalinata en la fachada (frente hacia -Z)
-  for (let i = -3; i <= 3; i++) g.add(cyl(0.6, 10, 0xf2ead8, i * 3.2, 0, -depth / 2 - 1.2));
+  // Columnas a ambos lados de la puerta (el centro queda libre para pasar en moto).
+  for (let i = -3; i <= 3; i++) if (i !== 0) g.add(cyl(0.6, 10, 0xf2ead8, i * 3.2, 0, -depth / 2 - 1.2));
   g.add(box(24, 0.6, 1.5, 0xf2ead8, 0, 10, -depth / 2 - 1.2));
   g.add(box(26, 0.3, 4, 0xcfc4ab, 0, 0, -depth / 2 - 2));
   // Puerta
-  g.add(box(5, 6, 0.4, damaged ? 0x111111 : 0x6b4f2a, 0, 0, -depth / 2 - 0.1));
+  const door = box(5, 6, 0.4, damaged ? 0x111111 : 0x6b4f2a, 0, 0, -depth / 2 - 0.1);
+  door.name = 'bankDoor';
+  g.add(door);
   const sign = textPlane('BANCO CENTRAL', 18, 3.2, '#1b2a4a', '#f4d03f');
   sign.position.set(0, 12.8, -depth / 2 + 3);
   if (flipSign) sign.rotation.z = Math.PI;
