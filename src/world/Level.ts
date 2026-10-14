@@ -264,7 +264,8 @@ export class Level {
 
     // ---- perseguidores, tráfico, helicóptero
     if (this.config.pursuers && running) this.updatePursuers(dt);
-    for (const c of this.civilians) c.update(dt, this.track, this.physics);
+    const probe = (x: number, d: number, dir: number) => this.chunks.obstacleAhead(x, d, dir);
+    for (const c of this.civilians) c.update(dt, this.track, this.physics, probe);
     if (this.heli && this.config.pursuers) {
       const shot = this.heli.update(dt, this.players, this.config.pursuers, this.rng);
       if (shot) this.fire(shot, true);
@@ -300,7 +301,8 @@ export class Level {
     const minD = Math.min(...ref.map((p) => p.vehicle.d));
     this.maxD = Math.max(this.maxD, ...ref.map((p) => p.vehicle.d));
     this.tracker.setDistance(this.maxD);
-    this.chunks.update(this.maxD, this.maxD - 150, dt);
+    const leadSpeed = Math.max(0, ...ref.map((p) => p.vehicle.speed));
+    this.chunks.update(this.maxD, this.maxD - 150, dt, leadSpeed);
     this.checkObstaclesPassed();
     this.cullTraffic(minD);
     if (this.storm) this.updateStorm(dt, minD);

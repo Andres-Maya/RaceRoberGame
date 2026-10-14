@@ -17,11 +17,17 @@ const CIVILIAN_SPEC: VehicleSpec = {
   density: 3,
 };
 
+/** Busca el obstáculo más cercano por delante: (x, d, dirección) → posición y distancia. */
+export type ObstacleProbe = (x: number, d: number, dir: number) => { x: number; dist: number } | null;
+
 /** Tráfico civil: obstáculos móviles que siguen su carril o cruzan la vía. */
 export class Civilian {
   readonly vehicle: Vehicle;
   /** Tras un choque fuerte el conductor frena en pánico. */
   panic = 0;
+  /** Desvío lateral temporal para esquivar un obstáculo en su carril. */
+  private dodge = 0;
+  private dodgeTimer = 0;
   readonly oncoming: boolean;
 
   constructor(
@@ -41,7 +47,7 @@ export class Civilian {
     return this.spawn.mode;
   }
 
-  update(dt: number, track: Track, physics: Physics): void {
+  update(dt: number, track: Track, physics: Physics, probe?: ObstacleProbe): void {
     const v = this.vehicle;
     if (this.panic > 0) {
       this.panic -= dt;
@@ -49,15 +55,32 @@ export class Civilian {
       return;
     }
     let steer = 0;
+    let blockedClose = false;
     if (this.spawn.mode === 'lane') {
-      const look = v.d + (this.oncoming ? -10 : 10);
-      const tx = track.centerX(look) + this.spawn.lane;
+      const dir = this.oncoming ? -1 : 1;
+      // Esquivar obstáculos del carril cambiándose de lado un momento.
+      this.dodgeTimer -= dt;
+      const obstacle = probe?.(v.px, v.d, dir);
+      if (obstacle) {
+        if (this.dodgeTimer <= 0) {
+          const half = track.halfWidth(v.d);
+          let shift = obstacle.x > v.px ? -3.6 : 3.6;
+          if (Math.abs(this.spawn.lane + shift) > half - 1.4) shift = -shift;
+          this.dodge = shift;
+        }
+        this.dodgeTimer = 1.2;
+        blockedClose = obstacle.dist < 5 && Math.abs(obstacle.x - v.px) < 1.8;
+      } else if (this.dodgeTimer <= 0) {
+        this.dodge = 0;
+      }
+      const look = v.d + dir * 10;
+      const tx = track.centerX(look) + this.spawn.lane + this.dodge;
       const desired = Math.atan2(-(tx - v.px), -(-look - v.pz));
       steer = clamp(-wrapAngle(desired - v.heading) * 2, -1, 1);
     }
     const ahead = physics.rayFixed(v.px, v.pz, -Math.sin(v.heading), -Math.cos(v.heading), 7);
-    const throttle = ahead === null && v.speed < this.spawn.speed ? 1 : 0;
-    const brake = ahead !== null ? 1 : 0;
-    v.drive(dt, throttle, brake, steer);
+    const stop = ahead !== null || blockedClose;
+    const throttle = !stop && v.speed < this.spawn.speed ? 1 : 0;
+    v.drive(dt, throttle, stop ? 1 : 0, steer);
   }
 }

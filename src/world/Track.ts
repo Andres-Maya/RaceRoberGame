@@ -39,20 +39,32 @@ export const ROUGH_BIOMES = new Set<Biome>(['desert', 'outskirts', 'wasteland', 
 export class Track {
   private readonly p1: number;
   private readonly p2: number;
+  private readonly p3: number;
   private readonly a1: number;
   private readonly a2: number;
+  private readonly a3: number;
+  private readonly f1: number;
+  private readonly f2: number;
+  private readonly f3: number;
   private biomes = new Map<number, Biome>();
 
   constructor(rng: Rng) {
+    // Cada partida tiene su propio trazado: amplitudes y frecuencias aleatorias.
     this.p1 = rng.range(0, Math.PI * 2);
     this.p2 = rng.range(0, Math.PI * 2);
-    this.a1 = rng.range(12, 20);
-    this.a2 = rng.range(5, 9);
+    this.p3 = rng.range(0, Math.PI * 2);
+    this.a1 = rng.range(8, 20);
+    this.a2 = rng.range(3, 9);
+    this.a3 = rng.range(0.5, 2.5);
+    this.f1 = rng.range(0.003, 0.0055);
+    this.f2 = rng.range(0.008, 0.013);
+    this.f3 = rng.range(0.018, 0.026);
   }
 
   centerX(d: number): number {
     const ramp = clamp01((d - 30) / 160);
-    return ramp * (this.a1 * Math.sin(d * 0.004 + this.p1) + this.a2 * Math.sin(d * 0.011 + this.p2) - this.a1 * Math.sin(this.p1) - this.a2 * Math.sin(this.p2));
+    const wave = (a: number, f: number, p: number) => a * (Math.sin(d * f + p) - Math.sin(p));
+    return ramp * (wave(this.a1, this.f1, this.p1) + wave(this.a2, this.f2, this.p2) + wave(this.a3, this.f3, this.p3));
   }
 
   slope(d: number): number {

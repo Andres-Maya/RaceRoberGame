@@ -104,7 +104,15 @@ interface Chunk {
   sirens: PursuerMesh[];
   pickups: Pickup[];
   placed: { x: number; d: number; r: number }[];
+  /** Contenido diferido (obstáculos, tráfico, zombis): se crea al acercarse la moto. */
+  pending: { d: number; run: () => void }[];
 }
+
+/**
+ * Distancia por delante de la moto a la que se activa el contenido diferido:
+ * justo fuera de la pantalla, para que nada se desordene antes de llegar.
+ */
+const ACTIVATE_AHEAD = 85;
 
 const DESERT_WEIGHTS: Partial<Record<ObstacleKind, number>> = { rock: 2.2, barrel: 1.8, tumbleweed: 1.6, wreck: 0.6, crate: 1, cactus: 0.4 };
 
@@ -141,6 +149,8 @@ export class ChunkManager {
   private sirenTimer = 0;
   private sirenPhase = false;
   private spin = 0;
+  private leadSpeed = 30;
+  private lastCross = -10;
   /** Se generó la estructura final cerrada (banco, túnel, planta): no hay más tramos. */
   finished = false;
   finishZone: FinishZone | null = null;
@@ -164,9 +174,19 @@ export class ChunkManager {
     return this.nextIndex * CHUNK;
   }
 
-  update(frontD: number, behindD: number, dt: number): void {
+  update(frontD: number, behindD: number, dt: number, leadSpeed = 30): void {
+    this.leadSpeed = leadSpeed;
     while (!this.finished && this.nextIndex * CHUNK < frontD + 260) this.generate(this.nextIndex++);
     for (const c of this.chunks.values()) if (c.d1 < behindD) this.disposeChunk(c);
+
+    // Activar el contenido diferido que ya quedó a la distancia de aparición.
+    for (const c of this.chunks.values()) {
+      if (!c.pending.length || c.d0 > frontD + ACTIVATE_AHEAD) continue;
+      const ready = c.pending.filter((p) => p.d <= frontD + ACTIVATE_AHEAD);
+      if (!ready.length) continue;
+      c.pending = c.pending.filter((p) => p.d > frontD + ACTIVATE_AHEAD);
+      for (const p of ready) p.run();
+    }
 
     // Props dinámicos: sincronizar malla con su cuerpo físico.
     for (const c of this.chunks.values()) {
@@ -227,6 +247,28 @@ export class ChunkManager {
     p.mesh.visible = false;
   }
 
+  /**
+   * Obstáculo más cercano por delante de un vehículo que avanza en dirección
+   * `dir` (+1 hacia la meta, -1 en sentido contrario). Devuelve su x o null.
+   */
+  obstacleAhead(x: number, d: number, dir: number, range = 16, width = 2.4): { x: number; dist: number } | null {
+    let best: { x: number; dist: number } | null = null;
+    const i0 = Math.floor(Math.min(d, d + dir * range) / CHUNK);
+    const i1 = Math.floor(Math.max(d, d + dir * range) / CHUNK);
+    for (let i = i0; i <= i1; i++) {
+      const c = this.chunks.get(i);
+      if (!c) continue;
+      for (const o of c.obstacles) {
+        if (o.dead || !o.onRoad) continue;
+        const t = o.body.translation();
+        const dist = (-t.z - d) * dir;
+        if (dist < 1.5 || dist > range || Math.abs(t.x - x) > width) continue;
+        if (!best || dist < best.dist) best = { x: t.x, dist };
+      }
+    }
+    return best;
+  }
+
   /** ¿Hay un obstáculo cerca de (x, d)? Útil para aparecer vehículos sin solaparse. */
   isClear(x: number, d: number, radius: number): boolean {
     const c = this.chunks.get(Math.floor(d / CHUNK));
@@ -271,6 +313,7 @@ export class ChunkManager {
       sirens: [],
       pickups: [],
       placed: [],
+      pending: [],
     };
     this.chunks.set(index, c);
     this.ground(c);
@@ -281,9 +324,14 @@ export class ChunkManager {
       case 'outskirts':
         this.genOutskirts(c);
         break;
-      case 'city':
-        this.genCity(c, index % 4 === 2 ? [c.d0 + 12, c.d0 + 28] : null);
+      case 'city': {
+        // Cruces a intervalos irregulares (nunca dos tramos seguidos).
+        const cross = index - this.lastCross >= 2 && this.ctx.rng.chance(0.3);
+        if (cross) this.lastCross = index;
+        const start = c.d0 + this.ctx.rng.range(8, 16);
+        this.genCity(c, cross ? [start, start + this.ctx.rng.range(14, 18)] : null);
         break;
+      }
       case 'plaza':
         this.genCity(c, [c.d0 + 2, c.d0 + 22], true);
         break;
@@ -424,8 +472,27 @@ export class ChunkManager {
     }
     this.bounds(c, BOUND);
 
+    // Mesetas rocosas y algún oasis fuera de la vía.
+    if (rng.chance(0.3)) {
+      const s = rng.sign();
+      const w = rng.range(6, 10);
+      const len = rng.range(8, 14);
+      const d = rng.range(c.d0 + len / 2, c.d1 - len / 2);
+      const off = s * rng.range(half + 6 + w / 2, 28 - w / 2);
+      this.add(c, cliff(w, rng.range(6, 14), len, rng.next()), d, off, rng.range(-0.3, 0.3));
+      this.solid(c, d, off, w / 2, len / 2);
+    } else if (rng.chance(0.1)) {
+      const s = rng.sign();
+      const d = (c.d0 + c.d1) / 2;
+      const off = s * rng.range(half + 9, 20);
+      const water = new THREE.Mesh(sandGeo, mat(0x3f8fbf));
+      water.scale.set(9, 1, 7);
+      water.position.y = 0.03;
+      this.add(c, water, d, off);
+      for (let i = 0; i < 3; i++) this.add(c, palm(), d + rng.range(-4, 4), off + rng.range(-5, 5));
+    }
     // Decoración fuera de la vía (también sólida): cactus y rocas.
-    const decor = rng.int(3, 6);
+    const decor = rng.int(2, 8);
     for (let i = 0; i < decor; i++) {
       const s = rng.sign();
       const off = s * rng.range(half + 3, 27);
@@ -515,15 +582,27 @@ export class ChunkManager {
         this.solid(c, mid, off, deep / 2, len / 2 + 1);
         if (plaza) this.sideSpawns.push({ x: this.track.centerX(mid) + s * (half + 22), d: mid, heading: s > 0 ? Math.PI / 2 : -Math.PI / 2 });
       }
-      if (!plaza && this.ctx.rng.chance(0.55 * Math.min(1.5, this.ctx.config.trafficDensity / 3))) {
+      if (!plaza && this.ctx.rng.chance(0.6 * Math.min(1.5, this.ctx.config.trafficDensity / 3))) {
         const s = this.ctx.rng.sign();
-        this.ctx.spawnCivilian({
-          x: this.track.centerX(mid) + s * 40,
-          d: mid + (s > 0 ? -3.5 : 3.5),
-          heading: s > 0 ? Math.PI / 2 : -Math.PI / 2,
-          speed: this.ctx.rng.range(11, 16),
-          mode: 'cross',
-          lane: 0,
+        const lane = s > 0 ? -3.5 : 3.5;
+        // Se programa al acercarse la moto para que el auto se atraviese justo delante.
+        this.defer(c, mid, () => {
+          const rng = this.ctx.rng;
+          const eta = Math.max(1.2, ACTIVATE_AHEAD / Math.max(10, this.leadSpeed));
+          let speed = rng.range(11, 16);
+          let offset = speed * eta * rng.range(0.8, 1.05);
+          if (offset > 42) {
+            offset = 42;
+            speed = Math.max(7, (42 / eta) * rng.range(0.85, 1.05));
+          }
+          this.ctx.spawnCivilian({
+            x: this.track.centerX(mid) - s * offset,
+            d: mid + lane,
+            heading: s > 0 ? -Math.PI / 2 : Math.PI / 2,
+            speed,
+            mode: 'cross',
+            lane: 0,
+          });
         });
       }
     }
@@ -580,9 +659,13 @@ export class ChunkManager {
           if (b - d - len < 5) len = b - d;
           const deep = rng.range(11, 16);
           const off = s * (half + SIDEWALK + deep / 2 + 0.3);
-          const h = rng.range(6, 26);
-          this.add(c, building(deep, h, len - 0.4, rng.next()), d + len / 2, off);
-          this.solid(c, d + len / 2, off, deep / 2, len / 2);
+          if (len >= 9 && rng.chance(0.14)) {
+            this.cityLot(c, d + len / 2, len, s, half);
+          } else {
+            const h = rng.range(6, 26);
+            this.add(c, building(deep, h, len - 0.4, rng.next()), d + len / 2, off);
+            this.solid(c, d + len / 2, off, deep / 2, len / 2);
+          }
           d += len;
         }
         // Árboles en la acera
@@ -592,6 +675,32 @@ export class ChunkManager {
           const x = this.track.centerX(td) + s * (half + SIDEWALK - 1);
           c.bodies.push(this.ctx.physics.fixedBall(x, -td, 0.3, { kind: 'wall' }));
         }
+      }
+    }
+  }
+
+  /** Parque o estacionamiento en lugar de un edificio: un respiro visual por el que se puede pasar. */
+  private cityLot(c: Chunk, d: number, len: number, s: number, half: number): void {
+    const rng = this.ctx.rng;
+    const deep = 14;
+    const off = s * (half + SIDEWALK + deep / 2 + 0.3);
+    if (rng.chance(0.5)) {
+      this.flat(c, deep, len - 0.4, 0x5d8a3c, d, off, 0.02);
+      for (let i = 0; i < rng.int(2, 4); i++) {
+        const td = d + rng.range(-len / 2 + 1.5, len / 2 - 1.5);
+        const toff = off + rng.range(-deep / 2 + 2, deep / 2 - 2);
+        this.add(c, tree(), td, toff);
+        c.bodies.push(this.ctx.physics.fixedBall(this.track.centerX(td) + toff, -td, 0.35, { kind: 'wall' }));
+      }
+    } else {
+      this.flat(c, deep, len - 0.4, 0x3a3b3f, d, off, 0.02);
+      for (let z = -len / 2 + 2; z < len / 2 - 1; z += 3) this.flat(c, deep * 0.6, 0.15, 0xdddddd, d + z, off + s * deep * 0.15, 0.03);
+      for (let z = -len / 2 + 3.5; z < len / 2 - 2; z += 3) {
+        if (!rng.chance(0.55)) continue;
+        const pos = off + s * deep * 0.15;
+        const car = obstacleMesh('parkedCar', rng.next());
+        this.add(c, car, d + z, pos, Math.PI / 2);
+        c.bodies.push(this.ctx.physics.fixedBox(this.track.centerX(d + z) + pos, -(d + z), 2, 0.95, this.track.angle(d + z), { kind: 'wall' }));
       }
     }
   }
@@ -859,7 +968,7 @@ export class ChunkManager {
       for (let i = 0; i < n; i++) {
         const zd = d + rng.range(-4, 4);
         const off = rng.range(-half, half);
-        if (this.isClear(this.track.centerX(zd) + off, zd, 1)) this.addObstacle(c, 'zombie', zd, off, 0, true);
+        if (this.isClear(this.track.centerX(zd) + off, zd, 1)) this.planObstacle(c, 'zombie', zd, off, 0);
       }
     }
     this.roadHazards(c, half, this.ctx.config.hazardWeights);
@@ -880,7 +989,30 @@ export class ChunkManager {
 
   // ------------------------------------------------------------ contenido
 
-  private addObstacle(c: Chunk, kind: ObstacleKind, d: number, off: number, rotOffset: number, onRoad: boolean, mesh?: THREE.Object3D): ObstacleRecord {
+  private defer(c: Chunk, d: number, run: () => void): void {
+    c.pending.push({ d, run });
+  }
+
+  /**
+   * Reserva el lugar de un obstáculo en la vía ahora, pero lo crea al acercarse
+   * la moto: así nadie lo choca ni lo empuja antes de que el jugador llegue.
+   */
+  private planObstacle(c: Chunk, kind: ObstacleKind, d: number, off: number, rotOffset: number, mesh?: THREE.Object3D): void {
+    const spec = OBSTACLE_SPECS[kind];
+    c.placed.push({ x: this.track.centerX(d) + off, d, r: Math.max(spec.hx, spec.hz) });
+    this.defer(c, d, () => this.addObstacle(c, kind, d, off, rotOffset, true, mesh, false));
+  }
+
+  private addObstacle(
+    c: Chunk,
+    kind: ObstacleKind,
+    d: number,
+    off: number,
+    rotOffset: number,
+    onRoad: boolean,
+    mesh?: THREE.Object3D,
+    register = true,
+  ): ObstacleRecord {
     const spec = OBSTACLE_SPECS[kind];
     const x = this.track.centerX(d) + off;
     const rot = this.track.angle(d) + rotOffset;
@@ -913,7 +1045,7 @@ export class ChunkManager {
     }
     c.bodies.push(rec.body);
     c.obstacles.push(rec);
-    c.placed.push({ x, d, r: Math.max(spec.hx, spec.hz) });
+    if (register) c.placed.push({ x, d, r: Math.max(spec.hx, spec.hz) });
     return rec;
   }
 
@@ -931,7 +1063,18 @@ export class ChunkManager {
     const rng = this.ctx.rng;
     // Los primeros tramos quedan despejados para arrancar con calma.
     if (c.index < 2) return;
-    const count = rng.poisson((this.ctx.config.obstacleDensity * factor * CHUNK) / 100);
+    const base = (this.ctx.config.obstacleDensity * factor * CHUNK) / 100;
+    const roll = rng.next();
+    let scale = 1;
+    if (roll < 0.15) {
+      // Tramo de respiro: casi vacío.
+      scale = 0.25;
+    } else if (roll < 0.15 + Math.min(0.6, 0.3 + base / 8)) {
+      // Una formación (slalom, muro con hueco, chicane...) y menos obstáculos sueltos.
+      this.formation(c, weights, half);
+      scale = 0.45;
+    }
+    const count = rng.poisson(base * scale);
     for (let i = 0; i < count; i++) {
       const kind = rng.weighted(weights);
       const spec = OBSTACLE_SPECS[kind];
@@ -940,13 +1083,114 @@ export class ChunkManager {
         const s = rng.sign();
         const d = rng.range(c.d0 + 3.5, c.d1 - 3.5);
         const off = s * (half - spec.hx - 0.3);
-        if (this.isClear(this.track.centerX(d) + off, d, spec.hz + 1)) this.addObstacle(c, kind, d, off, rng.chance(0.5) ? 0 : Math.PI, true);
+        if (this.isClear(this.track.centerX(d) + off, d, spec.hz + 1)) this.planObstacle(c, kind, d, off, rng.chance(0.5) ? 0 : Math.PI);
         continue;
       }
       const spot = this.freeSpot(c, half, Math.max(spec.hx, spec.hz));
       if (!spot) continue;
-      const rot = kind === 'barrier' ? rng.range(-0.15, 0.15) : kind === 'wreck' ? rng.range(-0.8, 0.8) : rng.range(0, Math.PI * 2);
-      this.addObstacle(c, kind, spot.d, spot.off, rot, true);
+      this.planObstacle(c, kind, spot.d, spot.off, this.randomRotation(kind));
+    }
+  }
+
+  private randomRotation(kind: ObstacleKind): number {
+    const rng = this.ctx.rng;
+    if (kind === 'barrier') return rng.range(-0.15, 0.15);
+    if (kind === 'wreck') return rng.range(-0.8, 0.8);
+    return rng.range(0, Math.PI * 2);
+  }
+
+  /** Marca un espacio libre (hueco de un muro, paso de un retén) que nadie debe ocupar. */
+  private reserve(c: Chunk, d: number, off: number, r: number): void {
+    c.placed.push({ x: this.track.centerX(d) + off, d, r });
+  }
+
+  /** Coloca un obstáculo si el lugar está libre y dentro del tramo. */
+  private placeOnRoad(c: Chunk, kind: ObstacleKind, d: number, off: number, rot = this.randomRotation(kind)): void {
+    if (d < c.d0 + 1 || d > c.d1 - 1) return;
+    const spec = OBSTACLE_SPECS[kind];
+    if (this.isClear(this.track.centerX(d) + off, d, Math.max(spec.hx, spec.hz) + 0.3)) this.planObstacle(c, kind, d, off, rot);
+  }
+
+  /** Formaciones de obstáculos: dan ritmo y variedad frente al reparto uniforme. */
+  private formation(c: Chunk, weights: Partial<Record<ObstacleKind, number>>, half: number): void {
+    const rng = this.ctx.rng;
+    const has = (k: ObstacleKind) => (weights[k] ?? 0) > 0;
+    const soft = (['cone', 'barrel', 'crate', 'toxicBarrel', 'tumbleweed'] as ObstacleKind[]).filter(has);
+    const hard = (['barrier', 'wreck', 'rock', 'dumpster'] as ObstacleKind[]).filter(has);
+    const options: string[] = [];
+    if (soft.length) options.push('slalom', 'spill', 'wall');
+    if (hard.length) options.push('chicane', 'wall');
+    if (has('parkedCar') || has('container')) options.push('parkedLine');
+    if (has('zombie')) options.push('horde', 'horde');
+    if (!options.length) return;
+    const start = c.d0 + rng.range(3, 10);
+
+    switch (rng.pick(options)) {
+      case 'slalom': {
+        // Zigzag: obstáculos alternando de lado.
+        const k = rng.pick(soft);
+        let side = rng.sign();
+        const gap = rng.range(5, 7.5);
+        for (let i = 0, n = rng.int(4, 6); i < n; i++, side = -side) this.placeOnRoad(c, k, start + i * gap, side * rng.range(half * 0.2, half * 0.55));
+        break;
+      }
+      case 'wall': {
+        // Fila de lado a lado con un único hueco.
+        const k = soft.length && (rng.chance(0.6) || !hard.length) ? rng.pick(soft) : rng.pick(hard);
+        const spec = OBSTACLE_SPECS[k];
+        const d = rng.range(c.d0 + 8, c.d1 - 8);
+        const hole = rng.range(-half + 3.5, half - 3.5);
+        // Barreras y chatarra van alineadas; el resto gira libre, así que su ancho real es mayor.
+        const aligned = k === 'barrier' || k === 'wreck';
+        const foot = aligned ? spec.hx : Math.hypot(spec.hx, spec.hz);
+        for (let off = -half + foot; off <= half - foot; off += foot * 2 + 0.4) {
+          // Hueco de al menos ~5,8 m entre los bordes de las piezas vecinas.
+          if (Math.abs(off - hole) > 2.9 + foot) this.placeOnRoad(c, k, d + rng.range(-0.3, 0.3), off, aligned ? rng.range(-0.08, 0.08) : undefined);
+        }
+        // El hueco queda reservado: ningún otro obstáculo puede taparlo.
+        this.reserve(c, d, hole, 2.9);
+        break;
+      }
+      case 'chicane': {
+        // Barreras que cierran media vía, alternando lados.
+        const k = rng.pick(hard);
+        const spec = OBSTACLE_SPECS[k];
+        const foot = k === 'barrier' || k === 'wreck' ? spec.hx : Math.hypot(spec.hx, spec.hz);
+        let side = rng.sign();
+        for (let i = 0, n = rng.int(2, 3); i < n; i++, side = -side) {
+          const d = start + i * rng.range(11, 15);
+          // Cada fila cierra su mitad sin pasar del centro: obliga a zigzaguear, no a frenar.
+          for (let off = half - foot; off >= foot; off -= foot * 2 + 0.3) this.placeOnRoad(c, k, d, side * off, k === 'barrier' || k === 'wreck' ? 0 : undefined);
+          this.reserve(c, d, -side * half * 0.5, 3.4);
+        }
+        break;
+      }
+      case 'spill': {
+        // Carga derramada: un montón de cajas o barriles juntos.
+        const k = rng.pick(soft);
+        const d = rng.range(c.d0 + 6, c.d1 - 6);
+        const off = rng.range(-half * 0.6, half * 0.6);
+        for (let i = 0, n = rng.int(4, 8); i < n; i++) this.placeOnRoad(c, k, d + rng.range(-3, 3), off + rng.range(-3, 3));
+        break;
+      }
+      case 'parkedLine': {
+        // Varios vehículos estacionados seguidos junto al borde.
+        const k: ObstacleKind = has('container') && (!has('parkedCar') || rng.chance(0.5)) ? 'container' : 'parkedCar';
+        const spec = OBSTACLE_SPECS[k];
+        const s = rng.sign();
+        let d = start;
+        for (let i = 0, n = rng.int(2, 4); i < n; i++) {
+          this.placeOnRoad(c, k, d + spec.hz, s * (half - spec.hx - 0.3), rng.chance(0.5) ? 0 : Math.PI);
+          d += spec.hz * 2 + rng.range(0.8, 3);
+        }
+        break;
+      }
+      case 'horde': {
+        // Hilera de zombis cruzando de lado a lado.
+        const d = rng.range(c.d0 + 6, c.d1 - 6);
+        for (let i = 0, n = rng.int(3, 6); i < n; i++) this.placeOnRoad(c, 'zombie', d + rng.range(-5, 5), rng.range(-half, half), 0);
+        break;
+      }
     }
   }
 
@@ -1005,14 +1249,15 @@ export class ChunkManager {
       const d = rng.range(c.d0 + 2, c.d1 - 2);
       const x = this.track.centerX(d) + lane;
       if (!this.isClear(x, d, 3)) continue;
-      this.ctx.spawnCivilian({
+      const spawn = {
         x,
         d,
         heading: this.track.angle(d) + (isForward ? 0 : Math.PI),
         speed: isForward ? rng.range(10, 16) : rng.range(12, 18),
-        mode: 'lane',
+        mode: 'lane' as const,
         lane,
-      });
+      };
+      this.defer(c, d, () => this.ctx.spawnCivilian(spawn));
       c.placed.push({ x, d, r: 2.5 });
     }
   }
@@ -1044,6 +1289,12 @@ export class ChunkManager {
     const slots: number[] = [];
     for (let off = -half + 2.2; off <= half - 2.2; off += 4.5) slots.push(off);
     const gap = rng.int(0, slots.length - 1);
+    // Si algo ya ocupa el paso del retén, se deja para el siguiente tramo.
+    if (!this.isClear(this.track.centerX(d) + slots[gap], d, 2.6)) {
+      this.nextRoadblock = c.d1;
+      return;
+    }
+    this.reserve(c, d, slots[gap], 2.6);
     const faction = this.ctx.config.faction;
     slots.forEach((off, i) => {
       if (i === gap) return;
@@ -1054,20 +1305,20 @@ export class ChunkManager {
         const pm = policeVehicle('patrol');
         setSiren(pm, i % 2 === 0);
         c.sirens.push(pm);
-        this.addObstacle(c, 'parkedCar', dd, off, rot, true, pm.group);
+        this.planObstacle(c, 'parkedCar', dd, off, rot, pm.group);
       } else if (faction === 'gang') {
         // Barricada de la banda rival
-        this.addObstacle(c, 'parkedCar', dd, off, rot, true, outlawVehicle('muscle'));
+        this.planObstacle(c, 'parkedCar', dd, off, rot, outlawVehicle('muscle'));
       } else {
         // Muro de chatarra quemada
-        this.addObstacle(c, 'wreck', dd, off, rot, true);
+        this.planObstacle(c, 'wreck', dd, off, rot);
       }
     });
     // Púas delante de un vehículo de la barricada y conos o barriles en los bordes.
     const spikeSlot = slots[(gap + 1) % slots.length];
     if (faction !== 'gang' && Math.abs(spikeSlot - slots[gap]) > 1) this.hazard(c, 'spikes', d - 4, spikeSlot, 2.2, 0.4);
     const edge: ObstacleKind = faction === 'police' ? 'cone' : faction === 'gang' ? 'barrel' : 'toxicBarrel';
-    for (const s of [-1, 1]) this.addObstacle(c, edge, d - 2, s * (half - 0.6), 0, true);
+    for (const s of [-1, 1]) this.planObstacle(c, edge, d - 2, s * (half - 0.6), 0);
   }
 
   // ------------------------------------------------------------ limpieza
