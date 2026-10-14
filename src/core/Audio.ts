@@ -16,7 +16,7 @@ export class Audio {
   private sirenPhase = 0;
   private music: Music | null = null;
   /** Modo pedido antes de desbloquear el audio; se aplica al crear la música. */
-  private pendingMusic: { mode: MusicMode; level: number } = { mode: 'menu', level: 0 };
+  private pendingMusic: { mode: MusicMode; level: number } = { mode: 'calm', level: 0 };
   muted = false;
   musicOn = true;
 

@@ -7,7 +7,12 @@ import { Rng } from './Rng';
  * No usa archivos: los riffs se generan por nivel y la intensidad sigue a la acción.
  */
 
-export type MusicMode = 'off' | 'menu' | 'level' | 'victory';
+/**
+ * calm: menú principal (guitarra limpia y coro suave).
+ * epic: historia de cada nivel. level: persecución. victory: resultados.
+ * death: réquiem cuando caen todas las motos.
+ */
+export type MusicMode = 'off' | 'calm' | 'epic' | 'level' | 'victory' | 'death';
 
 type Section = 'blast' | 'chug' | 'breakdown' | 'epic';
 
@@ -50,8 +55,32 @@ const STYLES: Record<number, Style> = {
   // Tierra baldía: cromático y disonante, el más brutal.
   3: { bpm: 222, root: 55, scale: [0, 1, 2, 3, 6, 7, 8], seed: 51 },
 };
-const MENU_STYLE: Style = { bpm: 92, root: 55, scale: [0, 2, 3, 5, 7, 8, 10], seed: 5 };
+const EPIC_STYLE: Style = { bpm: 92, root: 55, scale: [0, 2, 3, 5, 7, 8, 10], seed: 5 };
 const VICTORY_STYLE: Style = { bpm: 100, root: 58.27, scale: [0, 2, 3, 5, 7, 8, 10], seed: 7 };
+/** Menú principal: La menor tranquilo. */
+const CALM_STYLE: Style = { bpm: 72, root: 110, scale: [0, 2, 3, 5, 7, 8, 10], seed: 3 };
+/** Réquiem al morir: Re menor, muy lento. */
+const DEATH_STYLE: Style = { bpm: 56, root: 73.42, scale: [0, 2, 3, 5, 7, 8, 10], seed: 9 };
+
+const MINOR = [1, 1.2, 1.5, 0.5];
+const MAJOR = [1, 1.26, 1.5, 0.5];
+
+/** Menú: La menor → Fa → Do → Sol, en arpegios de guitarra limpia (semitonos sobre La). */
+const CALM_CHORDS: { notes: number[]; quality: number[] }[] = [
+  { notes: [0, 7, 12, 15, 19], quality: MINOR },
+  { notes: [-4, 3, 8, 12, 15], quality: MAJOR },
+  { notes: [3, 10, 15, 19, 22], quality: MAJOR },
+  { notes: [-2, 5, 10, 14, 17], quality: MAJOR },
+];
+const CALM_ARPEGGIO = [0, 1, 2, 3, 4, 3, 2, 1];
+
+/** Réquiem: Re menor → Mi bemol → Si bemol → La (cadencia trágica). */
+const DEATH_CHORDS: { root: number; third: number; quality: number[] }[] = [
+  { root: 0, third: 3, quality: MINOR },
+  { root: 1, third: 4, quality: MAJOR },
+  { root: -4, third: 4, quality: MAJOR },
+  { root: -5, third: 4, quality: MAJOR },
+];
 
 /** Progresión del coro (grados en semitonos) para las secciones épicas. */
 const EPIC_PROGRESSION = [0, 8, 10, 7];
@@ -172,7 +201,7 @@ export class Music {
   private phrase = 0;
   private section: Section = 'chug';
   private mode: MusicMode = 'off';
-  private style: Style = MENU_STYLE;
+  private style: Style = EPIC_STYLE;
   private riffs: Record<Section, Bar[]> = { blast: [], chug: [], breakdown: [], epic: [] };
   private enabled = true;
   private ducked = false;
@@ -235,19 +264,24 @@ export class Music {
 
   setMode(mode: MusicMode, level = 0): void {
     if (mode === this.mode && (mode !== 'level' || this.style === STYLES[level])) return;
+    const wasPlaying = this.mode !== 'off';
     this.mode = mode;
     if (mode === 'off') {
       this.stop();
       return;
     }
-    this.style = mode === 'menu' ? MENU_STYLE : mode === 'victory' ? VICTORY_STYLE : STYLES[level] ?? STYLES[0];
+    this.style = { calm: CALM_STYLE, epic: EPIC_STYLE, victory: VICTORY_STYLE, death: DEATH_STYLE, level: STYLES[level] ?? STYLES[0] }[mode];
     this.buildRiffs();
     this.step = 0;
     this.bar = 0;
     this.phrase = 0;
     this.section = mode === 'level' ? 'chug' : 'epic';
-    this.nextTime = this.ctx.currentTime + 0.08;
-    this.applyGain();
+    // Transición: bajar el volumen, cambiar de pieza y volver a subirlo.
+    const now = this.ctx.currentTime;
+    const gap = wasPlaying ? 0.4 : 0.08;
+    if (wasPlaying) this.out.gain.setTargetAtTime(0.0001, now, 0.08);
+    this.nextTime = now + gap;
+    this.applyGain(gap);
     if (this.timer === null) this.timer = window.setInterval(() => this.schedule(), 25);
   }
 
@@ -271,9 +305,9 @@ export class Music {
     this.nextTime = Math.max(this.nextTime, this.ctx.currentTime + 0.05);
   }
 
-  private applyGain(): void {
+  private applyGain(delay = 0): void {
     const target = !this.enabled || this.mode === 'off' ? 0 : this.ducked ? VOLUME * 0.3 : VOLUME;
-    this.out.gain.setTargetAtTime(target, this.ctx.currentTime, 0.25);
+    this.out.gain.setTargetAtTime(target, this.ctx.currentTime + delay, delay > 0 ? 0.5 : 0.25);
   }
 
   private stop(): void {
@@ -373,6 +407,8 @@ export class Music {
   }
 
   private playStep(t: number, sixteenth: number): void {
+    if (this.mode === 'calm') return this.playCalm(t, sixteenth);
+    if (this.mode === 'death') return this.playRequiem(t, sixteenth);
     const s = this.step;
     const barInPhrase = this.bar % 4;
     const riffs = this.riffs[this.section];
@@ -390,6 +426,45 @@ export class Music {
       this.choir(this.style.root * 4 * 2 ** (chord / 12), t, sixteenth * 16);
     }
     this.drums(t, s, barInPhrase);
+  }
+
+  /** Menú principal: arpegios de guitarra limpia, coro suave y percusión mínima. */
+  private playCalm(t: number, sixteenth: number): void {
+    const s = this.step;
+    const chord = CALM_CHORDS[this.bar % CALM_CHORDS.length];
+    const root = this.style.root;
+    if (s % 2 === 0) {
+      const n = chord.notes[CALM_ARPEGGIO[s / 2]];
+      this.pluck(root * 2 ** (n / 12), t, 1.8, (s / 2) % 2 === 0 ? -0.35 : 0.35, 0.34);
+    }
+    if (s === 0) {
+      this.choir(root * 2 * 2 ** (chord.notes[0] / 12), t, sixteenth * 16, 0.07, chord.quality);
+      this.softBass((root / 2) * 2 ** (chord.notes[0] / 12), t, sixteenth * 16);
+    }
+    // A partir de la segunda frase entra una percusión muy suave.
+    if (this.bar >= 4) {
+      if (s === 0) this.kick(t, 0.3);
+      if (s === 8) this.kick(t, 0.2);
+      if (s % 4 === 2) this.hat(t, 0.07);
+    }
+  }
+
+  /** Muerte: campana grave, coro trágico, timbal y arpegios lentos en Re menor. */
+  private playRequiem(t: number, sixteenth: number): void {
+    const s = this.step;
+    const chord = DEATH_CHORDS[this.bar % DEATH_CHORDS.length];
+    const root = this.style.root * 2 ** (chord.root / 12);
+    if (s === 0) {
+      if (this.bar % 2 === 0) this.bell(this.style.root * 2, t);
+      this.choir(root * 4, t, sixteenth * 16, 0.09, chord.quality);
+      this.softBass(root / 2, t, sixteenth * 16);
+      this.tom(t, 85);
+    }
+    if (s === 8) this.tom(t, 85);
+    if (s % 4 === 0) {
+      const tones = [0, 7, 12 + chord.third, 7];
+      this.pluck(root * 2 * 2 ** (tones[s / 4] / 12), t, 2.4, s % 8 === 0 ? -0.3 : 0.3, 0.13);
+    }
   }
 
   private drums(t: number, s: number, barInPhrase: number): void {
@@ -437,12 +512,12 @@ export class Music {
   // ------------------------------------------------------------ instrumentos
 
   /** Coro "aah": sierras desafinadas a través de formantes, con reverberación. */
-  private choir(freq: number, t: number, dur: number): void {
+  private choir(freq: number, t: number, dur: number, vol = 0.11, ratios = MINOR): void {
     const ctx = this.ctx;
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, t);
-    env.gain.linearRampToValueAtTime(0.11, t + 0.45);
-    env.gain.setValueAtTime(0.11, t + dur * 0.8);
+    env.gain.linearRampToValueAtTime(vol, t + 0.45);
+    env.gain.setValueAtTime(vol, t + dur * 0.8);
     env.gain.linearRampToValueAtTime(0, t + dur + 0.6);
     const f1 = ctx.createBiquadFilter();
     f1.type = 'bandpass';
@@ -459,7 +534,7 @@ export class Music {
     mix.connect(env);
     env.connect(this.out);
     env.connect(this.reverb);
-    for (const ratio of [1, 1.2, 1.5, 0.5]) {
+    for (const ratio of ratios) {
       for (const cents of [-9, 0, 9]) {
         const o = ctx.createOscillator();
         o.type = 'sawtooth';
@@ -476,6 +551,78 @@ export class Music {
   // Batería: cada pieza se sintetiza una sola vez en un buffer; cada golpe
   // reproduce el buffer con su propio volumen (solo dos nodos por golpe).
 
+  /** Guitarra limpia: nota pulsada que se apaga lentamente, con reverberación. */
+  private pluck(freq: number, t: number, dur: number, pan: number, vol: number): void {
+    const ctx = this.ctx;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(vol, t + 0.004);
+    env.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3200, t);
+    lp.frequency.exponentialRampToValueAtTime(900, t + dur * 0.5);
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = pan;
+    lp.connect(env).connect(panner);
+    panner.connect(this.out);
+    panner.connect(this.reverb);
+    for (const [ratio, type, gain] of [
+      [1, 'triangle', 1],
+      [2, 'sine', 0.35],
+      [3, 'sine', 0.12],
+    ] as const) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = freq * ratio;
+      const g = ctx.createGain();
+      g.gain.value = gain;
+      o.connect(g).connect(lp);
+      o.start(t);
+      o.stop(t + dur + 0.05);
+    }
+  }
+
+  /** Bajo suave de onda senoidal para las piezas tranquilas. */
+  private softBass(freq: number, t: number, dur: number): void {
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = freq;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.22, t + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(this.out);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+
+  /** Campana fúnebre: parciales inarmónicos con caídas largas. */
+  private bell(freq: number, t: number): void {
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = 0.22;
+    out.connect(this.out);
+    out.connect(this.reverb);
+    for (const [ratio, gain, decay] of [
+      [1, 1, 4.5],
+      [2, 0.5, 3.2],
+      [2.76, 0.35, 2.4],
+      [5.4, 0.2, 1.5],
+      [8.93, 0.1, 0.8],
+    ]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = freq * ratio;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + decay);
+      o.connect(g).connect(out);
+      o.start(t);
+      o.stop(t + decay + 0.05);
+    }
+  }
+
   private kick(t: number, vol = 1): void {
     this.hit(this.kit.kick, t, 0.95 * vol);
   }
@@ -484,8 +631,8 @@ export class Music {
     this.hit(this.kit.snare, t, 0.8 * vol, true);
   }
 
-  private hat(t: number): void {
-    this.hit(this.kit.hat, t, 0.22);
+  private hat(t: number, vol = 0.22): void {
+    this.hit(this.kit.hat, t, vol);
   }
 
   private ride(t: number): void {

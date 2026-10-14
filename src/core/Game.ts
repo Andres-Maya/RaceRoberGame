@@ -105,6 +105,8 @@ export class Game {
         const inputs = [0, 1].map((i) => this.input.drive(i, this.campaign.players));
         this.level.update(dt, inputs);
         this.audio.musicIntensity(this.level.musicIntensity);
+        // Cuando caen todas las motos, el metal se corta y entra el réquiem.
+        if (this.level.outcome === 'failed') this.audio.playMusic('death');
         this.hud.update(this.level);
         if (this.level.state === 'done') this.onLevelDone();
       }
@@ -128,7 +130,7 @@ export class Game {
     this.disposeLevel();
     this.hud.hide();
     this.audio.duckMusic(false);
-    this.audio.playMusic('menu');
+    this.audio.playMusic('calm');
     this.screens.menu(this.storage.data, {
       one: () => this.newCampaign(1),
       two: () => this.newCampaign(2),
@@ -196,7 +198,7 @@ export class Game {
     this.hud.hide();
     const cfg = this.configFor(this.campaign.level);
     this.campaign.config = cfg;
-    this.audio.playMusic('menu');
+    this.audio.playMusic('epic');
     this.screens.intro(cfg, this.campaign.players, () => this.beginLevel(), () => this.showMenu());
   }
 
@@ -245,7 +247,7 @@ export class Game {
     if (level.outcome === 'failed') {
       this.state = 'gameover';
       this.hud.hide();
-      this.audio.playMusic('menu');
+      this.audio.playMusic('death');
       this.saveBest(this.campaign.score + level.score, 0);
       this.screens.gameOver(cfg, m, level.score, () => this.showIntro(), () => this.showMenu());
       return;
