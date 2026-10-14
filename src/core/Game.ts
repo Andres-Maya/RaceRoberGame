@@ -59,11 +59,13 @@ export class Game {
       this.storage.save();
     }
     this.audio.muted = this.storage.data.muted;
+    this.audio.musicOn = this.storage.data.musicOn;
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.state === 'playing') this.pause();
+      if (!document.hidden) this.audio.resyncMusic();
     });
 
     this.showMenu();
@@ -94,6 +96,7 @@ export class Game {
 
   private tick(dt: number, render = true): void {
     if (this.input.wasPressed('KeyM') && this.state !== 'menu') this.toggleMute();
+    if (this.input.wasPressed('KeyN') && this.state !== 'menu') this.toggleMusic();
 
     if (this.state === 'playing' && this.level) {
       if (this.input.wasPressed('Escape', 'KeyP')) {
@@ -101,6 +104,7 @@ export class Game {
       } else {
         const inputs = [0, 1].map((i) => this.input.drive(i, this.campaign.players));
         this.level.update(dt, inputs);
+        this.audio.musicIntensity(this.level.musicIntensity);
         this.hud.update(this.level);
         if (this.level.state === 'done') this.onLevelDone();
       }
@@ -123,6 +127,8 @@ export class Game {
     this.state = 'menu';
     this.disposeLevel();
     this.hud.hide();
+    this.audio.duckMusic(false);
+    this.audio.playMusic('menu');
     this.screens.menu(this.storage.data, {
       one: () => this.newCampaign(1),
       two: () => this.newCampaign(2),
@@ -131,6 +137,10 @@ export class Game {
       stats: () => this.showStats(),
       mute: () => {
         this.toggleMute();
+        this.showMenu();
+      },
+      music: () => {
+        this.toggleMusic();
         this.showMenu();
       },
     });
@@ -153,6 +163,12 @@ export class Game {
     this.storage.data.muted = !this.storage.data.muted;
     this.storage.save();
     this.audio.setMuted(this.storage.data.muted);
+  }
+
+  private toggleMusic(): void {
+    this.storage.data.musicOn = !this.storage.data.musicOn;
+    this.storage.save();
+    this.audio.setMusicOn(this.storage.data.musicOn);
   }
 
   private newCampaign(players: number): void {
@@ -180,6 +196,7 @@ export class Game {
     this.hud.hide();
     const cfg = this.configFor(this.campaign.level);
     this.campaign.config = cfg;
+    this.audio.playMusic('menu');
     this.screens.intro(cfg, this.campaign.players, () => this.beginLevel(), () => this.showMenu());
   }
 
@@ -192,6 +209,8 @@ export class Game {
     const hooks = { message: (t: string, c?: string, s?: number) => this.hud.toast(t, c, s), flash: (c: string) => this.hud.flash(c) };
     this.level = new Level(cfg, this.campaign.players, this.audio, hooks, this.classifier);
     this.hud.show(this.level, this.campaign.cash);
+    this.audio.duckMusic(false);
+    this.audio.playMusic('level', cfg.index);
     this.state = 'playing';
     this.last = performance.now();
   }
@@ -200,9 +219,11 @@ export class Game {
     if (this.state !== 'playing') return;
     this.state = 'paused';
     this.audio.stopLoops();
+    this.audio.duckMusic(true);
     this.screens.pause(
       () => {
         this.screens.hide();
+        this.audio.duckMusic(false);
         this.state = 'playing';
         this.last = performance.now();
       },
@@ -224,6 +245,7 @@ export class Game {
     if (level.outcome === 'failed') {
       this.state = 'gameover';
       this.hud.hide();
+      this.audio.playMusic('menu');
       this.saveBest(this.campaign.score + level.score, 0);
       this.screens.gameOver(cfg, m, level.score, () => this.showIntro(), () => this.showMenu());
       return;
@@ -236,6 +258,7 @@ export class Game {
     data.unlocked = Math.max(data.unlocked, Math.min(3, cfg.index + 1));
     this.storage.save();
     this.hud.hide();
+    this.audio.playMusic('victory');
 
     if (cfg.index === 3) {
       this.state = 'victory';

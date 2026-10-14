@@ -57,7 +57,7 @@ export class Screens {
 
   // ------------------------------------------------------------ menú
 
-  menu(save: SaveData, a: { one: Action; two: Action; select: Action; controls: Action; stats: Action; mute: Action }): void {
+  menu(save: SaveData, a: { one: Action; two: Action; select: Action; controls: Action; stats: Action; mute: Action; music: Action }): void {
     this.show(
       `
       <div class="logo">
@@ -72,6 +72,7 @@ export class Screens {
         <button data-action="select">SELECCIONAR NIVEL <kbd>3</kbd></button>
         <button data-action="controls">CONTROLES</button>
         <button data-action="stats">PERFIL DE LA IA Y ESTADÍSTICAS</button>
+        <button data-action="music" class="ghost">${save.musicOn ? 'MÚSICA: DEATH METAL' : 'MÚSICA: APAGADA'} <kbd>N</kbd></button>
         <button data-action="mute" class="ghost">${save.muted ? 'SONIDO: APAGADO' : 'SONIDO: ENCENDIDO'} <kbd>M</kbd></button>
       </div>
       <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)}</div>`,
@@ -81,6 +82,7 @@ export class Screens {
         [['Digit2', 'Numpad2'], 'two'],
         [['Digit3', 'Numpad3'], 'select'],
         [['KeyM'], 'mute'],
+        [['KeyN'], 'music'],
       ],
       'menu',
     );
@@ -124,7 +126,7 @@ export class Screens {
           <p><kbd>Shift der.</kbd> / <kbd>Enter</kbd> turbo</p>
         </div>
       </div>
-      <p class="muted">Con un solo jugador puedes usar cualquiera de los dos esquemas. <kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio.</p>
+      <p class="muted">Con un solo jugador puedes usar cualquiera de los dos esquemas. <kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio · <kbd>N</kbd> música.</p>
       <ul class="tips">
         <li>Fuera del asfalto en el desierto la moto pierde velocidad.</li>
         <li>Manchas negras = aceite (derrapas). Tiras metálicas = púas (pinchazo).</li>

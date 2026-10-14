@@ -21,6 +21,7 @@ export interface SaveData {
   /** Historial de vectores de características: dataset para entrenar un modelo TF.js. */
   history: RunRecord[];
   muted: boolean;
+  musicOn: boolean;
 }
 
 const defaults = (): SaveData => ({
@@ -32,6 +33,7 @@ const defaults = (): SaveData => ({
   victories: 0,
   history: [],
   muted: false,
+  musicOn: true,
 });
 
 export class Storage {
@@ -62,8 +64,8 @@ export class Storage {
   }
 
   reset(): void {
-    const muted = this.data.muted;
-    this.data = { ...defaults(), muted };
+    const { muted, musicOn } = this.data;
+    this.data = { ...defaults(), muted, musicOn };
     this.save();
   }
 }

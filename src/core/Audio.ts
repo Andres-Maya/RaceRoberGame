@@ -1,6 +1,9 @@
+import { Music, type MusicMode } from './Music';
+
 /**
  * Audio sintetizado con WebAudio: no requiere archivos externos.
- * Motor (oscilador según velocidad), sirena, disparos, choques y explosiones.
+ * Motor (oscilador según velocidad), sirena, disparos, choques, explosiones
+ * y la banda sonora de death metal (ver Music).
  */
 export class Audio {
   private ctx: AudioContext | null = null;
@@ -11,7 +14,11 @@ export class Audio {
   private sirenGain!: GainNode;
   private noise!: AudioBuffer;
   private sirenPhase = 0;
+  private music: Music | null = null;
+  /** Modo pedido antes de desbloquear el audio; se aplica al crear la música. */
+  private pendingMusic: { mode: MusicMode; level: number } = { mode: 'menu', level: 0 };
   muted = false;
+  musicOn = true;
 
   /** Debe llamarse tras una interacción del usuario (política de autoplay). */
   unlock(): void {
@@ -50,6 +57,32 @@ export class Audio {
     this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+
+    this.music = new Music(ctx, this.master);
+    this.music.setEnabled(this.musicOn);
+    this.music.setMode(this.pendingMusic.mode, this.pendingMusic.level);
+  }
+
+  playMusic(mode: MusicMode, level = 0): void {
+    this.pendingMusic = { mode, level };
+    this.music?.setMode(mode, level);
+  }
+
+  setMusicOn(on: boolean): void {
+    this.musicOn = on;
+    this.music?.setEnabled(on);
+  }
+
+  musicIntensity(v: number): void {
+    this.music?.setIntensity(v);
+  }
+
+  duckMusic(on: boolean): void {
+    this.music?.duck(on);
+  }
+
+  resyncMusic(): void {
+    this.music?.resync();
   }
 
   setMuted(muted: boolean): void {

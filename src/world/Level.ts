@@ -232,6 +232,18 @@ export class Level {
     return this.pursuers.filter((p) => !p.wrecked).length;
   }
 
+  /** 0..1: qué tan brutal debe sonar la música (perseguidores, tormenta, meta cerca). */
+  get musicIntensity(): number {
+    if (this.state !== 'running') return 0.4;
+    if (this.config.index === 0) {
+      const gap = this.stormGap ?? 70;
+      return clamp01(0.3 + this.progress * 0.3 + (gap < 30 ? 0.4 : 0));
+    }
+    if (this.calibrating) return 0.35;
+    const max = this.config.pursuers?.maxActive ?? 1;
+    return clamp01(0.25 + (0.6 * this.activePursuers) / max + (this.heli ? 0.15 : 0) + (this.progress > 0.85 ? 0.2 : 0));
+  }
+
   update(dt: number, inputs: DriveInput[]): void {
     if (this.state === 'done') return;
     if (this.state === 'countdown') {
