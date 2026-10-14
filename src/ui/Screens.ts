@@ -1,0 +1,310 @@
+import type { PerformanceMetrics } from '../ai/PerformanceTracker';
+import { FEATURES, type SkillProfile } from '../ai/SkillClassifier';
+import type { LevelConfig } from '../config/types';
+import type { Input } from '../core/Input';
+import { formatMoney, formatTime } from '../core/math';
+import type { SaveData } from '../core/Storage';
+
+type Action = () => void;
+
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+/** Pantallas superpuestas en HTML: menú, historia, resultados, pausa... */
+export class Screens {
+  private el = document.querySelector('#screen') as HTMLElement;
+  private actions = new Map<string, Action>();
+  private keys: [string[], string][] = [];
+
+  constructor() {
+    this.el.addEventListener('click', (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
+      if (t?.dataset.action) this.run(t.dataset.action);
+    });
+  }
+
+  get visible(): boolean {
+    return !this.el.classList.contains('hidden');
+  }
+
+  private run(id: string): void {
+    this.actions.get(id)?.();
+  }
+
+  private show(html: string, actions: Record<string, Action>, keys: [string[], string][] = [], variant = ''): void {
+    this.el.className = `screen ${variant}`;
+    this.el.innerHTML = `<div class="panel">${html}</div>`;
+    this.actions = new Map(Object.entries(actions));
+    this.keys = keys;
+  }
+
+  hide(): void {
+    this.el.className = 'screen hidden';
+    this.el.innerHTML = '';
+    this.actions.clear();
+    this.keys = [];
+  }
+
+  /** Atajos de teclado de la pantalla activa. */
+  handleKeys(input: Input): void {
+    if (!this.visible) return;
+    for (const [codes, id] of this.keys) {
+      if (input.wasPressed(...codes)) {
+        this.run(id);
+        return;
+      }
+    }
+  }
+
+  // ------------------------------------------------------------ menú
+
+  menu(save: SaveData, a: { one: Action; two: Action; select: Action; controls: Action; stats: Action; mute: Action }): void {
+    const canSelect = save.profile !== null && save.unlocked > 0;
+    this.show(
+      `
+      <div class="logo">
+        <div class="logo-top">RACE</div>
+        <div class="logo-main">ROBBER</div>
+        <div class="logo-sub">Fuga en moto · Ciudad Cobalto</div>
+      </div>
+      <p class="tagline">Un golpe al Banco Central. Tres niveles de persecución. Una IA que estudia cómo manejas.</p>
+      <div class="menu-buttons">
+        <button data-action="one" class="primary">1 JUGADOR <kbd>1</kbd></button>
+        <button data-action="two">2 JUGADORES · mismo teclado <kbd>2</kbd></button>
+        <button data-action="select" ${canSelect ? '' : 'disabled'}>SELECCIONAR NIVEL ${canSelect ? '' : '<small>(completa el nivel 0)</small>'}</button>
+        <button data-action="controls">CONTROLES</button>
+        <button data-action="stats">PERFIL DE LA IA Y ESTADÍSTICAS</button>
+        <button data-action="mute" class="ghost">${save.muted ? '🔇 Sonido apagado' : '🔊 Sonido encendido'} <kbd>M</kbd></button>
+      </div>
+      <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)}</div>`,
+      a,
+      [
+        [['Digit1', 'Numpad1', 'Enter'], 'one'],
+        [['Digit2', 'Numpad2'], 'two'],
+        [['KeyM'], 'mute'],
+      ],
+      'menu',
+    );
+  }
+
+  levelSelect(save: SaveData, start: (level: number, players: number) => void, back: Action): void {
+    const names = ['La Ruta del Polvo', 'El Golpe', 'Avenida en Llamas', 'Último Cerco'];
+    const rows = names
+      .map((n, i) => {
+        const ok = i === 0 || (save.profile !== null && save.unlocked >= i);
+        return `<div class="level-row ${ok ? '' : 'locked'}">
+          <div><b>Nivel ${i}</b> — ${n}</div>
+          <div>${ok ? `<button data-action="l${i}p1">1J</button><button data-action="l${i}p2">2J</button>` : '🔒'}</div>
+        </div>`;
+      })
+      .join('');
+    const actions: Record<string, Action> = { back };
+    for (let i = 0; i < 4; i++) {
+      actions[`l${i}p1`] = () => start(i, 1);
+      actions[`l${i}p2`] = () => start(i, 2);
+    }
+    const prof = save.profile ? `Perfil actual: <b>${save.profile.tier}</b> (${Math.round(save.profile.skill * 100)}%)` : '';
+    this.show(`<h2>Seleccionar nivel</h2><p class="muted">${prof}</p>${rows}<div class="menu-buttons"><button data-action="back" class="ghost">Volver <kbd>Esc</kbd></button></div>`, actions, [[['Escape', 'Backspace'], 'back']]);
+  }
+
+  controls(back: Action): void {
+    this.show(
+      `<h2>Controles</h2>
+      <div class="controls-grid">
+        <div class="ctrl-card" style="--pc:#ff4d4d">
+          <h3>Jugador 1</h3>
+          <p><kbd>W</kbd> acelerar · <kbd>S</kbd> frenar / reversa</p>
+          <p><kbd>A</kbd> <kbd>D</kbd> girar</p>
+          <p><kbd>Espacio</kbd> / <kbd>Shift izq.</kbd> turbo</p>
+        </div>
+        <div class="ctrl-card" style="--pc:#4d9dff">
+          <h3>Jugador 2</h3>
+          <p><kbd>↑</kbd> acelerar · <kbd>↓</kbd> frenar / reversa</p>
+          <p><kbd>←</kbd> <kbd>→</kbd> girar</p>
+          <p><kbd>Shift der.</kbd> / <kbd>Enter</kbd> turbo</p>
+        </div>
+      </div>
+      <p class="muted">Con un solo jugador puedes usar cualquiera de los dos esquemas. <kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio.</p>
+      <ul class="tips">
+        <li>Fuera del asfalto en el desierto la moto pierde velocidad.</li>
+        <li>Manchas negras = aceite (derrapas). Tiras metálicas = púas (pinchazo).</li>
+        <li>Las patrullas que chocan fuerte contra muros u obstáculos quedan fuera de combate.</li>
+        <li>Cada disparo que recibes rompe la mochila: pierdes $2.500 del botín.</li>
+      </ul>
+      <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button></div>`,
+      { back },
+      [[['Escape', 'Enter', 'Backspace'], 'back']],
+    );
+  }
+
+  stats(save: SaveData, back: Action, reset: Action): void {
+    const p = save.profile;
+    const hist = save.history
+      .slice(-8)
+      .reverse()
+      .map((r) => `<tr><td>${new Date(r.date).toLocaleDateString('es-CO')}</td><td>Nivel ${r.level}</td><td>${r.players}J</td><td>${Math.round(r.skill * 100)}%</td></tr>`)
+      .join('');
+    this.show(
+      `<h2>Perfil de la IA</h2>
+      ${p ? this.profileBlock(p) : '<p class="muted">Aún no hay perfil: juega el nivel 0 para que El Analista te evalúe.</p>'}
+      <div class="stat-grid">
+        <div><b>${save.runs}</b><span>niveles jugados</span></div>
+        <div><b>${save.victories}</b><span>fugas exitosas</span></div>
+        <div><b>${save.bestScore.toLocaleString('es-CO')}</b><span>mejor puntaje</span></div>
+        <div><b>${formatMoney(save.bestCash)}</b><span>botín récord</span></div>
+      </div>
+      ${hist ? `<h3>Últimas evaluaciones</h3><table class="hist"><tr><th>Fecha</th><th>Nivel</th><th>Modo</th><th>Habilidad</th></tr>${hist}</table>` : ''}
+      <p class="muted small">Cada evaluación guarda su vector de características en localStorage: es el dataset para entrenar más adelante un modelo con TensorFlow.js.</p>
+      <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button><button data-action="reset" class="ghost danger">Borrar progreso</button></div>`,
+      { back, reset },
+      [[['Escape', 'Enter', 'Backspace'], 'back']],
+    );
+  }
+
+  private profileBlock(p: SkillProfile): string {
+    const bars = FEATURES.map(
+      (f) => `<div class="feat"><span>${f.label}</span><div class="bar"><div class="fill" style="width:${Math.round(p.features[f.key] * 100)}%"></div></div><em>${Math.round(p.features[f.key] * 100)}</em></div>`,
+    ).join('');
+    return `<div class="profile">
+      <div class="tier tier-${p.tier.toLowerCase()}">${p.tier}<small>${Math.round(p.skill * 100)}% de habilidad · ${esc(p.classifier)}</small></div>
+      <div class="feats">${bars}</div>
+    </div>`;
+  }
+
+  // ------------------------------------------------------------ juego
+
+  intro(cfg: LevelConfig, players: number, start: Action, back: Action): void {
+    const story = cfg.intro.map((t) => `<p>${esc(t)}</p>`).join('');
+    const notes = cfg.adaptiveNotes.length
+      ? `<div class="ai-notes"><h3>🤖 El Analista ajustó este nivel</h3><ul>${cfg.adaptiveNotes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`
+      : '';
+    const goal =
+      cfg.index === 0
+        ? `La IA te observará durante <b>${cfg.duration} s</b>. Luego entra al banco.`
+        : `Sobrevive <b>${formatTime(cfg.duration)}</b> a la persecución.`;
+    this.show(
+      `<div class="level-tag">${cfg.index === 0 ? 'PRÓLOGO' : `NIVEL ${cfg.index} DE 3`}</div>
+      <h1>${esc(cfg.name.split('—')[1]?.trim() ?? cfg.name)}</h1>
+      <div class="story">${story}</div>
+      <p class="goal">${goal} ${players > 1 ? '<br><span class="muted">Cooperativo: si un compañero cae, vuelve a los 6 s mientras el otro siga vivo.</span>' : ''}</p>
+      ${notes}
+      <div class="menu-buttons"><button data-action="start" class="primary">¡VAMOS! <kbd>Enter</kbd></button><button data-action="back" class="ghost">Menú <kbd>Esc</kbd></button></div>`,
+      { start, back },
+      [
+        [['Enter', 'Space', 'NumpadEnter'], 'start'],
+        [['Escape'], 'back'],
+      ],
+      'intro',
+    );
+  }
+
+  pause(resume: Action, restart: Action, menu: Action): void {
+    this.show(
+      `<h2>Pausa</h2>
+      <div class="menu-buttons">
+        <button data-action="resume" class="primary">Continuar <kbd>Esc</kbd></button>
+        <button data-action="restart">Reiniciar nivel <kbd>R</kbd></button>
+        <button data-action="menu" class="ghost">Salir al menú <kbd>Q</kbd></button>
+      </div>`,
+      { resume, restart, menu },
+      [
+        [['Escape', 'KeyP'], 'resume'],
+        [['KeyR'], 'restart'],
+        [['KeyQ'], 'menu'],
+      ],
+      'pause',
+    );
+  }
+
+  results(
+    cfg: LevelConfig,
+    m: PerformanceMetrics,
+    score: number,
+    cash: number | null,
+    profile: SkillProfile | null,
+    preview: LevelConfig[],
+    next: Action,
+    menu: Action,
+  ): void {
+    const encountered = m.obstaclesPassed + m.obstaclesHit;
+    const rows = [
+      ['Tiempo', formatTime(m.time)],
+      ['Distancia', `${Math.round(m.distance)} m`],
+      ['Obstáculos esquivados', `${m.obstaclesPassed} / ${encountered}`],
+      ['Pasadas al límite', String(m.nearMisses)],
+      ['Choques', String(m.collisions)],
+      ['Daño recibido', String(Math.round(m.damageTaken))],
+      ...(cfg.index > 0
+        ? [
+            ['Disparos recibidos', `${m.bulletsHit} de ${m.bulletsFired}`],
+            ['Patrullas destruidas', String(m.copsWrecked)],
+          ]
+        : []),
+      ['Puntaje', Math.round(score).toLocaleString('es-CO')],
+      ...(cash !== null ? [['Botín restante', formatMoney(cash)]] : []),
+    ];
+    const table = rows.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join('');
+    const ai =
+      cfg.index === 0 && profile
+        ? `<h3>Veredicto de El Analista</h3>${this.profileBlock(profile)}
+           <div class="preview">${preview
+             .map(
+               (c) => `<div class="pv"><b>Nivel ${c.index}</b><span>${formatTime(c.duration)}</span><span>${c.obstacleDensity.toFixed(1)} obst./100 m</span><span>${c.police?.maxActive ?? 0} patrullas</span></div>`,
+             )
+             .join('')}</div>
+           <p class="muted small">La duración y los obstáculos de cada nivel se calcularon a partir de tu perfil. Se reajustarán después de cada nivel.</p>`
+        : profile
+          ? `<p class="muted">Perfil actualizado: <b>${profile.tier}</b> (${Math.round(profile.skill * 100)}%)</p>`
+          : '';
+    this.show(
+      `<div class="level-tag">${cfg.index === 0 ? 'PRÓLOGO COMPLETADO' : `NIVEL ${cfg.index} SUPERADO`}</div>
+      <h2>${cfg.index === 0 ? '¡Dentro del Banco Central!' : '¡Escapaste!'}</h2>
+      <div class="kv-grid">${table}</div>
+      ${ai}
+      <div class="menu-buttons"><button data-action="next" class="primary">Continuar <kbd>Enter</kbd></button><button data-action="menu" class="ghost">Menú</button></div>`,
+      { next, menu },
+      [[['Enter', 'Space', 'NumpadEnter'], 'next']],
+      'results',
+    );
+  }
+
+  gameOver(cfg: LevelConfig, m: PerformanceMetrics, score: number, retry: Action, menu: Action): void {
+    this.show(
+      `<div class="level-tag danger">${cfg.name}</div>
+      <h2>${cfg.index === 0 ? 'La tormenta los alcanzó' : '¡Los atraparon!'}</h2>
+      <div class="kv-grid">
+        <div class="kv"><span>Tiempo resistido</span><b>${formatTime(m.time)}</b></div>
+        <div class="kv"><span>Distancia</span><b>${Math.round(m.distance)} m</b></div>
+        <div class="kv"><span>Puntaje del nivel</span><b>${Math.round(score).toLocaleString('es-CO')}</b></div>
+      </div>
+      ${cfg.index > 0 ? '<p class="muted">El Analista tomó nota: el reintento será un poco más amable.</p>' : ''}
+      <div class="menu-buttons"><button data-action="retry" class="primary">Reintentar <kbd>Enter</kbd></button><button data-action="menu" class="ghost">Menú <kbd>Esc</kbd></button></div>`,
+      { retry, menu },
+      [
+        [['Enter', 'Space', 'NumpadEnter'], 'retry'],
+        [['Escape'], 'menu'],
+      ],
+      'gameover',
+    );
+  }
+
+  victory(text: string[], cash: number, score: number, profile: SkillProfile | null, menu: Action): void {
+    this.show(
+      `<div class="level-tag">FUGA COMPLETADA</div>
+      <h1>¡El botín es suyo!</h1>
+      <div class="story">${text.map((t) => `<p>${esc(t)}</p>`).join('')}</div>
+      <div class="big-cash">${formatMoney(cash)}</div>
+      <div class="kv-grid">
+        <div class="kv"><span>Puntaje total</span><b>${Math.round(score).toLocaleString('es-CO')}</b></div>
+        ${profile ? `<div class="kv"><span>Perfil final</span><b>${profile.tier} (${Math.round(profile.skill * 100)}%)</b></div>` : ''}
+      </div>
+      <div class="menu-buttons"><button data-action="menu" class="primary">Volver al menú <kbd>Enter</kbd></button></div>`,
+      { menu },
+      [[['Enter', 'Escape', 'NumpadEnter'], 'menu']],
+      'victory',
+    );
+  }
+
+  loading(text: string): void {
+    this.show(`<div class="loading">${esc(text)}</div>`, {}, [], 'menu');
+  }
+}

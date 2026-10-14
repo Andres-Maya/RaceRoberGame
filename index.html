@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Race Robber: escapa en moto tras robar el Banco Central. Juego cenital estilo GTA 1 con dificultad adaptativa por IA." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏍️</text></svg>" />
+    <title>Race Robber — Fuga en Moto</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="boot">Cargando motor de física…</div>
+
+      <div id="storm-overlay"></div>
+      <div id="damage-overlay"></div>
+
+      <div id="hud" class="hidden">
+        <div class="hud-top">
+          <div class="hud-level">
+            <div id="hud-level-name"></div>
+            <div id="hud-objective"></div>
+          </div>
+          <div class="hud-timer">
+            <div id="hud-timer-label">TIEMPO</div>
+            <div id="hud-timer">0:00</div>
+          </div>
+          <div class="hud-score">
+            <div id="hud-cash"></div>
+            <div id="hud-score"></div>
+            <div id="hud-wanted"></div>
+          </div>
+        </div>
+
+        <div id="hud-ai" class="hud-ai hidden">
+          <div class="hud-ai-title">🤖 EL ANALISTA</div>
+          <div class="bar"><div id="hud-ai-bar" class="fill ai"></div></div>
+          <div class="hud-ai-row"><span>Habilidad estimada</span><b id="hud-ai-skill">—</b></div>
+          <div class="hud-ai-row"><span>Perfil</span><b id="hud-ai-tier">Calibrando…</b></div>
+        </div>
+        <div id="hud-storm" class="hidden"></div>
+
+        <div id="hud-toasts"></div>
+        <div id="hud-countdown" class="hidden"></div>
+        <div id="hud-players"></div>
+      </div>
+
+      <div id="screen" class="screen hidden"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
