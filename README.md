@@ -1,6 +1,6 @@
 # Race Robber — Fuga en Moto
 
-Videojuego 2D con vista cenital al estilo GTA 1 para 1 o 2 jugadores. Una banda de ladrones en moto cruza el desierto, asalta el Banco Central de Ciudad Cobalto y escapa de la policía. Durante el nivel 0, una IA ("El Analista") estudia cómo manejas y, con eso, adapta los obstáculos y la duración de los niveles 1, 2 y 3.
+Videojuego 2D con vista cenital al estilo GTA 1 para 1 o 2 jugadores. Una banda de ladrones en moto asalta el Banco Central de Ciudad Cobalto y huye de la policía, de una banda rival y de los mutantes de una tierra baldía. Al comienzo de cada nivel, una IA ("El Analista") estudia cómo manejas y ajusta ese mismo nivel: cuántos tipos de vehículos te persiguen, cuántos a la vez, cuántos obstáculos hay y cuánto falta para la meta.
 
 ## Cómo ejecutarlo
 
@@ -15,16 +15,16 @@ npm run preview    # sirve el build de producción
 
 ## Historia y niveles
 
-| Nivel | Escenario | Qué pasa |
+| Nivel | Perseguidores | Inicio → final |
 |---|---|---|
-| **0 — La Ruta del Polvo** | Desierto → afueras → ciudad | Esquivas rocas, cactus, barriles y rodadoras mientras una tormenta de arena te persigue. Cuando la IA está terminando su análisis llegas a la ciudad, y el nivel termina cuando la moto atraviesa la puerta del Banco Central. |
-| **1 — El Golpe** | Ciudad (tarde) | Arranca con la explosión de la bóveda: la moto sale del banco con un salto. Las patrullas te persiguen, te embisten y algunos agentes disparan. |
-| **2 — Avenida en Llamas** | Ciudad (atardecer) | Se suman motos policiales y SUVs, aparecen retenes y hay más obstáculos. |
-| **3 — Último Cerco** | Ciudad (anochecer) → desierto | Llegan furgonetas SWAT, un helicóptero con reflector y más retenes. El último tramo vuelve al desierto. |
+| **0 — La Ruta del Polvo** (prólogo) | Tormenta de arena | Desierto → afueras → ciudad. Termina cuando la moto atraviesa la puerta del Banco Central. |
+| **1 — El Golpe** | Policía: patrullas, motos, SUVs, SWAT y helicóptero | Explosión de la bóveda y salto por la puerta del banco → ciudad → puente del río. Termina al entrar al túnel de la montaña. |
+| **2 — Territorio Enemigo** | Los Cuervos: muscle cars, moteros, pickups con tirador, furgón blindado | Salida del túnel → zona industrial con contenedores y barricadas. Termina al entrar a la planta nuclear, que explota. |
+| **3 — Tierra Baldía** | Saqueadores: buggies, mutantes a pie, moteros mutantes, camiones de guerra | Explosión verde y salto desde dentro de la planta → ruinas con zombis que cruzan la vía y charcos de ácido. Termina al cruzar la zona segura. |
 
-En los niveles 1 a 3 ganas si sigues vivo cuando el cronómetro llega a cero. Cada disparo que recibes te quita $2.500 del botín.
+Todos los niveles terminan **por distancia**: el HUD muestra cuánto falta para la meta. Cada disparo que recibes te quita $2.500 del botín.
 
-Desde **Seleccionar nivel** puedes empezar en cualquier nivel. Si todavía no hay un perfil de la IA, los niveles 1 a 3 usan dificultad media.
+Desde **Seleccionar nivel** puedes empezar en cualquier nivel: cada uno calibra tu habilidad por su cuenta.
 
 ## Controles
 
@@ -40,14 +40,15 @@ Modo cooperativo (mismo teclado): la cámara sigue a las dos motos. Si un jugado
 
 ## La IA adaptativa
 
-1. **`PerformanceTracker`** (`src/ai/PerformanceTracker.ts`) registra durante el nivel: choques, daño, obstáculos esquivados o golpeados, pasadas al límite, avance real (distancia por segundo), tiempo fuera de la vía o sobre aceite/arena, cambios de dirección y tiempo cerca del peligro (la tormenta o la policía).
-2. **`SkillClassifier`** (`src/ai/SkillClassifier.ts`) convierte esas métricas en un vector de 8 características normalizadas y calcula una habilidad entre 0 y 1 con un modelo lineal de pesos fijos y una sigmoide. Cada característica se compara contra la de un jugador promedio, y solo cuentan los obstáculos que estaban en tu trayectoria; así chocar seguido o avanzar poco baja el perfil aunque mantengas el acelerador. Según el resultado te clasifica como *Novato*, *Intermedio*, *Experto* o *Leyenda*. Durante el nivel 0 el HUD muestra la estimación en vivo.
-3. **`AdaptiveDifficulty`** (`src/ai/AdaptiveDifficulty.ts`) usa ese perfil para generar la configuración de los niveles 1 a 3:
-   - **Duración** de cada nivel (más larga para jugadores hábiles).
-   - **Densidad de obstáculos** según la habilidad y qué tan bien esquivas.
-   - **Distribución de obstáculos**: si vas rápido, hay más obstáculos duros (barreras, chatarra); si vas lento, más blandos (conos, cajas).
-   - Tráfico civil, número y tipo de patrullas, agresividad, puntería, retenes y helicóptero.
-4. Después de cada nivel el perfil se **reajusta** mezclándolo con el desempeño reciente. Si pierdes un nivel, el reintento es un poco más fácil.
+1. **`PerformanceTracker`** (`src/ai/PerformanceTracker.ts`) registra durante el nivel: choques, daño, obstáculos esquivados o golpeados, pasadas al límite, avance real (distancia por segundo), tiempo fuera de la vía o sobre aceite/arena, cambios de dirección y tiempo cerca del peligro (la tormenta o los perseguidores).
+2. **`SkillClassifier`** (`src/ai/SkillClassifier.ts`) convierte esas métricas en un vector de 8 características normalizadas y calcula una habilidad entre 0 y 1 con un modelo lineal de pesos fijos y una sigmoide. Cada característica se compara contra la de un jugador promedio, y solo cuentan los obstáculos que estaban en tu trayectoria; así chocar seguido o avanzar poco baja el perfil aunque mantengas el acelerador. Según el resultado te clasifica como *Novato*, *Intermedio*, *Experto* o *Leyenda*. El HUD muestra la estimación en vivo.
+3. **Calibración dentro de cada nivel.** Los primeros ~550 m de los niveles 1 a 3 funcionan como un nivel 0: hay obstáculos en densidad neutral y solo uno o dos perseguidores del tipo más básico. El nivel 0 completo es la calibración del prólogo.
+4. **`AdaptiveDifficulty`** (`src/ai/AdaptiveDifficulty.ts`) aplica el resultado al mismo nivel, en caliente:
+   - **Tipos de vehículo** habilitados: 1 para un novato y los 4 para un experto (más en los niveles avanzados).
+   - **Perseguidores simultáneos**, frecuencia de refuerzos, agresividad y puntería.
+   - **Cantidad de obstáculos** según la habilidad y qué tan bien esquivaste. Si vas rápido, hay más obstáculos duros (barreras, contenedores, chatarra) y, en la tierra baldía, más zombis.
+   - **Distancia** hasta la meta (más larga para jugadores hábiles), retenes o barricadas y helicóptero policial.
+5. Si pierdes, el reintento vuelve a calibrar desde cero.
 
 ### Cómo pasar a TensorFlow.js
 
@@ -77,9 +78,9 @@ src/
     Physics.ts            Envoltura de Rapier: plano XZ, colisiones y raycasts
     Track.ts              Trazado curvo de la vía y biomas
     ChunkManager.ts       Generación procedural por tramos de 40 m (y su liberación)
-    Level.ts              Una partida: reglas, colisiones, policía, cámara
-  entities/               Vehicle (controlador arcade), Player, Police (IA), Civilian,
-                          Helicopter, Projectiles, Sandstorm
+    Level.ts              Una partida: calibración, reglas, colisiones, escenas, cámara
+  entities/               Vehicle (controlador arcade), Player, Pursuer (IA de policía,
+                          banda y mutantes), Civilian, Helicopter, Projectiles, Sandstorm
   fx/                     Modelos low-poly y partículas instanciadas
   ui/                     HUD y pantallas HTML/CSS
 ```
