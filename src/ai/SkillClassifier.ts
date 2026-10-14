@@ -6,16 +6,24 @@ import type { PerformanceMetrics } from './PerformanceTracker';
  * Es la misma entrada que recibiría un modelo de TensorFlow.js entrenado más adelante:
  * el historial guardado en localStorage contiene estos vectores para construir el dataset.
  */
+/**
+ * `ref` es el valor que obtendría un jugador promedio: la IA compara cada
+ * característica contra esa referencia (no contra 0.5), porque varias métricas
+ * salen altas incluso jugando mal (p. ej. el control en la vía).
+ */
 export const FEATURES = [
-  { key: 'avoidance', label: 'Esquive de obstáculos', weight: 1.6 },
-  { key: 'collisions', label: 'Pocos choques', weight: 1.2 },
-  { key: 'integrity', label: 'Integridad de la moto', weight: 1.2 },
-  { key: 'speed', label: 'Velocidad media', weight: 1.8 },
-  { key: 'nearMiss', label: 'Pasadas al límite', weight: 0.8 },
-  { key: 'control', label: 'Control en la vía', weight: 0.8 },
-  { key: 'smoothness', label: 'Suavidad de manejo', weight: 0.4 },
-  { key: 'composure', label: 'Sangre fría', weight: 1.0 },
+  { key: 'avoidance', label: 'Esquive de obstáculos', weight: 1.6, ref: 0.75 },
+  { key: 'collisions', label: 'Pocos choques', weight: 1.4, ref: 0.5 },
+  { key: 'integrity', label: 'Integridad de la moto', weight: 1.4, ref: 0.6 },
+  { key: 'speed', label: 'Avance real', weight: 1.6, ref: 0.55 },
+  { key: 'nearMiss', label: 'Pasadas al límite', weight: 0.5, ref: 0.3 },
+  { key: 'control', label: 'Control en la vía', weight: 0.8, ref: 0.8 },
+  { key: 'smoothness', label: 'Suavidad de manejo', weight: 0.3, ref: 0.5 },
+  { key: 'composure', label: 'Sangre fría', weight: 1.0, ref: 0.7 },
 ] as const;
+
+/** Velocidad de referencia (u/s) de un recorrido limpio sin turbo. */
+const IDEAL_SPEED = 34;
 
 export type FeatureKey = (typeof FEATURES)[number]['key'];
 export type FeatureVector = Record<FeatureKey, number>;
@@ -34,14 +42,18 @@ export interface SkillProfile {
 export function extractFeatures(m: PerformanceMetrics): FeatureVector {
   const minutes = Math.max(m.time / 60, 0.1);
   const players = Math.max(1, m.players);
-  const encountered = m.obstaclesPassed + m.obstaclesHit;
+  // Cada golpe pesa como tres esquives: chocar debe notarse en el perfil.
+  const weighted = m.obstaclesPassed + m.obstaclesHit * 3;
+  // Avance real: distancia por segundo, que ya refleja frenazos y choques
+  // (mantener el acelerador presionado no basta).
+  const progress = m.time > 1 ? m.distance / m.time / IDEAL_SPEED : 0;
   return {
-    avoidance: encountered > 0 ? m.obstaclesPassed / encountered : 0.5,
-    collisions: 1 - clamp01(m.collisions / players / minutes / 10),
-    integrity: 1 - clamp01(m.damageTaken / players / 120),
-    speed: m.speedSamples > 0 ? clamp01(((m.speedSum / m.speedSamples) - 0.25) / 0.65) : 0,
-    nearMiss: clamp01(m.nearMisses / players / minutes / 8),
-    control: 1 - clamp01(((m.offroadTime + m.hazardTime) / Math.max(m.time, 1)) * 2.5),
+    avoidance: weighted > 0 ? m.obstaclesPassed / weighted : 0.5,
+    collisions: 1 - clamp01(m.collisions / players / minutes / 5),
+    integrity: 1 - clamp01(m.damageTaken / players / 80),
+    speed: clamp01((progress - 0.35) / 0.55),
+    nearMiss: clamp01(m.nearMisses / players / minutes / 10),
+    control: 1 - clamp01(((m.offroadTime + m.hazardTime) / Math.max(m.time, 1)) * 3),
     smoothness: 1 - clamp01((m.steerChanges / players / minutes - 25) / 90),
     composure: 1 - clamp01((m.dangerTime / Math.max(m.time, 1)) * 4),
   };
@@ -68,12 +80,12 @@ export interface SkillClassifier {
  *   predict = f => model.predict(tf.tensor2d([FEATURES.map(x => f[x.key])])).dataSync()[0]
  */
 export class RuleBasedClassifier implements SkillClassifier {
-  readonly name = 'Reglas ponderadas v1';
+  readonly name = 'Reglas ponderadas v2';
 
   predict(f: FeatureVector): number {
     let z = 0;
-    for (const { key, weight } of FEATURES) z += weight * (f[key] - 0.5);
-    return sigmoid(z * 0.9);
+    for (const { key, weight, ref } of FEATURES) z += weight * (f[key] - ref);
+    return sigmoid(z * 1.3);
   }
 }
 

@@ -53,6 +53,11 @@ export class Game {
     window.addEventListener('resize', () => this.resize());
     this.resize();
 
+    // Un perfil calculado con otra versión del clasificador no es comparable: se descarta.
+    if (this.storage.data.profile && this.storage.data.profile.classifier !== this.classifier.name) {
+      this.storage.data.profile = null;
+      this.storage.save();
+    }
     this.audio.muted = this.storage.data.muted;
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock);
