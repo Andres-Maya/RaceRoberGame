@@ -34,9 +34,19 @@ Desde **Seleccionar nivel** puedes empezar en cualquier nivel: cada uno calibra 
 | Girar | `A` / `D` | `←` / `→` |
 | Turbo | `Espacio` o `Shift izq.` | `Shift der.` o `Enter` |
 
-Con un solo jugador sirven ambos esquemas. `Esc`/`P` pausa y `M` silencia el sonido.
+Con un solo jugador sirven ambos esquemas. `Esc`/`P` pausa, `M` silencia todo el sonido y `N` activa o desactiva la música.
 
 Modo cooperativo (mismo teclado): la cámara sigue a las dos motos. Si un jugador cae, reaparece a los 6 s junto a su compañero (cuesta $20.000). Si uno se queda muy atrás, se le trae de vuelta junto al otro.
+
+## Música
+
+La banda sonora es brutal death metal sintetizado en tiempo real con WebAudio (`src/core/Music.ts`), sin archivos de audio:
+
+- Dos guitarras afinadas muy grave con distorsión, abiertas a izquierda y derecha: trémolo, *palm mutes* y acordes de quinta. El bajo dobla la tónica.
+- Batería con blast beats, doble bombo, crash y china. Cada pieza se sintetiza una vez en un buffer para que el costo por golpe sea mínimo.
+- Coro épico con reverberación en el menú, los *breakdowns* y la pantalla de victoria.
+- Cada nivel tiene su tonalidad, tempo (de 176 a 222 BPM) y escala (frigia, frigia dominante, locria, cromática). Los riffs se generan con semilla, así que se repiten como en una canción.
+- La intensidad sigue a la acción: en calma suenan *chugs* y *breakdowns*; con muchos perseguidores, la tormenta cerca o la meta a la vista, entran los blast beats.
 
 ## La IA adaptativa
 
@@ -71,7 +81,7 @@ class TfClassifier implements SkillClassifier {
 ```
 src/
   main.ts                 Arranque: inicializa Rapier (WASM) y el juego
-  core/                   Game (bucle y estados), Input, Audio (WebAudio), Storage, Rng, math
+  core/                   Game (bucle y estados), Input, Audio y Music (WebAudio), Storage, Rng, math
   config/                 Tipos y configuración base de los niveles e historia
   ai/                     Métricas, clasificador de habilidad y dificultad adaptativa
   world/
@@ -97,4 +107,4 @@ Notas técnicas:
 - Multijugador en red con Socket.IO y un servidor Node.js (hoy el modo para 2 jugadores es local).
 - Entrenar el modelo de TF.js con el historial guardado.
 - Soporte para gamepad (Gamepad API) y controles táctiles.
-- Efectos de sonido grabados y música.
+- Voces guturales y efectos de sonido grabados.
