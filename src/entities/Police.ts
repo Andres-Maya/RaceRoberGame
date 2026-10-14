@@ -81,6 +81,8 @@ export class PoliceUnit {
   readonly model: PoliceMesh;
   hp: number;
   wrecked = false;
+  /** Segundos que lleva destruida (se retira al consumirse). */
+  wreckTime = 0;
   readonly armed: boolean;
   private ramTimer = 0;
   private ramCooldown: number;
@@ -112,6 +114,7 @@ export class PoliceUnit {
     const v = this.vehicle;
     const dt = ctx.dt;
     if (this.wrecked) {
+      this.wreckTime += dt;
       v.halt(dt);
       return null;
     }

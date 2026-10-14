@@ -80,6 +80,7 @@ export class Level {
   private camH = 50;
   private shake = 0;
   private spawnTimer = 2.5;
+  private policeArrived = false;
   private liveTimer = 0;
   private endTimer = 0;
   private respawnTimers = new Map<Player, number>();
@@ -478,7 +479,9 @@ export class Level {
 
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0 && this.activePolice < cfg.maxActive) {
-      const first = this.police.length === 0;
+      // La primera oleada sale de las calles laterales de la plaza del banco.
+      const first = !this.policeArrived;
+      this.policeArrived = true;
       this.spawnPolice(first);
       if (first) this.spawnPolice(true);
       this.spawnTimer = cfg.spawnInterval * this.rng.range(0.8, 1.2);
@@ -500,7 +503,10 @@ export class Level {
     for (let i = this.police.length - 1; i >= 0; i--) {
       const u = this.police[i];
       const tooFar = u.vehicle.d < minD - (u.wrecked ? 60 : 95) || u.vehicle.d > this.maxD + 200;
-      if (tooFar) {
+      // Las patrullas destruidas se consumen para no formar muros permanentes.
+      const burnedOut = u.wrecked && u.wreckTime > 7;
+      if (burnedOut) this.fx.explosion(u.vehicle.px, u.vehicle.pz, 0.5);
+      if (tooFar || burnedOut) {
         this.removeVehicle(u.vehicle.body, u.vehicle.mesh);
         this.police.splice(i, 1);
         if (!u.wrecked) this.spawnTimer = Math.min(this.spawnTimer, 1);
@@ -518,7 +524,7 @@ export class Level {
     let heading = 0;
 
     const sides = this.chunks.sideSpawns;
-    if ((fromSide || minD < 40) && sides.length) {
+    if (fromSide && sides.length && minD < 80) {
       const s = this.rng.pick(sides);
       x = s.x;
       d = s.d + this.rng.range(-3, 3);
@@ -534,7 +540,12 @@ export class Level {
       x = this.track.centerX(d) + this.rng.range(-half + 2.5, half - 2.5);
       heading = this.track.angle(d);
     }
-    if (d < 8 && !sides.length) d = 8;
+    if (d < 8) {
+      // Detrás está el banco: aparecer por delante en sentido contrario.
+      d = this.maxD + 70;
+      x = this.track.centerX(d);
+      heading = this.track.angle(d) + Math.PI;
+    }
     if (!this.chunks.isClear(x, d, 3)) x = this.track.centerX(d);
     for (const u of this.police) if (Math.hypot(u.vehicle.px - x, u.vehicle.pz + d) < 5) x += 5;
 
@@ -764,8 +775,8 @@ export class Level {
     const tz = cz + vz * 0.4 * look - 6;
     const speed = Math.hypot(vx, vz);
     const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const minForWidth = 26 / (tanHalf * camera.aspect);
-    const h = clamp(Math.max(42 + speed * 0.35 + spread * 0.8, minForWidth), 30, 120);
+    const minForWidth = 19 / (tanHalf * camera.aspect);
+    const h = clamp(Math.max(36 + speed * 0.35 + spread * 0.8, minForWidth), 28, 120);
 
     this.camX = damp(this.camX, tx, 5, dt);
     this.camZ = damp(this.camZ, tz, 5, dt);
