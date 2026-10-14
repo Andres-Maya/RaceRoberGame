@@ -1,84 +1,124 @@
 import { BASE_LEVELS } from '../config/levels';
-import type { LevelConfig, PoliceKind } from '../config/types';
+import type { LevelConfig, PursuerKind } from '../config/types';
 import { clamp, clamp01 } from '../core/math';
 import type { SkillProfile } from './SkillClassifier';
 
+/** Peso relativo de cada tipo habilitado, del más común al más raro. */
+const TYPE_WEIGHTS = [1, 0.75, 0.55, 0.4];
+
+/** Campos que la IA modifica en caliente al terminar la calibración. */
+export type Adjustment = Pick<
+  LevelConfig,
+  | 'distance'
+  | 'obstacleDensity'
+  | 'obstacleWeights'
+  | 'hazardDensity'
+  | 'trafficDensity'
+  | 'pursuers'
+  | 'roadblockEvery'
+  | 'helicopter'
+  | 'adaptiveNotes'
+>;
+
 /**
- * Sistema de dificultad adaptativa: recibe el perfil de habilidad (detectado en el
- * nivel 0 y reajustado después de cada nivel) y genera la configuración concreta
- * de los niveles 1, 2 y 3: cantidad y distribución de obstáculos, tráfico, policía
- * y la duración de cada nivel.
+ * Dificultad adaptativa dentro del mismo nivel. Cada nivel de persecución
+ * arranca con una fase de calibración neutral (pocos perseguidores del tipo
+ * más básico); al terminarla, el perfil medido decide cuántos tipos de
+ * vehículos aparecen, cuántos a la vez, cuántos obstáculos hay y cuánto falta
+ * para la meta.
  */
 export class AdaptiveDifficulty {
-  configFor(level: 1 | 2 | 3, profile: SkillProfile | null, players = 1): LevelConfig {
+  /** Configuración neutral para la fase de calibración. */
+  calibrationConfig(level: 1 | 2 | 3, players = 1): LevelConfig {
+    const base = structuredClone(BASE_LEVELS[level]);
+    const p = base.pursuers!;
+    base.pursuers = {
+      maxActive: 2 + (players - 1),
+      spawnInterval: p.spawnInterval * 1.3,
+      kinds: { [base.roster[0]]: 1 },
+      aggression: p.aggression * 0.7,
+      accuracy: p.accuracy * 0.7,
+      fireRate: p.fireRate * 0.7,
+    };
+    base.obstacleDensity *= 0.85;
+    base.roadblockEvery = 0;
+    base.helicopter = false;
+    return base;
+  }
+
+  adjust(level: 1 | 2 | 3, profile: SkillProfile, players = 1): Adjustment {
     const base = BASE_LEVELS[level];
-    const s = profile ? profile.skill : 0.5;
-    const f = profile?.features;
+    const s = profile.skill;
+    const f = profile.features;
 
-    // Multiplicador general: 0.6 (novato) .. 1.5 (leyenda).
-    const mult = 0.6 + 0.9 * s;
-    // Jugadores hábiles corren niveles más largos; los novatos, más cortos.
-    const duration = Math.round(base.duration * (0.8 + 0.45 * s));
+    // Número de tipos de vehículo: 1 para novatos, los 4 para expertos.
+    const typeCount = clamp(Math.round(1 + s * 2.6 + (level - 1) * 0.4), 1, base.roster.length);
+    const kinds: Partial<Record<PursuerKind, number>> = {};
+    base.roster.slice(0, typeCount).forEach((k, i) => (kinds[k] = TYPE_WEIGHTS[i]));
 
-    // Si esquiva bien, más obstáculos; si choca mucho, la IA alivia la densidad.
-    const avoidance = f ? f.avoidance : 0.5;
-    const obstacleDensity = base.obstacleDensity * mult * (0.85 + 0.3 * avoidance);
+    const bp = base.pursuers!;
+    const pursuers = {
+      maxActive: Math.max(2, Math.round(bp.maxActive * (0.7 + 0.8 * s)) + (players - 1)),
+      spawnInterval: clamp(bp.spawnInterval / (0.7 + 0.7 * s), 1.8, 10),
+      kinds,
+      aggression: clamp01(bp.aggression + (s - 0.5) * 0.4),
+      accuracy: clamp01(bp.accuracy + (s - 0.5) * 0.3),
+      fireRate: bp.fireRate * (0.75 + 0.6 * s),
+    };
 
-    // Quien va rápido recibe más obstáculos "duros" (barreras, chatarra);
-    // quien va lento, obstáculos blandos que solo frenan (conos, cajas).
-    const speed = f ? f.speed : 0.5;
+    // Cantidad de obstáculos: según habilidad y qué tan bien esquivó en la calibración.
+    const obstacleDensity = base.obstacleDensity * (0.6 + 0.9 * s) * (0.85 + 0.3 * f.avoidance);
+    // Quien avanza rápido recibe obstáculos duros; quien va lento, blandos.
     const weights = { ...base.obstacleWeights };
-    const hardBias = 0.6 + speed * 0.9;
-    for (const k of ['barrier', 'wreck', 'dumpster'] as const) if (weights[k]) weights[k] = weights[k]! * hardBias;
-    for (const k of ['cone', 'crate'] as const) if (weights[k]) weights[k] = weights[k]! * (1.6 - speed * 0.8);
+    const hardBias = 0.6 + f.speed * 0.9;
+    for (const k of ['barrier', 'wreck', 'dumpster', 'container'] as const) if (weights[k]) weights[k] = weights[k]! * hardBias;
+    for (const k of ['cone', 'crate'] as const) if (weights[k]) weights[k] = weights[k]! * (1.6 - f.speed * 0.8);
+    // Los zombis abundan más para quien los esquiva con facilidad.
+    if (weights.zombie) weights.zombie *= 0.7 + 0.8 * s;
 
-    let police = base.police;
-    if (police) {
-      const kinds: Partial<Record<PoliceKind, number>> = { ...police.kinds };
-      // Pilotos expertos atraen unidades rápidas (motos) antes de tiempo.
-      if (s > 0.6 && level >= 1) kinds.moto = (kinds.moto ?? 0) + (s - 0.6) * 0.8;
-      if (s > 0.75 && level >= 2) kinds.swat = (kinds.swat ?? 0) + (s - 0.75) * 0.8;
-      police = {
-        maxActive: Math.max(2, Math.round(police.maxActive * (0.7 + 0.7 * s) + (players - 1))),
-        spawnInterval: clamp(police.spawnInterval / (0.7 + 0.7 * s), 1.8, 10),
-        kinds,
-        aggression: clamp01(police.aggression + (s - 0.5) * 0.4),
-        accuracy: clamp01(police.accuracy + (s - 0.5) * 0.3),
-        fireRate: police.fireRate * (0.75 + 0.6 * s),
-      };
-    }
+    // El tramo restante es más largo para jugadores hábiles.
+    const distance = Math.round(base.calibration + (base.distance - base.calibration) * (0.8 + 0.45 * s));
+    const roadblockEvery = Math.round(base.roadblockEvery / (0.7 + 0.6 * s));
+    const helicopter = base.faction === 'police' && s > 0.7;
 
-    const roadblockEvery =
-      base.roadblockEvery > 0 ? Math.round(base.roadblockEvery / (0.7 + 0.6 * s)) : s > 0.8 && level === 1 ? 900 : 0;
+    const pct = (x: number) => `${x >= 1 ? '+' : ''}${Math.round((x - 1) * 100)}%`;
+    const names = base.roster.slice(0, typeCount).map(kindLabel).join(', ');
+    const adaptiveNotes = [
+      `Tipos de perseguidores: ${typeCount} de ${base.roster.length} (${names})`,
+      `Perseguidores simultáneos: ${pursuers.maxActive}`,
+      `Obstáculos: ${pct(obstacleDensity / base.obstacleDensity)}${f.avoidance > 0.8 ? ' (esquivas bien)' : f.avoidance < 0.5 ? ' (chocas seguido)' : ''}`,
+      `Distancia total: ${(distance / 1000).toFixed(1)} km (base ${(base.distance / 1000).toFixed(1)} km)`,
+      `Agresividad: ${Math.round(pursuers.aggression * 100)}% · Puntería: ${Math.round(pursuers.accuracy * 100)}%`,
+    ];
+    if (helicopter) adaptiveNotes.push('Helicóptero policial: eres demasiado bueno');
 
-    const config: LevelConfig = {
-      ...base,
-      duration,
+    return {
+      distance,
       obstacleDensity,
       obstacleWeights: weights,
       hazardDensity: base.hazardDensity * (0.7 + 0.6 * s),
       trafficDensity: base.trafficDensity * (0.8 + 0.4 * s),
-      police,
+      pursuers,
       roadblockEvery,
-      helicopter: base.helicopter || (level === 2 && s > 0.85),
-      adaptiveNotes: [],
+      helicopter,
+      adaptiveNotes,
     };
-
-    const pct = (x: number) => `${x >= 1 ? '+' : ''}${Math.round((x - 1) * 100)}%`;
-    config.adaptiveNotes = [
-      `Duración: ${duration} s (base ${base.duration} s)`,
-      `Obstáculos: ${pct(obstacleDensity / base.obstacleDensity)} ${avoidance > 0.7 ? '(esquivas bien)' : avoidance < 0.4 ? '(chocas seguido)' : ''}`.trim(),
-      `Obstáculos duros: ${pct(hardBias)} ${speed > 0.65 ? '(vas muy rápido)' : ''}`.trim(),
-      `Tráfico civil: ${pct(config.trafficDensity / base.trafficDensity)}`,
-    ];
-    if (police && base.police) {
-      config.adaptiveNotes.push(
-        `Patrullas simultáneas: ${police.maxActive} (base ${base.police.maxActive})`,
-        `Agresividad policial: ${Math.round(police.aggression * 100)}% · Puntería: ${Math.round(police.accuracy * 100)}%`,
-      );
-    }
-    if (roadblockEvery > 0) config.adaptiveNotes.push(`Retenes cada ~${roadblockEvery} m`);
-    if (config.helicopter && !base.helicopter) config.adaptiveNotes.push('Helicóptero adelantado: eres demasiado bueno');
-    return config;
   }
+}
+
+export function kindLabel(k: PursuerKind): string {
+  return {
+    patrol: 'patrullas',
+    moto: 'motos policiales',
+    suv: 'SUVs',
+    swat: 'SWAT',
+    muscle: 'muscle cars',
+    biker: 'moteros',
+    pickup: 'pickups armadas',
+    van: 'furgón blindado',
+    buggy: 'buggies',
+    mutant: 'mutantes',
+    raider: 'moteros mutantes',
+    rig: 'camiones de guerra',
+  }[k];
 }

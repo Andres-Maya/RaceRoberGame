@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import type { PoliceConfig } from '../config/types';
+import type { PursuerConfig } from '../config/types';
 import { damp, wrapAngle } from '../core/math';
 import type { Rng } from '../core/Rng';
 import { disposeUnique, helicopter, type HeliMesh } from '../fx/Meshes';
 import type { Player } from './Player';
-import type { FireRequest } from './Police';
+import type { FireRequest } from './Pursuer';
 
 const ALTITUDE = 15;
 
@@ -34,7 +34,7 @@ export class Helicopter {
     scene.add(this.model.group, this.model.shadow, this.model.spot);
   }
 
-  update(dt: number, players: Player[], cfg: PoliceConfig, rng: Rng): FireRequest | null {
+  update(dt: number, players: Player[], cfg: PursuerConfig, rng: Rng): FireRequest | null {
     this.t += dt;
     const alive = players.filter((p) => p.alive);
     if (alive.length === 0) return null;

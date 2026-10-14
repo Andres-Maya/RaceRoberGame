@@ -1,12 +1,12 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { quatY } from '../core/math';
 
-export type TagKind = 'player' | 'police' | 'civilian' | 'obstacle' | 'prop' | 'wall';
+export type TagKind = 'player' | 'pursuer' | 'civilian' | 'obstacle' | 'prop' | 'wall';
 
 /** Metadatos asociados a cada collider para resolver colisiones de juego. */
 export interface Tag {
   kind: TagKind;
-  /** Entidad dueña (Player, PoliceUnit, Civilian u ObstacleRecord). */
+  /** Entidad dueña (Player, Pursuer, Civilian u ObstacleRecord). */
   ref?: unknown;
 }
 

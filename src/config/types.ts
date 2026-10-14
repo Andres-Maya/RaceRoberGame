@@ -1,4 +1,18 @@
-export type Biome = 'desert' | 'outskirts' | 'city' | 'plaza' | 'bankBack' | 'bankEnd';
+export type Biome =
+  | 'desert'
+  | 'outskirts'
+  | 'city'
+  | 'plaza'
+  | 'bankBack'
+  | 'bankEnd'
+  | 'bridge'
+  | 'tunnelEnd'
+  | 'tunnelExit'
+  | 'industrial'
+  | 'plantEnd'
+  | 'plantBack'
+  | 'wasteland'
+  | 'safeZone';
 
 export type ObstacleKind =
   | 'rock'
@@ -10,19 +24,40 @@ export type ObstacleKind =
   | 'wreck'
   | 'crate'
   | 'dumpster'
-  | 'parkedCar';
+  | 'parkedCar'
+  | 'container'
+  | 'toxicBarrel'
+  | 'zombie';
 
-export type HazardKind = 'sand' | 'oil' | 'spikes';
+export type HazardKind = 'sand' | 'oil' | 'spikes' | 'acid';
 
-export type PoliceKind = 'patrol' | 'moto' | 'suv' | 'swat';
+/** Quién persigue a los jugadores en cada nivel. */
+export type Faction = 'police' | 'gang' | 'wasteland';
 
-export interface PoliceConfig {
-  /** Patrullas simultáneas máximas. */
+export type PursuerKind =
+  // Policía (nivel 1)
+  | 'patrol'
+  | 'moto'
+  | 'suv'
+  | 'swat'
+  // Banda rival (nivel 2)
+  | 'muscle'
+  | 'biker'
+  | 'pickup'
+  | 'van'
+  // Tierra baldía (nivel 3)
+  | 'buggy'
+  | 'mutant'
+  | 'raider'
+  | 'rig';
+
+export interface PursuerConfig {
+  /** Perseguidores simultáneos máximos. */
   maxActive: number;
   /** Segundos entre refuerzos. */
   spawnInterval: number;
-  /** Probabilidad relativa de cada tipo de vehículo. */
-  kinds: Partial<Record<PoliceKind, number>>;
+  /** Probabilidad relativa de cada tipo habilitado. */
+  kinds: Partial<Record<PursuerKind, number>>;
   /** 0..1: frecuencia e intensidad de las embestidas. */
   aggression: number;
   /** 0..1: precisión de los disparos. */
@@ -31,27 +66,36 @@ export interface PoliceConfig {
   fireRate: number;
 }
 
+export type StartScene = 'road' | 'bank' | 'tunnel' | 'plant';
+export type FinishScene = 'bank' | 'tunnel' | 'plant' | 'safeZone';
+
 export interface LevelConfig {
   index: 0 | 1 | 2 | 3;
   name: string;
   subtitle: string;
   intro: string[];
-  /** Duración del nivel en segundos (la IA la modifica en los niveles 1-3). */
-  duration: number;
+  /** Distancia (m) hasta la estructura final. La IA la ajusta tras la calibración. */
+  distance: number;
+  /** Metros iniciales de calibración (en el nivel 0, todo el recorrido). */
+  calibration: number;
+  faction: Faction | null;
+  /** Tipos de perseguidores del nivel, de menor a mayor amenaza. */
+  roster: PursuerKind[];
+  start: StartScene;
+  finish: FinishScene;
   /** Obstáculos por cada 100 m de carretera. */
   obstacleDensity: number;
   obstacleWeights: Partial<Record<ObstacleKind, number>>;
-  /** Zonas peligrosas (arena, aceite, púas) por cada 100 m. */
+  /** Zonas peligrosas por cada 100 m. */
   hazardDensity: number;
   hazardWeights: Partial<Record<HazardKind, number>>;
   /** Autos civiles por cada 100 m. */
   trafficDensity: number;
-  police: PoliceConfig | null;
-  /** Metros entre retenes policiales (0 = sin retenes). */
+  pursuers: PursuerConfig | null;
+  /** Metros entre retenes / barricadas (0 = ninguno). */
   roadblockEvery: number;
   helicopter: boolean;
-  /** Ambiente visual. */
-  mood: 'day' | 'afternoon' | 'sunset' | 'dusk';
+  mood: 'day' | 'afternoon' | 'sunset' | 'toxic';
   /** Explicación legible de los ajustes que hizo la IA. */
   adaptiveNotes: string[];
 }

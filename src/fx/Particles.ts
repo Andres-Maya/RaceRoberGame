@@ -138,10 +138,19 @@ export class Effects {
     scene.add(this.fire.mesh, this.smoke.mesh);
   }
 
-  explosion(x: number, z: number, scale = 1): void {
-    this.fire.emit({ x, z, y: 1, count: Math.round(40 * scale), speed: [4, 16 * scale], life: [0.3, 0.8], size: [2.2 * scale, 0.4], colors: [0xfff1a8, 0xff4500], drag: 3, rise: 3 });
-    this.smoke.emit({ x, z, y: 1.5, count: Math.round(30 * scale), speed: [2, 8 * scale], life: [1.2, 2.6], size: [1.5 * scale, 5 * scale], colors: [0x6a6058, 0x3a3a3a], drag: 2, rise: 1.5 });
-    this.fire.emit({ x, z, y: 1, count: Math.round(20 * scale), speed: [12, 26], life: [0.4, 0.9], size: [0.35, 0.1], colors: [0xffd27a, 0xff6a00], drag: 1 });
+  /** Explosión de fuego normal o tóxica (verde, para la planta nuclear). */
+  explosion(x: number, z: number, scale = 1, toxic = false): void {
+    const core: [number, number] = toxic ? [0xeaffc0, 0x39ff14] : [0xfff1a8, 0xff4500];
+    const smoke: [number, number] = toxic ? [0x4f7a32, 0x1e3314] : [0x6a6058, 0x3a3a3a];
+    const sparks: [number, number] = toxic ? [0xd9ff9a, 0x2fd10f] : [0xffd27a, 0xff6a00];
+    this.fire.emit({ x, z, y: 1, count: Math.round(40 * scale), speed: [4, 16 * scale], life: [0.3, 0.8], size: [2.2 * scale, 0.4], colors: core, drag: 3, rise: 3 });
+    this.smoke.emit({ x, z, y: 1.5, count: Math.round(30 * scale), speed: [2, 8 * scale], life: [1.2, 2.6], size: [1.5 * scale, 5 * scale], colors: smoke, drag: 2, rise: 1.5 });
+    this.fire.emit({ x, z, y: 1, count: Math.round(20 * scale), speed: [12, 26], life: [0.4, 0.9], size: [0.35, 0.1], colors: sparks, drag: 1 });
+  }
+
+  /** Salpicadura verde (zombis, mutantes, ácido). */
+  splatter(x: number, z: number, count = 14): void {
+    this.smoke.emit({ x, z, y: 0.8, count, speed: [3, 9], life: [0.3, 0.7], size: [0.5, 0.15], colors: [0x6dbf3a, 0x2f5a1a], drag: 4 });
   }
 
   sparks(x: number, z: number, count = 10): void {
@@ -160,8 +169,9 @@ export class Effects {
     this.fire.emit({ x, z, y: 0.7, count: 2, speed: [6, 10], life: [0.08, 0.2], size: [0.5, 0.1], colors: [0x9fd8ff, 0x2a6bff], dir, spread: 0.3, drag: 5 });
   }
 
-  smokeTrail(x: number, z: number): void {
-    this.smoke.emit({ x, z, y: 1.2, count: 1, speed: [0.3, 1.2], life: [0.6, 1.4], size: [0.6, 2.2], colors: [0x444444, 0x111111], drag: 1, rise: 1 });
+  smokeTrail(x: number, z: number, toxic = false): void {
+    const colors: [number, number] = toxic ? [0x5fae3a, 0x1e3314] : [0x444444, 0x111111];
+    this.smoke.emit({ x, z, y: 1.2, count: 1, speed: [0.3, 1.2], life: [0.6, 1.4], size: [0.6, 2.2], colors, drag: 1, rise: 1 });
   }
 
   update(dt: number): void {

@@ -39,8 +39,8 @@ export class Player {
   sinceHit = 0;
   steer = 0;
   offroad = false;
-  /** Escena automática en curso: entrar al banco (nivel 0) o salir saltando (niveles 1-3). */
-  cutscene: 'enterBank' | 'exitBank' | null = null;
+  /** Escena automática en curso: entrar a la estructura final o salir de la inicial. */
+  cutscene: 'enter' | 'exit' | null = null;
   /** Segundos de vuelo restantes durante el salto de salida. */
   airTime = 0;
   /** Sin colisiones: la moto atraviesa puertas y escombros durante las escenas. */

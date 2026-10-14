@@ -101,9 +101,9 @@ export class Screens {
       actions[`l${i}p1`] = () => start(i, 1);
       actions[`l${i}p2`] = () => start(i, 2);
     }
-    const prof = save.profile
-      ? `Perfil de la IA: <b>${save.profile.tier}</b> (${Math.round(save.profile.skill * 100)}%). Los niveles 1-3 se adaptan a este perfil.`
-      : 'Aún no hay perfil de la IA: los niveles 1-3 usarán dificultad media. Juega el nivel 0 para que El Analista te evalúe.';
+    const prof =
+      'Cada nivel empieza con una fase de calibración: El Analista mide tu habilidad en los primeros metros y ajusta ese mismo nivel.' +
+      (save.profile ? ` Último perfil: <b>${save.profile.tier}</b> (${Math.round(save.profile.skill * 100)}%).` : '');
     this.show(`<h2>Seleccionar nivel</h2><p class="muted">${prof}</p>${rows}<div class="menu-buttons"><button data-action="back" class="ghost">Volver <kbd>Esc</kbd></button></div>`, actions, [[['Escape', 'Backspace'], 'back']]);
   }
 
@@ -128,7 +128,8 @@ export class Screens {
       <ul class="tips">
         <li>Fuera del asfalto en el desierto la moto pierde velocidad.</li>
         <li>Manchas negras = aceite (derrapas). Tiras metálicas = púas (pinchazo).</li>
-        <li>Las patrullas que chocan fuerte contra muros u obstáculos quedan fuera de combate.</li>
+        <li>Los perseguidores que chocan fuerte contra muros u obstáculos quedan fuera de combate.</li>
+        <li>Charcos verdes = ácido (daño continuo). Los zombis cruzan la vía: si los atropellas, te frenan.</li>
         <li>Cada disparo que recibes rompe la mochila: pierdes $2.500 del botín.</li>
       </ul>
       <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button></div>`,
@@ -146,7 +147,7 @@ export class Screens {
       .join('');
     this.show(
       `<h2>Perfil de la IA</h2>
-      ${p ? this.profileBlock(p) : '<p class="muted">Aún no hay perfil: juega el nivel 0 para que El Analista te evalúe.</p>'}
+      ${p ? this.profileBlock(p) : '<p class="muted">Aún no hay perfil: juega cualquier nivel para que El Analista te evalúe.</p>'}
       <div class="stat-grid">
         <div><b>${save.runs}</b><span>niveles jugados</span></div>
         <div><b>${save.victories}</b><span>fugas exitosas</span></div>
@@ -178,10 +179,12 @@ export class Screens {
     const notes = cfg.adaptiveNotes.length
       ? `<div class="ai-notes"><h3>El Analista ajustó este nivel</h3><ul>${cfg.adaptiveNotes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`
       : '';
+    const km = (m: number) => `${(m / 1000).toFixed(1)} km`;
+    const target = { bank: 'el Banco Central', tunnel: 'el túnel del puente', plant: 'la planta nuclear', safeZone: 'la zona segura' }[cfg.finish];
     const goal =
       cfg.index === 0
-        ? `La IA te observará durante <b>${cfg.duration} s</b>. Luego entra al banco.`
-        : `Sobrevive <b>${formatTime(cfg.duration)}</b> a la persecución.`;
+        ? `Recorre <b>${km(cfg.distance)}</b> hasta ${target}. La IA te observará todo el camino.`
+        : `Llega a ${target}: unos <b>${km(cfg.distance)}</b>. Los primeros <b>${cfg.calibration} m</b> son de calibración: El Analista medirá tu habilidad y ajustará en este mismo nivel los tipos de vehículos, cuántos te persiguen, los obstáculos y la distancia.`;
     this.show(
       `<div class="level-tag">${cfg.index === 0 ? 'PRÓLOGO' : `NIVEL ${cfg.index} DE 3`}</div>
       <h1>${esc(cfg.name.split('—')[1]?.trim() ?? cfg.name)}</h1>
@@ -222,7 +225,6 @@ export class Screens {
     score: number,
     cash: number | null,
     profile: SkillProfile | null,
-    preview: LevelConfig[],
     next: Action,
     menu: Action,
   ): void {
@@ -237,28 +239,24 @@ export class Screens {
       ...(cfg.index > 0
         ? [
             ['Disparos recibidos', `${m.bulletsHit} de ${m.bulletsFired}`],
-            ['Patrullas destruidas', String(m.copsWrecked)],
+            ['Perseguidores derribados', String(m.copsWrecked)],
           ]
         : []),
       ['Puntaje', Math.round(score).toLocaleString('es-CO')],
       ...(cash !== null ? [['Botín restante', formatMoney(cash)]] : []),
     ];
     const table = rows.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join('');
-    const ai =
-      cfg.index === 0 && profile
-        ? `<h3>Veredicto de El Analista</h3>${this.profileBlock(profile)}
-           <div class="preview">${preview
-             .map(
-               (c) => `<div class="pv"><b>Nivel ${c.index}</b><span>${formatTime(c.duration)}</span><span>${c.obstacleDensity.toFixed(1)} obst./100 m</span><span>${c.police?.maxActive ?? 0} patrullas</span></div>`,
-             )
-             .join('')}</div>
-           <p class="muted small">La duración y los obstáculos de cada nivel se calcularon a partir de tu perfil. Se reajustarán después de cada nivel.</p>`
-        : profile
-          ? `<p class="muted">Perfil actualizado: <b>${profile.tier}</b> (${Math.round(profile.skill * 100)}%)</p>`
-          : '';
+    const notes = cfg.adaptiveNotes.length
+      ? `<div class="ai-notes"><h3>Ajustes aplicados en este nivel</h3><ul>${cfg.adaptiveNotes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`
+      : '';
+    const ai = profile
+      ? `<h3>Veredicto de El Analista</h3>${this.profileBlock(profile)}${notes}${
+          cfg.index === 0 ? '<p class="muted small">Cada nivel siguiente empieza con su propia fase de calibración.</p>' : ''
+        }`
+      : '';
     this.show(
       `<div class="level-tag">${cfg.index === 0 ? 'PRÓLOGO COMPLETADO' : `NIVEL ${cfg.index} SUPERADO`}</div>
-      <h2>${cfg.index === 0 ? '¡Dentro del Banco Central!' : '¡Escapaste!'}</h2>
+      <h2>${{ bank: '¡Dentro del Banco Central!', tunnel: '¡A salvo en el túnel!', plant: '¡La planta nuclear voló!', safeZone: '¡Zona segura!' }[cfg.finish]}</h2>
       <div class="kv-grid">${table}</div>
       ${ai}
       <div class="menu-buttons"><button data-action="next" class="primary">Continuar <kbd>Enter</kbd></button><button data-action="menu" class="ghost">Menú</button></div>`,
@@ -271,13 +269,13 @@ export class Screens {
   gameOver(cfg: LevelConfig, m: PerformanceMetrics, score: number, retry: Action, menu: Action): void {
     this.show(
       `<div class="level-tag danger">${cfg.name}</div>
-      <h2>${cfg.index === 0 ? 'La tormenta los alcanzó' : '¡Los atraparon!'}</h2>
+      <h2>${['La tormenta los alcanzó', '¡Los atrapó la policía!', '¡Los Cuervos se quedaron con el botín!', '¡La tierra baldía los devoró!'][cfg.index]}</h2>
       <div class="kv-grid">
         <div class="kv"><span>Tiempo resistido</span><b>${formatTime(m.time)}</b></div>
         <div class="kv"><span>Distancia</span><b>${Math.round(m.distance)} m</b></div>
         <div class="kv"><span>Puntaje del nivel</span><b>${Math.round(score).toLocaleString('es-CO')}</b></div>
       </div>
-      ${cfg.index > 0 ? '<p class="muted">El Analista tomó nota: el reintento será un poco más amable.</p>' : ''}
+      ${cfg.index > 0 ? '<p class="muted">En el reintento, El Analista volverá a calibrar tu habilidad desde el inicio.</p>' : ''}
       <div class="menu-buttons"><button data-action="retry" class="primary">Reintentar <kbd>Enter</kbd></button><button data-action="menu" class="ghost">Menú <kbd>Esc</kbd></button></div>`,
       { retry, menu },
       [

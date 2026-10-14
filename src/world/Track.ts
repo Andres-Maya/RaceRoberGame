@@ -18,7 +18,18 @@ export const HALF_WIDTH: Record<Biome, number> = {
   plaza: 12,
   bankBack: 12,
   bankEnd: 12,
+  bridge: 10,
+  tunnelEnd: 10,
+  tunnelExit: 11,
+  industrial: 11,
+  plantEnd: 11,
+  plantBack: 10,
+  wasteland: 10,
+  safeZone: 10,
 };
+
+/** Biomas donde salirse del asfalto frena la moto (tierra, arena, escombros). */
+export const ROUGH_BIOMES = new Set<Biome>(['desert', 'outskirts', 'wasteland', 'safeZone']);
 
 /**
  * Trazado de la carretera. El avance se mide con "d" (distancia recorrida),
@@ -72,7 +83,7 @@ export class Track {
 
   isOffroad(x: number, d: number): boolean {
     const biome = this.biomeAt(d);
-    const margin = biome === 'desert' || biome === 'outskirts' ? 1.5 : SIDEWALK;
+    const margin = ROUGH_BIOMES.has(biome) ? 1.5 : SIDEWALK;
     return Math.abs(this.lateral(x, d)) > HALF_WIDTH[biome] + margin;
   }
 }

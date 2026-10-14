@@ -1,24 +1,33 @@
 import type RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
-import type { Biome, HazardKind, LevelConfig, ObstacleKind } from '../config/types';
+import type { Biome, FinishScene, HazardKind, LevelConfig, ObstacleKind } from '../config/types';
+import { quatY } from '../core/math';
 import type { Rng } from '../core/Rng';
 import {
   bankBuilding,
   box,
   building,
   cliff,
+  container,
+  coolingTower,
+  deadTree,
   mat,
+  nuclearPlant,
   OBSTACLE_SPECS,
   obstacleMesh,
+  outlawVehicle,
   palm,
   pickupMesh,
   policeVehicle,
+  rubble,
+  ruin,
   setSiren,
   shareGeometry,
   textPlane,
   tree,
+  tunnelMountain,
   disposeUnique,
-  type PoliceMesh,
+  type PursuerMesh,
 } from '../fx/Meshes';
 import type { Physics } from './Physics';
 import { BOUND, CHUNK, HALF_WIDTH, SIDEWALK, Track, WIDE_BOUND } from './Track';
@@ -35,6 +44,17 @@ export interface ObstacleRecord {
   mesh: THREE.Object3D;
   dynamic: boolean;
   drift: { x: number; z: number } | null;
+  /** Zombis atropellados: quedan tendidos y sin colisión. */
+  dead?: boolean;
+}
+
+/** Zona que termina el nivel (puerta del banco, boca del túnel, planta, línea de meta). */
+export interface FinishZone {
+  kind: FinishScene;
+  x: number;
+  d: number;
+  hw: number;
+  hd: number;
 }
 
 export interface Hazard {
@@ -81,7 +101,7 @@ interface Chunk {
   objects: THREE.Object3D[];
   obstacles: ObstacleRecord[];
   hazards: Hazard[];
-  sirens: PoliceMesh[];
+  sirens: PursuerMesh[];
   pickups: Pickup[];
   placed: { x: number; d: number; r: number }[];
 }
@@ -95,7 +115,18 @@ const GROUND: Record<Biome, number> = {
   plaza: 0x6a6d72,
   bankBack: 0x6a6d72,
   bankEnd: 0x6a6d72,
+  bridge: 0x2b6f95,
+  tunnelEnd: 0x7a6a55,
+  tunnelExit: 0x55534d,
+  industrial: 0x55534d,
+  plantEnd: 0x55534d,
+  plantBack: 0x5a5446,
+  wasteland: 0x6a5d45,
+  safeZone: 0x6a5d45,
 };
+
+/** Biomas con tráfico, obstáculos normales, retenes y recompensas. */
+const ROAD_BIOMES = new Set<Biome>(['desert', 'outskirts', 'city', 'bridge', 'industrial', 'wasteland']);
 
 /**
  * Genera el mapa por tramos de 40 m delante de los jugadores y libera los que
@@ -110,11 +141,14 @@ export class ChunkManager {
   private sirenTimer = 0;
   private sirenPhase = false;
   private spin = 0;
-  /** Se generó el banco final (nivel 0): no hay más tramos. */
+  /** Se generó la estructura final cerrada (banco, túnel, planta): no hay más tramos. */
   finished = false;
-  bankDoor: { x: number; d: number; hw: number; hd: number } | null = null;
-  bankFront: { x: number; d: number } | null = null;
-  private bankDoorMesh: THREE.Mesh | null = null;
+  finishZone: FinishZone | null = null;
+  /** Fachada de la estructura de salida (banco, túnel o planta) al inicio del nivel. */
+  startFront: { x: number; d: number } | null = null;
+  /** Puntos donde estalla la planta nuclear al final del nivel 2. */
+  blastPoints: { x: number; z: number }[] = [];
+  private finishDoor: THREE.Mesh | null = null;
   /** Puntos de aparición de patrullas en calles laterales de la plaza. */
   sideSpawns: { x: number; d: number; heading: number }[] = [];
 
@@ -123,8 +157,7 @@ export class ChunkManager {
     startIndex: number,
   ) {
     this.nextIndex = startIndex;
-    const every = ctx.config.roadblockEvery;
-    this.nextRoadblock = every > 0 ? 260 + every * 0.4 : Infinity;
+    this.nextRoadblock = Infinity;
   }
 
   get generatedUntil(): number {
@@ -145,6 +178,18 @@ export class ChunkManager {
         o.mesh.position.set(t.x, 0, t.z);
         o.mesh.quaternion.set(r.x, r.y, r.z, r.w);
         if (o.kind === 'tumbleweed') o.mesh.children[0].rotation.z -= (o.drift?.x ?? 0) * dt * 0.8;
+        if (o.kind === 'zombie' && !o.dead) {
+          const inner = o.mesh.children[0];
+          const phase = this.spin * 3 + o.d;
+          inner.rotation.z = Math.sin(phase) * 0.15;
+          inner.position.y = Math.abs(Math.sin(phase)) * 0.1;
+          // Al salir de la vía dan media vuelta y vuelven a cruzar.
+          const lat = t.x - this.track.centerX(o.d);
+          if (o.drift && Math.abs(lat) > this.track.halfWidth(o.d) + 5 && Math.sign(lat) === Math.sign(o.drift.x)) {
+            o.drift.x *= -1;
+            o.body.setRotation(quatY(o.drift.x > 0 ? -Math.PI / 2 : Math.PI / 2), true);
+          }
+        }
       }
     }
 
@@ -189,9 +234,20 @@ export class ChunkManager {
     return c.placed.every((p) => Math.hypot(p.x - x, p.d - d) > p.r + radius);
   }
 
-  /** Abre la puerta del banco final: queda un hueco oscuro por donde entra la moto. */
-  openBankDoor(): void {
-    if (this.bankDoorMesh) this.bankDoorMesh.material = mat(0x0a0a0a);
+  /** Abre la puerta final (banco o planta): queda un hueco oscuro por donde entra la moto. */
+  openFinishDoor(): void {
+    if (this.finishDoor) this.finishDoor.material = mat(0x0a0a0a);
+  }
+
+  /** Zombi atropellado: cae al suelo y deja de colisionar. */
+  killZombie(o: ObstacleRecord): void {
+    if (o.dead) return;
+    o.dead = true;
+    o.drift = null;
+    const inner = o.mesh.children[0];
+    inner.rotation.set(-Math.PI / 2, 0, 0);
+    inner.position.y = 0.3;
+    o.body.collider(0).setSensor(true);
   }
 
   dispose(): void {
@@ -237,8 +293,32 @@ export class ChunkManager {
       case 'bankEnd':
         this.genBankEnd(c);
         break;
+      case 'bridge':
+        this.genBridge(c);
+        break;
+      case 'tunnelEnd':
+        this.genTunnelEnd(c);
+        break;
+      case 'tunnelExit':
+        this.genTunnelExit(c);
+        break;
+      case 'industrial':
+        this.genIndustrial(c);
+        break;
+      case 'plantEnd':
+        this.genPlantEnd(c);
+        break;
+      case 'plantBack':
+        this.genPlantBack(c);
+        break;
+      case 'wasteland':
+        this.genWasteland(c);
+        break;
+      case 'safeZone':
+        this.genSafeZone(c);
+        break;
     }
-    if (biome !== 'bankBack' && biome !== 'plaza' && biome !== 'bankEnd' && index >= 3) {
+    if (ROAD_BIOMES.has(biome) && index >= 3) {
       this.maybeRoadblock(c);
       this.maybePickup(c);
     }
@@ -533,7 +613,7 @@ export class ChunkManager {
     }
     this.solid(c, c.d0 + 0.5, 0, WIDE_BOUND + 1, 0.5);
     this.bounds(c, WIDE_BOUND);
-    this.bankFront = { x: this.track.centerX(c.d1), d: c.d1 - 2 };
+    this.startFront = { x: this.track.centerX(c.d1), d: c.d1 - 2 };
   }
 
   /** Final del nivel 0: la vía desemboca en la fachada del Banco Central. */
@@ -547,11 +627,255 @@ export class ChunkManager {
     const depth = 24;
     const bank = bankBuilding(70, depth, false, true);
     this.add(c, bank, facade + depth / 2, 0, Math.PI);
-    this.bankDoorMesh = bank.getObjectByName('bankDoor') as THREE.Mesh;
+    this.finishDoor = bank.getObjectByName('bankDoor') as THREE.Mesh;
     this.solid(c, facade + depth / 2, 0, 35, depth / 2);
     this.bounds(c, BOUND);
-    this.bankDoor = { x: this.track.centerX(facade), d: facade - 4, hw: 6, hd: 4 };
+    this.finishZone = { kind: 'bank', x: this.track.centerX(facade), d: facade - 4, hw: 6, hd: 4 };
     this.finished = true;
+  }
+
+  // ------------------------------------------------------------ puente y túnel (nivel 1 → 2)
+
+  private bridgeDeck(c: Chunk, half: number, d0 = c.d0, d1 = c.d1): void {
+    this.strip(c, -half - 1.6, half + 1.6, 0x7d7d78, 0.008, d0, d1);
+    this.road(c, half, 0x34353a, d0, d1);
+    this.strip(c, -half, -half + 0.25, 0xffffff, 0.03, d0, d1);
+    this.strip(c, half - 0.25, half, 0xffffff, 0.03, d0, d1);
+    this.strip(c, -0.35, -0.15, 0xf1c40f, 0.03, d0, d1);
+    this.strip(c, 0.15, 0.35, 0xf1c40f, 0.03, d0, d1);
+    this.dashes(c, -half / 2, 0xffffff, 3, 8, 0.2, d0, d1);
+    this.dashes(c, half / 2, 0xffffff, 3, 8, 0.2, d0, d1);
+    for (const s of [-1, 1]) {
+      for (let d = d0; d < d1; d += 4) this.add(c, box(0.4, 1.1, 4.05, 0xb8b8b8), d + 2, s * (half + 1.3));
+      this.solid(c, (d0 + d1) / 2, s * (half + 1.7), 0.4, (d1 - d0) / 2 + 1.5);
+    }
+  }
+
+  private genBridge(c: Chunk): void {
+    const rng = this.ctx.rng;
+    const half = HALF_WIDTH.bridge;
+    // Oleaje del río
+    for (let i = 0; i < 10; i++) this.flat(c, rng.range(4, 14), 0.5, 0x4a93bd, rng.range(c.d0, c.d1), rng.sign() * rng.range(half + 4, 70), 0.0, rng.range(-0.2, 0.2));
+    if (this.prevBiome !== 'bridge') {
+      // Estribo de concreto a la entrada del puente
+      this.flat(c, 80, 6, 0x8a8a85, c.d0 + 3, 0, 0.004);
+      this.gantry(c, c.d0 + 10, half, 'PUENTE DEL RÍO');
+    }
+    this.bridgeDeck(c, half);
+    if (c.index % 2 === 0) {
+      // Torres de un puente colgante
+      const mid = (c.d0 + c.d1) / 2;
+      for (const s of [-1, 1]) this.add(c, box(2.2, 26, 2.2, 0xa03a2a), mid, s * (half + 3.4));
+      this.add(c, box(half * 2 + 9, 1.4, 1.6, 0xa03a2a, 0, 24, 0), mid, 0);
+      for (const s of [-1, 1]) this.add(c, box(0.2, 0.2, CHUNK, 0x555555, 0, 22, 0), mid, s * (half + 3.4));
+    }
+    this.bounds(c, BOUND);
+    this.roadObstacles(c, this.ctx.config.obstacleWeights, half, 0.6);
+    this.roadHazards(c, half, { oil: 1 });
+    this.traffic(c, [-3, -7], [3, 7], 0.8);
+  }
+
+  /** Final del nivel 1: el puente desemboca en el túnel de la montaña. */
+  private genTunnelEnd(c: Chunk): void {
+    const half = HALF_WIDTH.tunnelEnd;
+    const face = c.d0 + 22;
+    const depth = 30;
+    this.bridgeDeck(c, half, c.d0, c.d0 + 10);
+    this.strip(c, -half - 1.6, half + 1.6, 0x6a5a48, 0.006, c.d0 + 10, face);
+    this.road(c, half, 0x34353a, c.d0 + 10, face);
+    const mountain = tunnelMountain(96, depth, half * 2);
+    this.add(c, mountain, face + depth / 2, 0, Math.PI);
+    this.solid(c, face + depth / 2, 0, 48, depth / 2);
+    this.bounds(c, BOUND);
+    this.finishZone = { kind: 'tunnel', x: this.track.centerX(face), d: face - 4, hw: half - 1, hd: 4 };
+    this.finished = true;
+  }
+
+  /** Inicio del nivel 2: las motos salen de la boca del túnel. */
+  private genTunnelExit(c: Chunk): void {
+    const half = HALF_WIDTH.tunnelExit;
+    const depth = 30;
+    const face = c.d1 - 2;
+    this.road(c, half, 0x343434, face - 2, c.d1);
+    const mountain = tunnelMountain(96, depth, half * 2);
+    this.add(c, mountain, face - depth / 2, 0);
+    this.solid(c, face - depth / 2, 0, 48, depth / 2);
+    this.bounds(c, BOUND);
+    this.startFront = { x: this.track.centerX(face), d: face };
+  }
+
+  // ------------------------------------------------------------ zona industrial (nivel 2)
+
+  private industrialStreet(c: Chunk, half: number, d0 = c.d0, d1 = c.d1): void {
+    this.strip(c, -half - 2.5, half + 2.5, 0x6b675e, 0.005, d0, d1);
+    this.road(c, half, 0x343434, d0, d1);
+    this.strip(c, -half, -half + 0.25, 0xcfcfcf, 0.03, d0, d1);
+    this.strip(c, half - 0.25, half, 0xcfcfcf, 0.03, d0, d1);
+    this.dashes(c, 0, 0xd4a017, 3, 7, 0.22, d0, d1);
+    this.dashes(c, -half / 2, 0xcfcfcf, 2.5, 9, 0.2, d0, d1);
+    this.dashes(c, half / 2, 0xcfcfcf, 2.5, 9, 0.2, d0, d1);
+  }
+
+  private genIndustrial(c: Chunk): void {
+    const rng = this.ctx.rng;
+    const half = HALF_WIDTH.industrial;
+    this.industrialStreet(c, half);
+    for (const s of [-1, 1]) {
+      let d = c.d0;
+      while (c.d1 - d > 4) {
+        const r = rng.next();
+        if (r < 0.45) {
+          // Bodega
+          const len = Math.min(rng.range(12, 20), c.d1 - d);
+          const deep = rng.range(12, 17);
+          const off = s * (half + 3 + deep / 2);
+          this.add(c, building(deep, rng.range(6, 10), len - 0.6, rng.next()), d + len / 2, off);
+          this.solid(c, d + len / 2, off, deep / 2, len / 2);
+          d += len;
+        } else if (r < 0.8) {
+          // Pila de contenedores
+          const len = 6.6;
+          if (c.d1 - d < len) break;
+          const cols = rng.int(1, 3);
+          for (let j = 0; j < cols; j++) {
+            const off = s * (half + 3 + 1.3 + j * 2.7);
+            const levels = rng.int(1, 2);
+            for (let k = 0; k < levels; k++) {
+              const ct = container([0xb03a2e, 0x2e86c1, 0x1e8449, 0xd68910][rng.int(0, 3)]);
+              ct.position.y = k * 2.6;
+              this.add(c, ct, d + len / 2, off);
+            }
+          }
+          this.solid(c, d + len / 2, s * (half + 3 + cols * 1.35), cols * 1.35, len / 2);
+          d += len + rng.range(1, 4);
+        } else {
+          // Chimenea industrial
+          const off = s * (half + rng.range(8, 14));
+          const h = rng.range(18, 28);
+          this.add(c, box(2.4, h, 2.4, 0x8a8580), d + 3, off);
+          this.add(c, box(2.5, 1.2, 2.5, 0xc0392b, 0, h - 3, 0), d + 3, off);
+          this.add(c, box(2.5, 1.2, 2.5, 0xffffff, 0, h - 1.5, 0), d + 3, off);
+          this.solid(c, d + 3, off, 1.2, 1.2);
+          d += 8;
+        }
+      }
+    }
+    this.bounds(c, BOUND);
+    const weights = { ...this.ctx.config.obstacleWeights };
+    this.roadObstacles(c, weights, half);
+    this.roadHazards(c, half, this.ctx.config.hazardWeights);
+    this.traffic(c, [-3, -8], [3, 8], 1);
+  }
+
+  /** Final del nivel 2: la carretera termina en la compuerta de la planta nuclear. */
+  private genPlantEnd(c: Chunk): void {
+    const half = HALF_WIDTH.plantEnd;
+    const facade = c.d0 + 30;
+    const depth = 26;
+    this.industrialStreet(c, half, c.d0, facade);
+    this.flat(c, 70, 14, 0x8f8a80, facade - 7, 0, 0.012);
+    const plant = nuclearPlant(70, depth, false, true);
+    this.add(c, plant, facade + depth / 2, 0, Math.PI);
+    this.finishDoor = plant.getObjectByName('plantDoor') as THREE.Mesh;
+    this.solid(c, facade + depth / 2, 0, 35, depth / 2);
+    const towerD = facade + depth + 8;
+    for (const s of [-1, 1]) this.add(c, coolingTower(10, 26, false), towerD, s * 24);
+    this.bounds(c, BOUND);
+    const cx = this.track.centerX(facade + depth / 2);
+    this.blastPoints = [
+      { x: cx, z: -(facade + depth / 2) },
+      { x: this.track.centerX(towerD) - 24, z: -towerD },
+      { x: this.track.centerX(towerD) + 24, z: -towerD },
+    ];
+    this.finishZone = { kind: 'plant', x: this.track.centerX(facade), d: facade - 4, hw: 6, hd: 4 };
+    this.finished = true;
+  }
+
+  // ------------------------------------------------------------ tierra baldía (nivel 3)
+
+  /** Inicio del nivel 3: la planta destruida queda detrás, brillando en verde. */
+  private genPlantBack(c: Chunk): void {
+    const half = HALF_WIDTH.plantBack;
+    const depth = 26;
+    const center = c.d1 - 3 - depth / 2;
+    this.road(c, half, 0x3d3a36, c.d1 - 6, c.d1);
+    const plant = nuclearPlant(70, depth, true);
+    this.add(c, plant, center, 0);
+    this.solid(c, center, 0, 35, depth / 2);
+    for (const s of [-1, 1]) this.add(c, coolingTower(10, 13, true), center - 2, s * 26);
+    this.solid(c, c.d0 + 0.5, 0, BOUND + 1, 0.5);
+    this.bounds(c, BOUND);
+    this.startFront = { x: this.track.centerX(c.d1), d: c.d1 - 2 };
+  }
+
+  private wastelandRoad(c: Chunk, half: number): void {
+    const rng = this.ctx.rng;
+    this.strip(c, -half - 2, half + 2, 0x5e5240, 0.005);
+    this.road(c, half, 0x3d3a36);
+    this.dashes(c, 0, 0x8a7a3a, 3, 9);
+    // Grietas en el asfalto
+    for (let i = 0; i < 6; i++) this.flat(c, 0.18, rng.range(2, 6), 0x1f1d1b, rng.range(c.d0, c.d1), rng.range(-half + 1, half - 1), 0.03, rng.range(-1, 1));
+    for (const s of [-1, 1]) {
+      for (let d = c.d0; d < c.d1; d += 10) {
+        const w = rng.range(5, 8);
+        const off = s * (30 + w / 2);
+        this.add(c, rubble(w, rng.range(3, 8), 10.4, rng.next()), d + 5, off);
+        this.solid(c, d + 5, off, w / 2, 5.2);
+      }
+    }
+    this.bounds(c, BOUND);
+  }
+
+  private genWasteland(c: Chunk): void {
+    const rng = this.ctx.rng;
+    const half = HALF_WIDTH.wasteland;
+    this.wastelandRoad(c, half);
+    for (const s of [-1, 1]) {
+      let d = c.d0 + rng.range(0, 6);
+      while (d < c.d1 - 6) {
+        const len = rng.range(7, 13);
+        const deep = rng.range(7, 12);
+        const off = s * (half + rng.range(4, 8) + deep / 2);
+        if (Math.abs(off) + deep / 2 < 29.5) {
+          this.add(c, ruin(deep, rng.range(5, 13), len, rng.next()), d + len / 2, off);
+          this.solid(c, d + len / 2, off, deep / 2, len / 2);
+          c.placed.push({ x: this.track.centerX(d + len / 2) + off, d: d + len / 2, r: Math.max(deep, len) / 2 });
+        }
+        d += len + rng.range(4, 12);
+      }
+      for (let i = 0; i < 2; i++) {
+        const td = rng.range(c.d0, c.d1);
+        const off = s * rng.range(half + 2, half + 4);
+        this.add(c, deadTree(), td, off);
+      }
+      if (rng.chance(0.5)) this.addObstacle(c, 'wreck', rng.range(c.d0, c.d1), s * rng.range(half + 3, 26), rng.range(0, 6), false);
+      if (rng.chance(0.4)) this.addObstacle(c, 'toxicBarrel', rng.range(c.d0, c.d1), s * rng.range(half + 3, 26), 0, false);
+    }
+    this.roadObstacles(c, this.ctx.config.obstacleWeights, half + 1);
+    // Hordas de zombis cruzando la carretera
+    if (c.index >= 2 && rng.chance(Math.min(0.8, 0.35 * (this.ctx.config.obstacleDensity / 8)))) {
+      const d = rng.range(c.d0 + 6, c.d1 - 6);
+      const n = rng.int(2, 5);
+      for (let i = 0; i < n; i++) {
+        const zd = d + rng.range(-4, 4);
+        const off = rng.range(-half, half);
+        if (this.isClear(this.track.centerX(zd) + off, zd, 1)) this.addObstacle(c, 'zombie', zd, off, 0, true);
+      }
+    }
+    this.roadHazards(c, half, this.ctx.config.hazardWeights);
+  }
+
+  /** Final del nivel 3: el cartel de la zona segura marca la meta. */
+  private genSafeZone(c: Chunk): void {
+    const half = HALF_WIDTH.safeZone;
+    this.wastelandRoad(c, half);
+    const d = c.d0 + 20;
+    this.gantry(c, d, half, 'ZONA SEGURA');
+    for (let x = -half, i = 0; x < half; x += 1, i++) {
+      this.flat(c, 1, 1, i % 2 === 0 ? 0xffffff : 0x111111, d - 0.5, x + 0.5, 0.04);
+      this.flat(c, 1, 1, i % 2 === 0 ? 0x111111 : 0xffffff, d + 0.5, x + 0.5, 0.04);
+    }
+    this.finishZone = { kind: 'safeZone', x: this.track.centerX(d), d, hw: 40, hd: 1.5 };
   }
 
   // ------------------------------------------------------------ contenido
@@ -572,12 +896,20 @@ export class ChunkManager {
           density: spec.density,
           linearDamping: kind === 'tumbleweed' ? 0.2 : 1.6,
           angularDamping: 3,
-          rotates: true,
+          rotates: kind !== 'zombie',
         })
       : this.ctx.physics.fixedBox(x, -d, spec.hx, spec.hz, rot, tag);
     if (kind === 'tumbleweed') {
       const dir = this.ctx.rng.sign();
       rec.drift = { x: dir * this.ctx.rng.range(3, 6), z: this.ctx.rng.range(-1, 1) };
+    }
+    if (kind === 'zombie') {
+      // Caminan lentamente de un lado a otro de la vía.
+      const dir = this.ctx.rng.sign();
+      rec.drift = { x: dir * this.ctx.rng.range(1.2, 2.4), z: this.ctx.rng.range(-0.4, 0.4) };
+      const facing = dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+      rec.body.setRotation(quatY(facing), true);
+      m.rotation.y = facing;
     }
     c.bodies.push(rec.body);
     c.obstacles.push(rec);
@@ -595,19 +927,20 @@ export class ChunkManager {
     return null;
   }
 
-  private roadObstacles(c: Chunk, weights: Partial<Record<ObstacleKind, number>>, half: number): void {
+  private roadObstacles(c: Chunk, weights: Partial<Record<ObstacleKind, number>>, half: number, factor = 1): void {
     const rng = this.ctx.rng;
     // Los primeros tramos quedan despejados para arrancar con calma.
     if (c.index < 2) return;
-    const count = rng.poisson((this.ctx.config.obstacleDensity * CHUNK) / 100);
+    const count = rng.poisson((this.ctx.config.obstacleDensity * factor * CHUNK) / 100);
     for (let i = 0; i < count; i++) {
       const kind = rng.weighted(weights);
       const spec = OBSTACLE_SPECS[kind];
-      if (kind === 'parkedCar') {
+      if (kind === 'parkedCar' || kind === 'container') {
+        // Estacionados junto al borde, alineados con la vía.
         const s = rng.sign();
-        const d = rng.range(c.d0 + 2, c.d1 - 2);
-        const off = s * (half - 1.3);
-        if (this.isClear(this.track.centerX(d) + off, d, 3)) this.addObstacle(c, kind, d, off, rng.chance(0.5) ? 0 : Math.PI, true);
+        const d = rng.range(c.d0 + 3.5, c.d1 - 3.5);
+        const off = s * (half - spec.hx - 0.3);
+        if (this.isClear(this.track.centerX(d) + off, d, spec.hz + 1)) this.addObstacle(c, kind, d, off, rng.chance(0.5) ? 0 : Math.PI, true);
         continue;
       }
       const spot = this.freeSpot(c, half, Math.max(spec.hx, spec.hz));
@@ -623,7 +956,7 @@ export class ChunkManager {
     const count = rng.poisson((this.ctx.config.hazardDensity * CHUNK) / 100);
     for (let i = 0; i < count; i++) {
       const kind = rng.weighted(weights);
-      const size = { sand: [3.5, 3], oil: [1.8, 1.6], spikes: [3.2, 0.4] }[kind];
+      const size = { sand: [3.5, 3], oil: [1.8, 1.6], spikes: [3.2, 0.4], acid: [2.2, 2] }[kind];
       const d = rng.range(c.d0 + 3, c.d1 - 3);
       const off = rng.range(-half + size[0], half - size[0]);
       this.hazard(c, kind, d, off, size[0], size[1]);
@@ -642,6 +975,15 @@ export class ChunkManager {
       m.scale.set(hw * 2, 1, hd * 2);
       m.position.y = 0.05;
       this.add(c, m, d, off);
+    } else if (kind === 'acid') {
+      const m = new THREE.Mesh(sandGeo, mat(0x4cff2a, 0x1fae0a));
+      m.scale.set(hw * 2, 1, hd * 2);
+      m.position.y = 0.05;
+      this.add(c, m, d, off);
+      const rim = new THREE.Mesh(sandGeo, mat(0x2a5a1a));
+      rim.scale.set(hw * 2.3, 1, hd * 2.3);
+      rim.position.y = 0.04;
+      this.add(c, rim, d, off);
     } else {
       this.flat(c, hw * 2, hd * 2, 0x3a3a3a, d, off, 0.06);
       for (let x = -hw + 0.3; x < hw; x += 0.5) {
@@ -690,6 +1032,10 @@ export class ChunkManager {
   }
 
   private maybeRoadblock(c: Chunk): void {
+    const every = this.ctx.config.roadblockEvery;
+    if (every <= 0) return;
+    // La IA puede activar los retenes a mitad de nivel: el primero llega con algo de margen.
+    if (this.nextRoadblock === Infinity) this.nextRoadblock = c.d0 + every * 0.4;
     if (c.d0 < this.nextRoadblock) return;
     const rng = this.ctx.rng;
     this.nextRoadblock = c.d0 + this.ctx.config.roadblockEvery * rng.range(0.8, 1.2);
@@ -698,17 +1044,30 @@ export class ChunkManager {
     const slots: number[] = [];
     for (let off = -half + 2.2; off <= half - 2.2; off += 4.5) slots.push(off);
     const gap = rng.int(0, slots.length - 1);
+    const faction = this.ctx.config.faction;
     slots.forEach((off, i) => {
       if (i === gap) return;
-      const pm = policeVehicle('patrol');
-      setSiren(pm, i % 2 === 0);
-      c.sirens.push(pm);
-      this.addObstacle(c, 'parkedCar', d + rng.range(-0.6, 0.6), off, Math.PI / 2 + rng.range(-0.25, 0.25), true, pm.group);
+      const dd = d + rng.range(-0.6, 0.6);
+      const rot = Math.PI / 2 + rng.range(-0.25, 0.25);
+      if (faction === 'police') {
+        // Retén policial con sirenas encendidas
+        const pm = policeVehicle('patrol');
+        setSiren(pm, i % 2 === 0);
+        c.sirens.push(pm);
+        this.addObstacle(c, 'parkedCar', dd, off, rot, true, pm.group);
+      } else if (faction === 'gang') {
+        // Barricada de la banda rival
+        this.addObstacle(c, 'parkedCar', dd, off, rot, true, outlawVehicle('muscle'));
+      } else {
+        // Muro de chatarra quemada
+        this.addObstacle(c, 'wreck', dd, off, rot, true);
+      }
     });
-    // Púas delante de un carro del retén y conos en los bordes.
+    // Púas delante de un vehículo de la barricada y conos o barriles en los bordes.
     const spikeSlot = slots[(gap + 1) % slots.length];
-    if (Math.abs(spikeSlot - slots[gap]) > 1) this.hazard(c, 'spikes', d - 4, spikeSlot, 2.2, 0.4);
-    for (const s of [-1, 1]) this.addObstacle(c, 'cone', d - 2, s * (half - 0.6), 0, true);
+    if (faction !== 'gang' && Math.abs(spikeSlot - slots[gap]) > 1) this.hazard(c, 'spikes', d - 4, spikeSlot, 2.2, 0.4);
+    const edge: ObstacleKind = faction === 'police' ? 'cone' : faction === 'gang' ? 'barrel' : 'toxicBarrel';
+    for (const s of [-1, 1]) this.addObstacle(c, edge, d - 2, s * (half - 0.6), 0, true);
   }
 
   // ------------------------------------------------------------ limpieza

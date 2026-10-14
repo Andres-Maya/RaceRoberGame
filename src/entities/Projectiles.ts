@@ -28,15 +28,20 @@ export interface BulletEvents {
 }
 
 const GEO = new THREE.BoxGeometry(0.16, 0.16, 1.3);
-const MAT = mat(0xffe066, 0xffc400);
+/** Color de las balas según quién dispara. */
+const MATS = {
+  police: mat(0xffe066, 0xffc400),
+  gang: mat(0xff9a3c, 0xff6a00),
+  wasteland: mat(0x9dff6a, 0x39ff14),
+};
 
 export class Projectiles {
   private bullets: Bullet[] = [];
 
   constructor(private scene: THREE.Scene) {}
 
-  fire(x: number, z: number, angle: number, damage: number, aerial = false): void {
-    const mesh = new THREE.Mesh(GEO, MAT);
+  fire(x: number, z: number, angle: number, damage: number, aerial = false, style: keyof typeof MATS = 'police'): void {
+    const mesh = new THREE.Mesh(GEO, MATS[style]);
     mesh.position.set(x, 1.3, z);
     mesh.rotation.y = angle;
     this.scene.add(mesh);

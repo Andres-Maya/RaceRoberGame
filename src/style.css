@@ -65,7 +65,8 @@ kbd {
 /* ------------------------------------------------------------ overlays */
 
 #storm-overlay,
-#damage-overlay {
+#damage-overlay,
+#flash-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -114,6 +115,7 @@ kbd {
 }
 
 .hud-timer {
+  min-width: 170px;
   text-align: center;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid var(--line);
@@ -131,6 +133,10 @@ kbd {
   font: 2.3rem var(--display);
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+#hud-progress-bar {
+  background: var(--gold);
 }
 
 #hud-timer.urgent {

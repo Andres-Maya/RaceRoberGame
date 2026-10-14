@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AdaptiveDifficulty } from '../ai/AdaptiveDifficulty';
-import { blendProfile, buildProfile, RuleBasedClassifier, type SkillProfile } from '../ai/SkillClassifier';
+import { buildProfile, RuleBasedClassifier, type SkillProfile } from '../ai/SkillClassifier';
 import { LEVEL_0, VICTORY_TEXT } from '../config/levels';
 import type { LevelConfig } from '../config/types';
 import { Hud } from '../ui/Hud';
@@ -161,14 +161,17 @@ export class Game {
   }
 
   private startFrom(level: number, players: number): void {
-    const profile = level > 0 ? this.storage.data.profile : null;
-    this.campaign = { players, level, profile, cash: level > 0 ? LOOT : 0, score: 0, config: null };
+    this.campaign = { players, level, profile: this.storage.data.profile, cash: level > 0 ? LOOT : 0, score: 0, config: null };
     this.showIntro();
   }
 
+  /**
+   * Configuración nueva para cada intento: los niveles 1-3 arrancan en modo
+   * calibración y la IA los ajusta en caliente durante la partida.
+   */
   private configFor(level: number): LevelConfig {
-    if (level === 0) return LEVEL_0;
-    return this.difficulty.configFor(level as 1 | 2 | 3, this.campaign.profile, this.campaign.players);
+    if (level === 0) return structuredClone(LEVEL_0);
+    return this.difficulty.calibrationConfig(level as 1 | 2 | 3, this.campaign.players);
   }
 
   private showIntro(): void {
@@ -181,11 +184,13 @@ export class Game {
   }
 
   private beginLevel(): void {
-    const cfg = this.campaign.config ?? this.configFor(this.campaign.level);
+    const cfg = this.configFor(this.campaign.level);
+    this.campaign.config = cfg;
     this.disposeLevel();
     this.screens.hide();
     this.audio.unlock();
-    this.level = new Level(cfg, this.campaign.players, this.audio, { message: (t, c, s) => this.hud.toast(t, c, s) }, this.classifier);
+    const hooks = { message: (t: string, c?: string, s?: number) => this.hud.toast(t, c, s), flash: (c: string) => this.hud.flash(c) };
+    this.level = new Level(cfg, this.campaign.players, this.audio, hooks, this.classifier);
     this.hud.show(this.level, this.campaign.cash);
     this.state = 'playing';
     this.last = performance.now();
@@ -212,12 +217,11 @@ export class Game {
     const m = level.tracker.m;
     const data = this.storage.data;
     data.runs++;
-    const recent = buildProfile(this.classifier, m);
-    this.storage.record({ date: new Date().toISOString(), players: this.campaign.players, level: cfg.index, skill: recent.skill, features: recent.features });
+    // El perfil del nivel es el medido en su calibración (o el recorrido completo si no llegó a terminarla).
+    const measured = level.calibratedProfile ?? buildProfile(this.classifier, m);
+    this.storage.record({ date: new Date().toISOString(), players: this.campaign.players, level: cfg.index, skill: measured.skill, features: measured.features });
 
     if (level.outcome === 'failed') {
-      // La IA también aprende de las derrotas: el reintento será más accesible.
-      if (cfg.index > 0 && this.campaign.profile) this.campaign.profile = blendProfile(this.campaign.profile, recent, 0.25);
       this.state = 'gameover';
       this.hud.hide();
       this.saveBest(this.campaign.score + level.score, 0);
@@ -226,13 +230,8 @@ export class Game {
     }
 
     this.campaign.score += level.score;
-    if (cfg.index === 0) {
-      this.campaign.profile = recent;
-      this.campaign.cash = LOOT;
-    } else {
-      this.campaign.profile = this.campaign.profile ? blendProfile(this.campaign.profile, recent, 0.3) : recent;
-      this.campaign.cash = Math.max(0, this.campaign.cash - level.cashLost);
-    }
+    this.campaign.profile = measured;
+    this.campaign.cash = cfg.index === 0 ? LOOT : Math.max(0, this.campaign.cash - level.cashLost);
     data.profile = this.campaign.profile;
     data.unlocked = Math.max(data.unlocked, Math.min(3, cfg.index + 1));
     this.storage.save();
@@ -247,14 +246,12 @@ export class Game {
     }
 
     this.state = 'results';
-    const preview = cfg.index === 0 ? ([1, 2, 3] as const).map((l) => this.difficulty.configFor(l, this.campaign.profile, this.campaign.players)) : [];
     this.screens.results(
       cfg,
       m,
       level.score,
       cfg.index === 0 ? null : this.campaign.cash,
-      this.campaign.profile,
-      preview,
+      measured,
       () => {
         this.campaign.level = cfg.index + 1;
         this.showIntro();

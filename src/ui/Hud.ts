@@ -1,4 +1,4 @@
-import { formatMoney, formatTime } from '../core/math';
+import { formatMoney } from '../core/math';
 import { BIKE_SPEC, PLAYER_COLORS, TURBO_MUL } from '../entities/Player';
 import type { Level } from '../world/Level';
 
@@ -24,13 +24,15 @@ export class Hud {
   private countdown = $('#hud-countdown');
   private stormOverlay = $('#storm-overlay');
   private damageOverlay = $('#damage-overlay');
+  private flashOverlay = $('#flash-overlay');
+  private progressBar = $('#hud-progress-bar');
   private cache = new Map<HTMLElement, string>();
 
   show(level: Level, baseCash: number): void {
     this.root.classList.remove('hidden');
     this.levelName.textContent = level.config.name;
     this.objective.textContent = level.config.subtitle;
-    this.ai.classList.toggle('hidden', level.config.index !== 0);
+    this.ai.classList.remove('hidden');
     this.storm.classList.toggle('hidden', level.config.index !== 0);
     this.cash.classList.toggle('hidden', level.config.index === 0);
     this.wanted.classList.toggle('hidden', level.config.index === 0);
@@ -66,18 +68,22 @@ export class Hud {
 
   update(level: Level): void {
     const cfg = level.config;
+    // Meta por distancia
+    const goal = { bank: 'BANCO', tunnel: 'TÚNEL', plant: 'PLANTA', safeZone: 'ZONA SEGURA' }[cfg.finish];
+    this.set(this.timerLabel, `${goal} EN`);
+    const left = level.remainingDistance;
+    this.set(this.timer, left >= 1000 ? `${(left / 1000).toFixed(2)} km` : `${Math.round(left)} m`);
+    this.timer.classList.toggle('urgent', left < 150);
+    this.progressBar.style.width = `${Math.round(level.progress * 100)}%`;
+
+    // El Analista: calibración y veredicto
+    this.aiBar.style.width = `${Math.round(level.aiProgress * 100)}%`;
+    const prof = level.liveProfile;
+    this.set(this.aiSkill, prof ? `${Math.round(prof.skill * 100)}%` : '—');
+    const calibrating = level.calibrating;
+    this.set(this.aiTier, !prof || (calibrating && level.aiProgress < 0.35) ? 'Calibrando…' : calibrating ? `${prof.tier}?` : `${prof.tier} · ajuste aplicado`);
+
     if (cfg.index === 0) {
-      if (level.aiProgress >= 1) {
-        this.set(this.timerLabel, 'OBJETIVO');
-        this.set(this.timer, 'BANCO');
-      } else {
-        this.set(this.timerLabel, 'ANÁLISIS IA');
-        this.set(this.timer, formatTime(level.remaining));
-      }
-      this.aiBar.style.width = `${Math.round(level.aiProgress * 100)}%`;
-      const prof = level.liveProfile;
-      this.set(this.aiSkill, prof ? `${Math.round(prof.skill * 100)}%` : '—');
-      this.set(this.aiTier, prof ? (level.aiProgress < 0.35 ? 'Calibrando…' : prof.tier) : 'Calibrando…');
       const gap = level.stormGap;
       if (gap !== null) {
         this.set(this.storm, gap > 0 ? `Tormenta a ${Math.round(gap)} m` : '¡DENTRO DE LA TORMENTA!');
@@ -86,11 +92,8 @@ export class Hud {
         this.stormOverlay.style.opacity = String(stormAlpha);
       }
     } else {
-      this.set(this.timerLabel, 'RESISTE');
-      this.set(this.timer, formatTime(level.remaining));
-      this.timer.classList.toggle('urgent', level.remaining < 10);
       this.set(this.cash, formatMoney(this.baseCash - level.cashLost));
-      const stars = Math.min(5, Math.ceil(level.activePolice / 1.5) + (level.heli ? 1 : 0));
+      const stars = Math.min(5, Math.ceil(level.activePursuers / 1.5) + (level.heli ? 1 : 0));
       this.set(this.wanted, '★'.repeat(stars) + '☆'.repeat(5 - stars));
     }
     this.set(this.score, `${Math.round(level.score).toLocaleString('es-CO')} pts`);
@@ -122,6 +125,17 @@ export class Hud {
     } else {
       this.countdown.classList.add('hidden');
     }
+  }
+
+  /** Destello de pantalla completa que se desvanece. */
+  flash(color: string): void {
+    const el = this.flashOverlay;
+    el.style.transition = 'none';
+    el.style.background = color;
+    el.style.opacity = '0.85';
+    void el.offsetWidth;
+    el.style.transition = 'opacity 1.4s ease-out';
+    el.style.opacity = '0';
   }
 
   toast(text: string, color = '#ffffff', seconds = 1.8): void {
