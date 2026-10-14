@@ -17,12 +17,14 @@ npm run preview    # sirve el build de producción
 
 | Nivel | Escenario | Qué pasa |
 |---|---|---|
-| **0 — La Ruta del Polvo** | Desierto → afueras → ciudad | Esquivas rocas, cactus, barriles y rodadoras mientras una tormenta de arena te persigue. Cuando la IA está terminando su análisis llegas a la ciudad, y el nivel termina al entrar al Banco Central. |
-| **1 — El Golpe** | Ciudad (tarde) | Arranca con la explosión de la bóveda. Las patrullas te persiguen, te embisten y algunos agentes disparan. |
+| **0 — La Ruta del Polvo** | Desierto → afueras → ciudad | Esquivas rocas, cactus, barriles y rodadoras mientras una tormenta de arena te persigue. Cuando la IA está terminando su análisis llegas a la ciudad, y el nivel termina cuando la moto atraviesa la puerta del Banco Central. |
+| **1 — El Golpe** | Ciudad (tarde) | Arranca con la explosión de la bóveda: la moto sale del banco con un salto. Las patrullas te persiguen, te embisten y algunos agentes disparan. |
 | **2 — Avenida en Llamas** | Ciudad (atardecer) | Se suman motos policiales y SUVs, aparecen retenes y hay más obstáculos. |
 | **3 — Último Cerco** | Ciudad (anochecer) → desierto | Llegan furgonetas SWAT, un helicóptero con reflector y más retenes. El último tramo vuelve al desierto. |
 
 En los niveles 1 a 3 ganas si sigues vivo cuando el cronómetro llega a cero. Cada disparo que recibes te quita $2.500 del botín.
+
+Desde **Seleccionar nivel** puedes empezar en cualquier nivel. Si todavía no hay un perfil de la IA, los niveles 1 a 3 usan dificultad media.
 
 ## Controles
 
@@ -38,8 +40,8 @@ Modo cooperativo (mismo teclado): la cámara sigue a las dos motos. Si un jugado
 
 ## La IA adaptativa
 
-1. **`PerformanceTracker`** (`src/ai/PerformanceTracker.ts`) registra durante el nivel: choques, daño, obstáculos esquivados o golpeados, pasadas al límite, velocidad media, tiempo fuera de la vía o sobre aceite/arena, cambios de dirección y tiempo cerca del peligro (la tormenta o la policía).
-2. **`SkillClassifier`** (`src/ai/SkillClassifier.ts`) convierte esas métricas en un vector de 8 características normalizadas y calcula una habilidad entre 0 y 1 con un modelo lineal de pesos fijos y una sigmoide. Según el resultado te clasifica como *Novato*, *Intermedio*, *Experto* o *Leyenda*. Durante el nivel 0 el HUD muestra la estimación en vivo.
+1. **`PerformanceTracker`** (`src/ai/PerformanceTracker.ts`) registra durante el nivel: choques, daño, obstáculos esquivados o golpeados, pasadas al límite, avance real (distancia por segundo), tiempo fuera de la vía o sobre aceite/arena, cambios de dirección y tiempo cerca del peligro (la tormenta o la policía).
+2. **`SkillClassifier`** (`src/ai/SkillClassifier.ts`) convierte esas métricas en un vector de 8 características normalizadas y calcula una habilidad entre 0 y 1 con un modelo lineal de pesos fijos y una sigmoide. Cada característica se compara contra la de un jugador promedio, y solo cuentan los obstáculos que estaban en tu trayectoria; así chocar seguido o avanzar poco baja el perfil aunque mantengas el acelerador. Según el resultado te clasifica como *Novato*, *Intermedio*, *Experto* o *Leyenda*. Durante el nivel 0 el HUD muestra la estimación en vivo.
 3. **`AdaptiveDifficulty`** (`src/ai/AdaptiveDifficulty.ts`) usa ese perfil para generar la configuración de los niveles 1 a 3:
    - **Duración** de cada nivel (más larga para jugadores hábiles).
    - **Densidad de obstáculos** según la habilidad y qué tan bien esquivas.
