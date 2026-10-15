@@ -1,4 +1,5 @@
 import type { FeatureVector, SkillProfile } from '../ai/SkillClassifier';
+import { DEFAULT_VOLUMES, type Volumes } from './Audio';
 
 const KEY = 'racerober.save.v1';
 
@@ -22,8 +23,8 @@ export interface SaveData {
   history: RunRecord[];
   muted: boolean;
   musicOn: boolean;
-  /** Volumen de la música (0..1). */
-  musicVolume: number;
+  /** Volumen de cada canal de sonido (0..1). */
+  volumes: Volumes;
   /** Mejor distancia (m) en el nivel infinito. */
   bestEndless: number;
 }
@@ -38,7 +39,7 @@ const defaults = (): SaveData => ({
   history: [],
   muted: false,
   musicOn: true,
-  musicVolume: 0.8,
+  volumes: { ...DEFAULT_VOLUMES },
   bestEndless: 0,
 });
 
@@ -49,7 +50,14 @@ export class Storage {
     this.data = defaults();
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) this.data = { ...defaults(), ...JSON.parse(raw) };
+      if (raw) {
+        const saved = JSON.parse(raw);
+        // Partidas guardadas antes de los canales de sonido: conservar el volumen de música.
+        const volumes = { ...DEFAULT_VOLUMES, ...(saved.volumes ?? {}) };
+        if (!saved.volumes && typeof saved.musicVolume === 'number') volumes.music = saved.musicVolume;
+        delete saved.musicVolume;
+        this.data = { ...defaults(), ...saved, volumes };
+      }
     } catch {
       // Sin almacenamiento disponible (modo privado): se juega sin guardar.
     }
@@ -70,8 +78,8 @@ export class Storage {
   }
 
   reset(): void {
-    const { muted, musicOn, musicVolume } = this.data;
-    this.data = { ...defaults(), muted, musicOn, musicVolume };
+    const { muted, musicOn, volumes } = this.data;
+    this.data = { ...defaults(), muted, musicOn, volumes };
     this.save();
   }
 }

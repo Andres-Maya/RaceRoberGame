@@ -1,6 +1,7 @@
 import type { PerformanceMetrics } from '../ai/PerformanceTracker';
 import { FEATURES, type SkillProfile } from '../ai/SkillClassifier';
 import type { LevelConfig } from '../config/types';
+import type { SoundChannel, Volumes } from '../core/Audio';
 import type { Input } from '../core/Input';
 import { formatMoney, formatTime } from '../core/math';
 import type { SaveData } from '../core/Storage';
@@ -14,8 +15,8 @@ export class Screens {
   private el = document.querySelector('#screen') as HTMLElement;
   private actions = new Map<string, Action>();
   private keys: [string[], string][] = [];
-  /** Recibe el volumen (0..1) cuando se mueve el control deslizante de la música. */
-  onVolume: ((v: number) => void) | null = null;
+  /** Recibe canal y volumen (0..1) cuando se mueve un control deslizante. */
+  onVolume: ((channel: SoundChannel, v: number) => void) | null = null;
 
   constructor() {
     this.el.addEventListener('click', (e) => {
@@ -24,28 +25,61 @@ export class Screens {
     });
     this.el.addEventListener('input', (e) => {
       const t = e.target as HTMLInputElement;
-      if (t.dataset.volume === undefined) return;
+      const channel = t.dataset.volume as SoundChannel | undefined;
+      if (!channel) return;
       const v = Number(t.value) / 100;
-      this.showVolume(v);
-      this.onVolume?.(v);
+      this.showVolume(channel, v);
+      this.onVolume?.(channel, v);
     });
   }
 
-  /** Control deslizante del volumen de la música. */
-  private volumeSlider(v: number): string {
-    return `<label class="volume">
-      <span>Volumen de la música <kbd>-</kbd> <kbd>+</kbd></span>
-      <input type="range" min="0" max="100" step="5" value="${Math.round(v * 100)}" data-volume />
-      <b data-volume-label>${Math.round(v * 100)}%</b>
-    </label>`;
+  /** Controles deslizantes de todos los canales de sonido. */
+  private soundSliders(volumes: Volumes): string {
+    const rows: [SoundChannel, string, string][] = [
+      ['master', 'Volumen general', ''],
+      ['music', 'Música', '<kbd>-</kbd> <kbd>+</kbd>'],
+      ['engine', 'Motor de la moto', ''],
+      ['enemies', 'Enemigos', 'sirenas y disparos'],
+      ['impacts', 'Choques y explosiones', ''],
+      ['ui', 'Interfaz', 'avisos y recompensas'],
+    ];
+    return `<div class="sound-grid">${rows
+      .map(
+        ([ch, label, hint]) => `<label class="volume${ch === 'master' ? ' master' : ''}">
+        <span>${label}${hint ? ` <small class="muted">${hint}</small>` : ''}</span>
+        <input type="range" min="0" max="100" step="5" value="${Math.round(volumes[ch] * 100)}" data-volume="${ch}" />
+        <b data-volume-label="${ch}">${Math.round(volumes[ch] * 100)}%</b>
+      </label>`,
+      )
+      .join('')}</div>`;
   }
 
-  /** Actualiza el control si está en pantalla (p. ej. al cambiar el volumen con el teclado). */
-  showVolume(v: number): void {
-    const input = this.el.querySelector<HTMLInputElement>('input[data-volume]');
-    const label = this.el.querySelector<HTMLElement>('[data-volume-label]');
+  /** Actualiza un control si está en pantalla (p. ej. al cambiar el volumen con el teclado). */
+  showVolume(channel: SoundChannel, v: number): void {
+    const input = this.el.querySelector<HTMLInputElement>(`input[data-volume="${channel}"]`);
+    const label = this.el.querySelector<HTMLElement>(`[data-volume-label="${channel}"]`);
     if (input && document.activeElement !== input) input.value = String(Math.round(v * 100));
     if (label) label.textContent = `${Math.round(v * 100)}%`;
+  }
+
+  /** Apartado de sonido: volumen por canal, música y silencio. */
+  sound(save: SaveData, a: { back: Action; music: Action; mute: Action }): void {
+    this.show(
+      `<h2>Sonido</h2>
+      <p class="muted">Cada control reproduce una muestra al moverlo.</p>
+      ${this.soundSliders(save.volumes)}
+      <div class="menu-buttons">
+        <button data-action="music">${save.musicOn ? 'Música: death metal' : 'Música: apagada'} <kbd>N</kbd></button>
+        <button data-action="mute">${save.muted ? 'Sonido: silenciado' : 'Sonido: activado'} <kbd>M</kbd></button>
+        <button data-action="back" class="primary">Volver <kbd>Esc</kbd></button>
+      </div>`,
+      a,
+      [
+        [['Escape', 'Backspace'], 'back'],
+        [['KeyN'], 'music'],
+        [['KeyM'], 'mute'],
+      ],
+    );
   }
 
   get visible(): boolean {
@@ -83,7 +117,7 @@ export class Screens {
 
   // ------------------------------------------------------------ menú
 
-  menu(save: SaveData, a: { one: Action; two: Action; select: Action; controls: Action; stats: Action; mute: Action; music: Action }): void {
+  menu(save: SaveData, a: { one: Action; two: Action; select: Action; controls: Action; stats: Action; sound: Action; mute: Action; music: Action }): void {
     this.show(
       `
       <div class="logo">
@@ -98,16 +132,15 @@ export class Screens {
         <button data-action="select">SELECCIONAR NIVEL <kbd>3</kbd></button>
         <button data-action="controls">CONTROLES</button>
         <button data-action="stats">PERFIL DE LA IA Y ESTADÍSTICAS</button>
-        <button data-action="music" class="ghost">${save.musicOn ? 'MÚSICA: DEATH METAL' : 'MÚSICA: APAGADA'} <kbd>N</kbd></button>
-        <button data-action="mute" class="ghost">${save.muted ? 'SONIDO: APAGADO' : 'SONIDO: ENCENDIDO'} <kbd>M</kbd></button>
+        <button data-action="sound">SONIDO <kbd>4</kbd> <small>${save.muted ? '(silenciado)' : `general ${Math.round(save.volumes.master * 100)}% · música ${save.musicOn ? `${Math.round(save.volumes.music * 100)}%` : 'apagada'}`}</small></button>
       </div>
-      ${this.volumeSlider(save.musicVolume)}
       <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)} · Récord infinito: ${(save.bestEndless / 1000).toFixed(2)} km</div>`,
       a,
       [
         [['Digit1', 'Numpad1', 'Enter'], 'one'],
         [['Digit2', 'Numpad2'], 'two'],
         [['Digit3', 'Numpad3'], 'select'],
+        [['Digit4', 'Numpad4'], 'sound'],
         [['KeyM'], 'mute'],
         [['KeyN'], 'music'],
       ],
@@ -233,7 +266,7 @@ export class Screens {
     );
   }
 
-  pause(volume: number, resume: Action, restart: Action, menu: Action): void {
+  pause(volumes: Volumes, resume: Action, restart: Action, menu: Action): void {
     this.show(
       `<h2>Pausa</h2>
       <div class="menu-buttons">
@@ -241,7 +274,8 @@ export class Screens {
         <button data-action="restart">Reiniciar nivel <kbd>R</kbd></button>
         <button data-action="menu" class="ghost">Salir al menú <kbd>Q</kbd></button>
       </div>
-      ${this.volumeSlider(volume)}`,
+      <h3>Sonido</h3>
+      ${this.soundSliders(volumes)}`,
       { resume, restart, menu },
       [
         [['Escape', 'KeyP'], 'resume'],

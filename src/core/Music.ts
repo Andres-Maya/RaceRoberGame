@@ -204,8 +204,6 @@ export class Music {
   private style: Style = EPIC_STYLE;
   private riffs: Record<Section, Bar[]> = { blast: [], chug: [], breakdown: [], epic: [] };
   private enabled = true;
-  /** Volumen elegido por el jugador (0..1). */
-  private volume = 0.8;
   private ducked = false;
   /** 0..1: qué tan intensa debe sonar (persecución, peligro). */
   intensity = 0.5;
@@ -287,11 +285,6 @@ export class Music {
     if (this.timer === null) this.timer = window.setInterval(() => this.schedule(), 25);
   }
 
-  setVolume(v: number): void {
-    this.volume = Math.max(0, Math.min(1, v));
-    this.applyGain();
-  }
-
   setEnabled(on: boolean): void {
     this.enabled = on;
     this.applyGain();
@@ -313,7 +306,7 @@ export class Music {
   }
 
   private applyGain(delay = 0): void {
-    const full = VOLUME * this.volume;
+    const full = VOLUME;
     const target = !this.enabled || this.mode === 'off' ? 0 : this.ducked ? full * 0.3 : full;
     this.out.gain.setTargetAtTime(target, this.ctx.currentTime + delay, delay > 0 ? 0.5 : 0.25);
   }

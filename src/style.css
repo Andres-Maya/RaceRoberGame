@@ -762,3 +762,30 @@ table.hist th {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+.sound-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.sound-grid .volume {
+  margin-top: 0;
+  grid-template-columns: 1fr 180px 48px;
+}
+
+.volume.master {
+  background: rgba(244, 208, 63, 0.1);
+  border: 1px solid rgba(244, 208, 63, 0.35);
+}
+
+.volume small {
+  font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .sound-grid .volume {
+    grid-template-columns: 1fr 110px 42px;
+  }
+}

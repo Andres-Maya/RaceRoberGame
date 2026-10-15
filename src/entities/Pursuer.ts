@@ -88,6 +88,8 @@ export class Pursuer {
   wrecked = false;
   /** Segundos que lleva destruido (se retira al consumirse). */
   wreckTime = 0;
+  /** Cayó al río y se está hundiendo. */
+  sinking = false;
   readonly armed: boolean;
   smokeTimer = 0;
   private ramTimer = 0;
@@ -123,7 +125,13 @@ export class Pursuer {
     this.t += dt;
     if (this.wrecked) {
       this.wreckTime += dt;
-      v.halt(dt);
+      v.halt(dt, this.sinking ? 60 : 28);
+      if (this.sinking) {
+        // Se hunde lentamente, inclinándose hacia adelante.
+        const g = this.model.group;
+        g.position.y = -this.wreckTime * 1.4;
+        g.rotation.x = Math.min(0.6, this.wreckTime * 0.5);
+      }
       return null;
     }
 
@@ -246,6 +254,15 @@ export class Pursuer {
       }
     }
     return null;
+  }
+
+  /** Cae al río: queda fuera de combate y deja de chocar con nada. */
+  sink(): void {
+    if (this.wrecked) return;
+    this.wrecked = true;
+    this.sinking = true;
+    this.wreckTime = 0;
+    this.vehicle.body.collider(0).setSensor(true);
   }
 
   /** Recibe daño; devuelve true si quedó destruido en este golpe. */

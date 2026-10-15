@@ -1,13 +1,25 @@
 import { Music, type MusicMode } from './Music';
 
+/** Canales de volumen ajustables por el jugador. */
+export type SoundChannel = 'master' | 'music' | 'engine' | 'enemies' | 'impacts' | 'ui';
+
+export type Volumes = Record<SoundChannel, number>;
+
+export const DEFAULT_VOLUMES: Volumes = { master: 1, music: 0.8, engine: 0.8, enemies: 0.8, impacts: 0.9, ui: 0.8 };
+
+/** Ganancia del bus maestro con el volumen general al 100 %. */
+const MASTER_GAIN = 0.5;
+
 /**
  * Audio sintetizado con WebAudio: no requiere archivos externos.
- * Motor (oscilador según velocidad), sirena, disparos, choques, explosiones
- * y la banda sonora de death metal (ver Music).
+ * Cada tipo de sonido va por su propio bus con volumen independiente:
+ * música, motor de la moto, enemigos (sirenas y disparos), choques y
+ * explosiones, e interfaz. Todos terminan en el bus general.
  */
 export class Audio {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
+  private buses = {} as Record<Exclude<SoundChannel, 'master'>, GainNode>;
   private engineOsc!: OscillatorNode;
   private engineGain!: GainNode;
   private sirenOsc!: OscillatorNode;
@@ -17,9 +29,10 @@ export class Audio {
   private music: Music | null = null;
   /** Modo pedido antes de desbloquear el audio; se aplica al crear la música. */
   private pendingMusic: { mode: MusicMode; level: number } = { mode: 'calm', level: 0 };
+  private lastPreview = 0;
   muted = false;
   musicOn = true;
-  musicVolume = 0.8;
+  volumes: Volumes = { ...DEFAULT_VOLUMES };
 
   /** Debe llamarse tras una interacción del usuario (política de autoplay). */
   unlock(): void {
@@ -32,8 +45,13 @@ export class Audio {
     const ctx = new AC();
     this.ctx = ctx;
     this.master = ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.5;
     this.master.connect(ctx.destination);
+    for (const ch of ['music', 'engine', 'enemies', 'impacts', 'ui'] as const) {
+      const bus = ctx.createGain();
+      bus.connect(this.master);
+      this.buses[ch] = bus;
+    }
+    this.applyVolumes();
 
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
@@ -43,7 +61,7 @@ export class Audio {
     this.engineOsc.frequency.value = 50;
     this.engineGain = ctx.createGain();
     this.engineGain.gain.value = 0;
-    this.engineOsc.connect(lp).connect(this.engineGain).connect(this.master);
+    this.engineOsc.connect(lp).connect(this.engineGain).connect(this.buses.engine);
     this.engineOsc.start();
 
     this.sirenOsc = ctx.createOscillator();
@@ -51,7 +69,7 @@ export class Audio {
     this.sirenOsc.frequency.value = 700;
     this.sirenGain = ctx.createGain();
     this.sirenGain.gain.value = 0;
-    this.sirenOsc.connect(this.sirenGain).connect(this.master);
+    this.sirenOsc.connect(this.sirenGain).connect(this.buses.enemies);
     this.sirenOsc.start();
 
     const len = ctx.sampleRate * 1.5;
@@ -59,20 +77,66 @@ export class Audio {
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
 
-    this.music = new Music(ctx, this.master);
+    this.music = new Music(ctx, this.buses.music);
     this.music.setEnabled(this.musicOn);
-    this.music.setVolume(this.musicVolume);
     this.music.setMode(this.pendingMusic.mode, this.pendingMusic.level);
   }
+
+  // ------------------------------------------------------------ volumen
+
+  private applyVolumes(): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.master.gain.setTargetAtTime(this.muted ? 0 : MASTER_GAIN * this.volumes.master, t, 0.05);
+    for (const ch of Object.keys(this.buses) as (keyof typeof this.buses)[]) this.buses[ch].gain.setTargetAtTime(this.volumes[ch], t, 0.05);
+  }
+
+  setVolume(channel: SoundChannel, v: number): void {
+    this.volumes[channel] = Math.max(0, Math.min(1, v));
+    this.applyVolumes();
+  }
+
+  setVolumes(volumes: Volumes): void {
+    this.volumes = { ...DEFAULT_VOLUMES, ...volumes };
+    this.applyVolumes();
+  }
+
+  /** Sonido de muestra al mover un control de volumen (con un mínimo entre muestras). */
+  preview(channel: SoundChannel): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    if (now - this.lastPreview < 0.18) return;
+    this.lastPreview = now;
+    switch (channel) {
+      case 'engine': {
+        const t = this.ctx.currentTime;
+        this.engineOsc.frequency.setValueAtTime(70, t);
+        this.engineOsc.frequency.linearRampToValueAtTime(160, t + 0.35);
+        this.engineGain.gain.setValueAtTime(0.11, t);
+        this.engineGain.gain.setTargetAtTime(0, t + 0.4, 0.08);
+        break;
+      }
+      case 'enemies':
+        this.shot();
+        break;
+      case 'impacts':
+        this.crash(0.8);
+        break;
+      case 'master':
+      case 'ui':
+        this.blip(880);
+        break;
+      case 'music':
+        // La música ya suena de fondo: no hace falta muestra.
+        break;
+    }
+  }
+
+  // ------------------------------------------------------------ música
 
   playMusic(mode: MusicMode, level = 0): void {
     this.pendingMusic = { mode, level };
     this.music?.setMode(mode, level);
-  }
-
-  setMusicVolume(v: number): void {
-    this.musicVolume = v;
-    this.music?.setVolume(v);
   }
 
   setMusicOn(on: boolean): void {
@@ -94,8 +158,10 @@ export class Audio {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
-    if (this.ctx) this.master.gain.setTargetAtTime(muted ? 0 : 0.5, this.ctx.currentTime, 0.05);
+    this.applyVolumes();
   }
+
+  // ------------------------------------------------------------ efectos
 
   /** speed01: 0..1, active: si hay motos en marcha. */
   engine(speed01: number, active: boolean): void {
@@ -122,7 +188,7 @@ export class Audio {
     this.sirenGain.gain.setTargetAtTime(0, t, 0.05);
   }
 
-  private burst(duration: number, freq: number, type: BiquadFilterType, volume: number, pitchDrop = 0): void {
+  private burst(bus: GainNode, duration: number, freq: number, type: BiquadFilterType, volume: number, pitchDrop = 0): void {
     if (!this.ctx || this.muted) return;
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
@@ -134,23 +200,25 @@ export class Audio {
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(volume, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-    src.connect(filter).connect(gain).connect(this.master);
+    src.connect(filter).connect(gain).connect(bus);
     src.start();
     src.stop(ctx.currentTime + duration);
   }
 
+  /** Disparos de los enemigos. */
   shot(): void {
-    this.burst(0.12, 2500, 'highpass', 0.25);
+    this.burst(this.buses.enemies, 0.12, 2500, 'highpass', 0.25);
   }
 
   crash(strength = 1): void {
-    this.burst(0.25 + strength * 0.2, 900, 'lowpass', 0.35 * Math.min(1.5, strength), 0.3);
+    this.burst(this.buses.impacts, 0.25 + strength * 0.2, 900, 'lowpass', 0.35 * Math.min(1.5, strength), 0.3);
   }
 
   explosion(): void {
-    this.burst(1.3, 700, 'lowpass', 0.9, 0.08);
+    this.burst(this.buses.impacts, 1.3, 700, 'lowpass', 0.9, 0.08);
   }
 
+  /** Avisos de interfaz: cuenta regresiva, recompensas. */
   blip(freq = 880): void {
     if (!this.ctx || this.muted) return;
     const ctx = this.ctx;
@@ -159,7 +227,7 @@ export class Audio {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.12, ctx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-    osc.connect(g).connect(this.master);
+    osc.connect(g).connect(this.buses.ui);
     osc.start();
     osc.stop(ctx.currentTime + 0.16);
   }

@@ -6,7 +6,7 @@ import type { LevelConfig } from '../config/types';
 import { Hud } from '../ui/Hud';
 import { Screens } from '../ui/Screens';
 import { Level } from '../world/Level';
-import { Audio } from './Audio';
+import { Audio, type SoundChannel } from './Audio';
 import { Input } from './Input';
 import { Storage } from './Storage';
 
@@ -60,8 +60,8 @@ export class Game {
     }
     this.audio.muted = this.storage.data.muted;
     this.audio.musicOn = this.storage.data.musicOn;
-    this.audio.musicVolume = this.storage.data.musicVolume;
-    this.screens.onVolume = (v) => this.setMusicVolume(v, false);
+    this.audio.setVolumes(this.storage.data.volumes);
+    this.screens.onVolume = (ch, v) => this.setVolume(ch, v, false);
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
@@ -99,8 +99,8 @@ export class Game {
   private tick(dt: number, render = true): void {
     if (this.input.wasPressed('KeyM') && this.state !== 'menu') this.toggleMute();
     if (this.input.wasPressed('KeyN') && this.state !== 'menu') this.toggleMusic();
-    if (this.input.wasPressed('Minus', 'NumpadSubtract')) this.setMusicVolume(this.storage.data.musicVolume - 0.1, true);
-    if (this.input.wasPressed('Equal', 'NumpadAdd')) this.setMusicVolume(this.storage.data.musicVolume + 0.1, true);
+    if (this.input.wasPressed('Minus', 'NumpadSubtract')) this.setVolume('music', this.storage.data.volumes.music - 0.1, true);
+    if (this.input.wasPressed('Equal', 'NumpadAdd')) this.setVolume('music', this.storage.data.volumes.music + 0.1, true);
 
     if (this.state === 'playing' && this.level) {
       if (this.input.wasPressed('Escape', 'KeyP')) {
@@ -143,6 +143,7 @@ export class Game {
       select: () => this.screens.levelSelect(this.storage.data, (l, p) => this.startFrom(l, p), () => this.showMenu()),
       controls: () => this.screens.controls(() => this.showMenu()),
       stats: () => this.showStats(),
+      sound: () => this.showSound(),
       mute: () => {
         this.toggleMute();
         this.showMenu();
@@ -173,16 +174,34 @@ export class Game {
     this.audio.setMuted(this.storage.data.muted);
   }
 
-  /** Volumen de la música (0..1): desde el control deslizante o con las teclas - y +. */
-  private setMusicVolume(v: number, fromKeys: boolean): void {
+  /** Volumen de un canal (0..1): desde los controles deslizantes o con las teclas - y + (música). */
+  private setVolume(channel: SoundChannel, v: number, fromKeys: boolean): void {
     const vol = Math.round(Math.max(0, Math.min(1, v)) * 20) / 20;
-    this.storage.data.musicVolume = vol;
+    this.storage.data.volumes[channel] = vol;
     this.storage.save();
-    this.audio.setMusicVolume(vol);
+    this.audio.unlock();
+    this.audio.setVolume(channel, vol);
     if (fromKeys) {
-      this.screens.showVolume(vol);
+      this.screens.showVolume(channel, vol);
       if (this.state === 'playing') this.hud.toast(`Música: ${Math.round(vol * 100)}%`, '#cccccc', 0.8);
+    } else {
+      this.audio.preview(channel);
     }
+  }
+
+  /** Apartado de sonido del menú principal. */
+  private showSound(): void {
+    this.screens.sound(this.storage.data, {
+      back: () => this.showMenu(),
+      music: () => {
+        this.toggleMusic();
+        this.showSound();
+      },
+      mute: () => {
+        this.toggleMute();
+        this.showSound();
+      },
+    });
   }
 
   private toggleMusic(): void {
@@ -242,7 +261,7 @@ export class Game {
     this.audio.stopLoops();
     this.audio.duckMusic(true);
     this.screens.pause(
-      this.storage.data.musicVolume,
+      this.storage.data.volumes,
       () => {
         this.screens.hide();
         this.audio.duckMusic(false);

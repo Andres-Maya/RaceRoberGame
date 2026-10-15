@@ -460,7 +460,7 @@ export class Level {
     if (this.storm) this.updateStorm(dt, minD);
     this.updateStartSmoke(dt);
     for (const u of this.pursuers) {
-      if (!u.wrecked || u.stats.onFoot) continue;
+      if (!u.wrecked || u.stats.onFoot || u.sinking) continue;
       u.smokeTimer -= dt;
       if (u.smokeTimer <= 0) {
         u.smokeTimer = 0.12;
@@ -821,13 +821,24 @@ export class Level {
     }
     this.updateFlyers(dt, cfg);
 
+    // Los enemigos terrestres que pisan el río se hunden.
+    for (const u of this.pursuers) {
+      if (u.wrecked || !this.track.isWater(u.vehicle.px, u.vehicle.d)) continue;
+      u.sink();
+      this.fx.splash(u.vehicle.px, u.vehicle.pz);
+      this.audio.crash(0.6);
+      this.tracker.copWrecked();
+      this.score += 500;
+      this.hooks.message(`¡${u.stats.label} se hundió en el río! +500`, '#7fc8ff', 1.5);
+    }
+
     // Reciclar unidades que quedaron muy atrás o ya se consumieron.
     const minD = Math.min(...alive.map((p) => p.vehicle.d));
     for (let i = this.pursuers.length - 1; i >= 0; i--) {
       const u = this.pursuers[i];
       const tooFar = u.vehicle.d < minD - (u.wrecked ? 60 : 95) || u.vehicle.d > this.maxD + 200;
-      const burnedOut = u.wrecked && u.wreckTime > (u.stats.onFoot ? 2.5 : 7);
-      if (burnedOut && !u.stats.onFoot) this.fx.explosion(u.vehicle.px, u.vehicle.pz, 0.5);
+      const burnedOut = u.wrecked && u.wreckTime > (u.sinking ? 2.2 : u.stats.onFoot ? 2.5 : 7);
+      if (burnedOut && !u.stats.onFoot && !u.sinking) this.fx.explosion(u.vehicle.px, u.vehicle.pz, 0.5);
       if (tooFar || burnedOut) {
         this.removeVehicle(u.vehicle.body, u.vehicle.mesh);
         this.pursuers.splice(i, 1);
@@ -889,6 +900,8 @@ export class Level {
       d = this.maxD + this.rng.range(25, 55);
       const s = this.rng.sign();
       x = this.track.centerX(d) + s * (this.track.halfWidth(d) + this.rng.range(3, 7));
+      // Sobre el puente los costados son río: aparecen al borde de la calzada.
+      if (this.track.isWater(x, d)) x = this.track.centerX(d) + s * (this.track.halfWidth(d) - 1);
       heading = s > 0 ? Math.PI / 2 : -Math.PI / 2;
     } else if (fromSide && sides.length && minD < 80) {
       const s = this.rng.pick(sides);
@@ -1071,7 +1084,9 @@ export class Level {
     for (let i = this.civilians.length - 1; i >= 0; i--) {
       const c = this.civilians[i];
       const v = c.vehicle;
-      if (v.d < minD - 70 || v.d > this.maxD + 340 || Math.abs(this.track.lateral(v.px, v.d)) > 70) {
+      const sank = this.track.isWater(v.px, v.d);
+      if (sank) this.fx.splash(v.px, v.pz);
+      if (sank || v.d < minD - 70 || v.d > this.maxD + 340 || Math.abs(this.track.lateral(v.px, v.d)) > 70) {
         this.removeVehicle(v.body, v.mesh);
         this.civilians.splice(i, 1);
       }

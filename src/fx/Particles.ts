@@ -148,6 +148,12 @@ export class Effects {
     this.fire.emit({ x, z, y: 1, count: Math.round(20 * scale), speed: [12, 26], life: [0.4, 0.9], size: [0.35, 0.1], colors: sparks, drag: 1 });
   }
 
+  /** Salpicadura de agua: algo cayó al río. */
+  splash(x: number, z: number, count = 26): void {
+    this.smoke.emit({ x, z, y: 0.3, count, speed: [3, 9], life: [0.5, 1.1], size: [0.7, 0.2], colors: [0xf2fbff, 0x7fb8d8], drag: 2.5, rise: 5 });
+    this.smoke.emit({ x, z, y: 0.1, count: 8, speed: [1, 3], life: [1, 1.8], size: [1.2, 3.5], colors: [0xd6eef8, 0x4a93bd], drag: 2 });
+  }
+
   /** Salpicadura verde (zombis, mutantes, ácido). */
   splatter(x: number, z: number, count = 14): void {
     this.smoke.emit({ x, z, y: 0.8, count, speed: [3, 9], life: [0.3, 0.7], size: [0.5, 0.15], colors: [0x6dbf3a, 0x2f5a1a], drag: 4 });

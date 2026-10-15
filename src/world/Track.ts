@@ -93,6 +93,23 @@ export class Track {
     return x - this.centerX(d);
   }
 
+  /**
+   * Distancia lateral a partir de la cual hay agua (río bajo el puente), o null
+   * si en ese punto no hay río. Las barandas del puente están justo en ese borde.
+   */
+  waterEdge(d: number): number | null {
+    const biome = this.biomeAt(d);
+    if (biome === 'bridge') return HALF_WIDTH.bridge + 1.3;
+    // El túnel final empieza con 10 m de puente.
+    if (biome === 'tunnelEnd' && d - Math.floor(d / CHUNK) * CHUNK < 10) return HALF_WIDTH.tunnelEnd + 1.3;
+    return null;
+  }
+
+  isWater(x: number, d: number): boolean {
+    const edge = this.waterEdge(d);
+    return edge !== null && Math.abs(this.lateral(x, d)) > edge;
+  }
+
   isOffroad(x: number, d: number): boolean {
     const biome = this.biomeAt(d);
     const margin = ROUGH_BIOMES.has(biome) ? 1.5 : SIDEWALK;

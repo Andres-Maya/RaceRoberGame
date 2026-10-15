@@ -205,7 +205,9 @@ export class ChunkManager {
           inner.position.y = Math.abs(Math.sin(phase)) * 0.1;
           // Al salir de la vía dan media vuelta y vuelven a cruzar.
           const lat = t.x - this.track.centerX(o.d);
-          if (o.drift && Math.abs(lat) > this.track.halfWidth(o.d) + 5 && Math.sign(lat) === Math.sign(o.drift.x)) {
+          // Sobre el puente se dan la vuelta en la baranda, no a 5 m (sería el río).
+          const turnAt = this.track.waterEdge(o.d) !== null ? this.track.halfWidth(o.d) + 0.6 : this.track.halfWidth(o.d) + 5;
+          if (o.drift && Math.abs(lat) > turnAt && Math.sign(lat) === Math.sign(o.drift.x)) {
             o.drift.x *= -1;
             o.body.setRotation(quatY(o.drift.x > 0 ? -Math.PI / 2 : Math.PI / 2), true);
           }
