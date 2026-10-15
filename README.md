@@ -18,9 +18,9 @@ npm run preview    # sirve el build de producción
 | Nivel | Perseguidores | Inicio → final |
 |---|---|---|
 | **0 — La Ruta del Polvo** (prólogo) | Tormenta de arena | Desierto → afueras → ciudad. Termina cuando la moto atraviesa la puerta del Banco Central. |
-| **1 — El Golpe** | Policía: patrullas, motos, SUVs, SWAT y helicóptero | Explosión de la bóveda y salto por la puerta del banco → ciudad → puente del río. Termina al entrar al túnel de la montaña. |
-| **2 — Territorio Enemigo** | Los Cuervos: muscle cars, moteros, pickups con tirador, tráileres, furgón blindado | Salida del túnel → zona industrial con contenedores y barricadas. Termina al entrar a la planta nuclear, que explota. |
-| **3 — Tierra Baldía** | Saqueadores: buggies, mutantes a pie (con esqueleto articulado), harpías mutantes voladoras, moteros mutantes, camiones de guerra | Explosión verde y salto desde dentro de la planta → ruinas con zombis que cruzan la vía y charcos de ácido. Termina al cruzar la zona segura. |
+| **1 — El Golpe** | Policía: patrullas, motos, SUVs, SWAT con lanzagranadas y helicóptero | Explosión de la bóveda y salto por la puerta del banco → ciudad → puente del río. Termina al entrar al túnel de la montaña. |
+| **2 — Territorio Enemigo** | Los Cuervos: muscle cars, moteros que lanzan bombas, pickups con lanzagranadas, tráileres, furgón blindado | Salida del túnel → zona industrial con contenedores y barricadas. Termina al entrar a la planta nuclear, que explota. |
+| **3 — Tierra Baldía** | Saqueadores: buggies, mutantes a pie (con esqueleto articulado), harpías mutantes que lanzan lluvia de ácido, incineradores con lanzallamas, moteros mutantes que lanzan bombas, camiones de guerra con lanzagranadas | Explosión verde y salto desde dentro de la planta → ruinas con zombis que cruzan la vía y charcos de ácido. Termina al cruzar la zona segura. |
 
 | **∞ — Carretera Sin Fin** | Cualquier enemigo de los tres bandos | Sin meta. Zonas de 500–900 m que cambian bioma (desierto, ciudad, industrial, tierra baldía), iluminación (día, tarde, atardecer, noche, tóxico) y música; puentes o afueras unen las zonas. Cada zona suma tipos de enemigos, perseguidores y obstáculos. Se guarda el récord de distancia. |
 
@@ -68,9 +68,13 @@ La banda sonora es brutal death metal sintetizado en tiempo real con WebAudio (`
 
 ## Adrenalina
 
-- **Barriles de combustible:** explotan al chocarlos, tú o los enemigos, y encadenan a los barriles cercanos. La onda daña mucho a los perseguidores y poco a la moto (máximo ~16 de 150).
+- **Barriles de combustible:** abundan en el camino y explotan al chocarlos (tú o los enemigos) o si una bala los roza. Encadenan a los barriles cercanos. La onda daña mucho a los perseguidores y poco a la moto (máximo ~16 de 150).
 - **Explosiones en cadena:** cuando un perseguidor estalla, su onda daña y empuja a los que tiene al lado. Hay bola de fuego, columna, escombros, onda expansiva y temblor de cámara según la distancia.
 - **Rampas:** saltas por encima de muros, obstáculos y autos (sin colisiones en el aire) y ganas 300 puntos y turbo. Siempre hay un hueco para rodear, por si prefieres no saltar.
+- **Granadas y bombas:** algunos enemigos las lanzan en arco. Un anillo rojo o naranja parpadea en el suelo donde van a caer, así que se pueden esquivar. Su onda también daña a otros enemigos.
+- **Lluvia de ácido:** las harpías dejan caer gotas de ácido verde, marcadas en el suelo, que salpican y dejan charcos que queman unos segundos.
+- **Lanzallamas:** los incineradores queman a corta distancia por delante, en ráfagas, y su fuego también hace estallar barriles y quema zombis.
+- **Estética tóxica:** en la tierra baldía todas las explosiones, el humo y el fuego son verdes.
 - **Combos:** derribar perseguidores seguidos (menos de 3,5 s entre uno y otro) da puntos extra, turbo y un poco de vida. Si caen dos o más casi a la vez, entra un breve **tiempo bala**.
 
 ## La IA adaptativa
