@@ -73,7 +73,7 @@ La banda sonora es brutal death metal sintetizado en tiempo real con WebAudio (`
 
 - **Auto-apuntado:** la tecla de disparo apunta sola al objetivo más cercano a la vista dentro de 45 m: perseguidores, harpías o bidones explosivos. Un anillo del color del jugador marca el objetivo.
 - **Ratón:** el clic izquierdo dispara hacia la mira (el cursor se convierte en mira durante la partida).
-- **Daño:** cada bala hace 20 de daño a los perseguidores, revienta zombis, derriba harpías (2 balas) y hace estallar los bidones. Las paredes las bloquean y los civiles solo se asustan.
+- **Daño:** cada bala hace 20 de daño a los perseguidores, revienta zombis y hace estallar los bidones. Los mutantes a pie y los moteros mutantes aguantan 4 balas y las harpías 3. Las paredes las bloquean y los civiles solo se asustan.
 - **Munición:** empiezas con 30 balas y llevas como máximo 60. Las cajas amarillas del camino dan +20, igual que las llaves verdes reparan y las latas azules llenan el turbo.
 
 ## Adrenalina

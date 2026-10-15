@@ -58,10 +58,10 @@ export const PURSUER_STATS: Record<PursuerKind, PursuerStats> = {
   van: { faction: 'gang', spec: spec(30, 15, 1.6, 5, 1.3, 2.9, 6), hp: 260, ram: 30, shooter: 0.5, bulletDamage: 8, label: 'Furgón blindado' },
   // ---- Tierra baldía
   buggy: { faction: 'wasteland', spec: spec(39, 28, 2.6, 7, 0.95, 1.8, 2.5), hp: 70, ram: 14, shooter: 0.3, bulletDamage: 6, label: 'Buggy saqueador' },
-  mutant: { faction: 'wasteland', spec: spec(26, 40, 4.5, 12, 0.45, 0.45, 1.5), hp: 25, ram: 10, shooter: 0, bulletDamage: 0, label: 'Mutante', onFoot: true },
+  mutant: { faction: 'wasteland', spec: spec(26, 40, 4.5, 12, 0.45, 0.45, 1.5), hp: 70, ram: 10, shooter: 0, bulletDamage: 0, label: 'Mutante', onFoot: true },
   flyer: { faction: 'wasteland', spec: spec(30, 30, 3, 8, 0.5, 0.5, 1), hp: 1, ram: 12, shooter: 1, bulletDamage: 7, label: 'Harpía mutante', flying: true },
   pyro: { faction: 'wasteland', spec: spec(37, 24, 2.3, 6, 1.05, 2.3, 3.5), hp: 130, ram: 16, shooter: 1, bulletDamage: 0, label: 'Incinerador', weapon: 'flame' },
-  raider: { faction: 'wasteland', spec: spec(39, 26, 2.8, 8, 0.45, 1.1, 2), hp: 45, ram: 7, shooter: 1, bulletDamage: 11, label: 'Motero mutante', weapon: 'bomb' },
+  raider: { faction: 'wasteland', spec: spec(39, 26, 2.8, 8, 0.45, 1.1, 2), hp: 80, ram: 7, shooter: 1, bulletDamage: 11, label: 'Motero mutante', weapon: 'bomb' },
   rig: { faction: 'wasteland', spec: spec(29, 14, 1.4, 5, 1.5, 3.4, 7), hp: 340, ram: 36, shooter: 0.8, bulletDamage: 14, label: 'Camión de guerra', weapon: 'grenade' },
 };
 
