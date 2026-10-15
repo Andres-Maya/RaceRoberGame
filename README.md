@@ -36,7 +36,20 @@ Desde **Seleccionar nivel** puedes empezar en cualquier nivel: cada uno calibra 
 | Girar | `A` / `D` | `←` / `→` |
 | Turbo | `Espacio` o `Shift izq.` | `Shift der.` o `Enter` |
 
-Con un solo jugador sirven ambos esquemas. `Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen (también hay un control deslizante en el menú y en la pausa).
+Con un solo jugador sirven ambos esquemas. `Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen.
+
+### Sonido
+
+En el menú principal, **Sonido** (tecla `4`) abre un apartado con volúmenes independientes. Cada control reproduce una muestra al moverlo, se guardan entre partidas y también están en la pausa:
+
+| Canal | Qué controla |
+|---|---|
+| General | Todo el audio del juego |
+| Música | La banda sonora |
+| Motor de la moto | El rugido del motor según la velocidad |
+| Enemigos | Sirenas y disparos |
+| Choques y explosiones | Colisiones, vehículos destruidos y la planta nuclear |
+| Interfaz | Cuenta regresiva, recompensas y avisos |
 
 Modo cooperativo (mismo teclado): la cámara sigue a las dos motos. Si un jugador cae, reaparece a los 6 s junto a su compañero (cuesta $20.000). Si uno se queda muy atrás, se le trae de vuelta junto al otro.
 
@@ -109,6 +122,7 @@ Notas técnicas:
 - **Mapa:** se genera por delante de los jugadores y se libera por detrás, lo que mantiene estable la cantidad de cuerpos físicos y mallas. Cada partida tiene un trazado distinto (frecuencias y amplitudes de curva aleatorias).
 - **Contenido diferido:** el paisaje se crea con anticipación, pero los obstáculos, el tráfico, los zombis y los retenes aparecen cuando la moto está a ~85 m. Así nada los choca antes de que llegues, y los autos de los cruces se programan para atravesarse justo delante de ti.
 - **Formaciones de obstáculos:** además del reparto suelto hay slaloms, muros con un hueco reservado, chicanes, derrames de carga, filas de autos estacionados, hordas de zombis y tramos de respiro. Los huecos siempre dejan paso.
+- **Río:** bajo los puentes hay agua de verdad: los enemigos terrestres que caen en ella se hunden (y cuentan como derribados), y los mutantes nunca aparecen sobre el río.
 - **Ciudad variable:** cruces a intervalos irregulares y parques o estacionamientos entre los edificios. En el desierto aparecen mesetas y oasis.
 
 ## Próximos pasos sugeridos
