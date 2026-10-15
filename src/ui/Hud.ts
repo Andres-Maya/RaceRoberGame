@@ -114,7 +114,7 @@ export class Hud {
       const sp = this.players.querySelector<HTMLElement>(`[data-speed="${p.index}"]`);
       if (hp) {
         hp.style.width = `${(p.hp / p.maxHp) * 100}%`;
-        hp.classList.toggle('low', p.hp < 30);
+        hp.classList.toggle('low', p.hp < p.maxHp * 0.3);
       }
       if (tb) {
         tb.style.width = `${p.turbo * 100}%`;

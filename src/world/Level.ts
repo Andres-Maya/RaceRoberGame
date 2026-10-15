@@ -639,8 +639,10 @@ export class Level {
       this.score += 100;
       this.audio.blip(pk.kind === 'repair' ? 760 : 1200);
       if (pk.kind === 'repair') {
-        p.hp = Math.min(p.maxHp, p.hp + 30);
-        this.hooks.message(`J${p.index + 1}: ¡Reparación! +30`, '#4cd37b', 1);
+        // La llave repara un 30 % de la vida máxima.
+        const repair = Math.round(p.maxHp * 0.3);
+        p.hp = Math.min(p.maxHp, p.hp + repair);
+        this.hooks.message(`J${p.index + 1}: ¡Reparación! +${repair}`, '#4cd37b', 1);
       } else {
         p.turbo = 1;
         this.hooks.message(`J${p.index + 1}: ¡Nitro lleno!`, '#7dd3fc', 1);
@@ -648,7 +650,7 @@ export class Level {
     }
     // Nivel 0 (prólogo): la moto se repara lentamente si no recibe golpes.
     p.sinceHit += dt;
-    if (this.config.index === 0 && p.sinceHit > 4) p.hp = Math.min(p.maxHp, p.hp + dt * 2.5);
+    if (this.config.index === 0 && p.sinceHit > 4) p.hp = Math.min(p.maxHp, p.hp + dt * p.maxHp * 0.025);
 
     const wantsTurbo = input.turbo && input.throttle > 0 && p.turbo > 0.02;
     p.turboActive = wantsTurbo;
@@ -786,7 +788,7 @@ export class Level {
     const d = partner.vehicle.d - 5;
     p.vehicle.teleport(this.track.centerX(d) + (partner.vehicle.px > this.track.centerX(d) ? -2.5 : 2.5), -d, 0);
     p.alive = true;
-    p.hp = 45;
+    p.hp = Math.round(p.maxHp * 0.45);
     p.invuln = 2.5;
     this.cashLost += 20000;
     this.hooks.message(`J${p.index + 1} vuelve a la carrera (−$20.000)`, p.color, 2);
@@ -1195,7 +1197,8 @@ export class Level {
       this.aiProgress = 1;
       this.calibratedProfile = buildProfile(this.classifier, this.tracker.m);
     } else {
-      this.score += 3000 * this.config.index + this.alivePlayers.reduce((s, p) => s + p.hp * 20, 0);
+      // Bonificación por la vida que queda (proporcional, no depende del máximo).
+      this.score += 3000 * this.config.index + this.alivePlayers.reduce((s, p) => s + (p.hp / p.maxHp) * 2000, 0);
     }
     if (kind !== 'safeZone') {
       if (kind !== 'tunnel') this.chunks.openFinishDoor();

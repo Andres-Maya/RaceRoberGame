@@ -22,10 +22,13 @@ export const PLAYER_COLORS = [
 
 export const TURBO_MUL = 1.4;
 
+/** Vida máxima de la moto. */
+export const BIKE_HP = 150;
+
 export class Player {
   readonly vehicle: Vehicle;
-  hp = 100;
-  readonly maxHp = 100;
+  readonly maxHp = BIKE_HP;
+  hp = BIKE_HP;
   /** Medidor de turbo 0..1 */
   turbo = 1;
   turboActive = false;
