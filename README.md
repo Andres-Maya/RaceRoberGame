@@ -35,6 +35,8 @@ Desde **Seleccionar nivel** puedes empezar en cualquier nivel: cada uno calibra 
 | Acelerar / frenar-reversa | `W` / `S` | `↑` / `↓` |
 | Girar | `A` / `D` | `←` / `→` |
 | Turbo | `Espacio` o `Shift izq.` | `Shift der.` o `Enter` |
+| Disparar al objetivo más cercano | `F` | `Ctrl der.` o `.` |
+| Disparar hacia la mira | Clic izquierdo del ratón | — |
 
 Con un solo jugador sirven ambos esquemas. `Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen.
 
@@ -47,6 +49,7 @@ En el menú principal, **Sonido** (tecla `4`) abre un apartado con volúmenes in
 | General | Todo el audio del juego |
 | Música | La banda sonora |
 | Motor de la moto | El rugido del motor según la velocidad |
+| Disparos de la moto | El arma del jugador |
 | Enemigos | Sirenas y disparos |
 | Choques y explosiones | Colisiones, vehículos destruidos y la planta nuclear |
 | Interfaz | Cuenta regresiva, recompensas y avisos |
@@ -65,6 +68,13 @@ La banda sonora es brutal death metal sintetizado en tiempo real con WebAudio (`
 - Los cambios de pieza tienen una transición suave.
 - Cada nivel tiene su tonalidad, tempo (de 176 a 222 BPM) y escala (frigia, frigia dominante, locria, cromática). Los riffs se generan con semilla, así que se repiten como en una canción.
 - La intensidad sigue a la acción: en calma suenan *chugs* y *breakdowns*; con muchos perseguidores, la tormenta cerca o la meta a la vista, entran los blast beats.
+
+## Arma de la moto
+
+- **Auto-apuntado:** la tecla de disparo apunta sola al objetivo más cercano a la vista dentro de 45 m: perseguidores, harpías o bidones explosivos. Un anillo del color del jugador marca el objetivo.
+- **Ratón:** el clic izquierdo dispara hacia la mira (el cursor se convierte en mira durante la partida).
+- **Daño:** cada bala hace 20 de daño a los perseguidores, revienta zombis, derriba harpías (2 balas) y hace estallar los bidones. Las paredes las bloquean y los civiles solo se asustan.
+- **Munición:** empiezas con 30 balas y llevas como máximo 60. Las cajas amarillas del camino dan +20, igual que las llaves verdes reparan y las latas azules llenan el turbo.
 
 ## Adrenalina
 
