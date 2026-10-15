@@ -27,9 +27,11 @@ export type ObstacleKind =
   | 'parkedCar'
   | 'container'
   | 'toxicBarrel'
+  | 'fuelBarrel'
   | 'zombie';
 
-export type HazardKind = 'sand' | 'oil' | 'spikes' | 'acid';
+/** 'ramp': rampa de salto (no es un peligro, pero se detecta igual). */
+export type HazardKind = 'sand' | 'oil' | 'spikes' | 'acid' | 'ramp';
 
 /** Quién persigue a los jugadores en cada nivel. */
 export type Faction = 'police' | 'gang' | 'wasteland';

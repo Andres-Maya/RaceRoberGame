@@ -130,12 +130,49 @@ class ParticleSystem {
 }
 
 /** Efectos de alto nivel: explosiones, chispas, polvo, fogonazos. */
+interface Shockwave {
+  mesh: THREE.Mesh;
+  t: number;
+  dur: number;
+  radius: number;
+}
+
+const RING = new THREE.RingGeometry(0.82, 1, 40).rotateX(-Math.PI / 2);
+
 export class Effects {
-  private fire = new ParticleSystem(700, true);
-  private smoke = new ParticleSystem(700, false);
+  private fire = new ParticleSystem(1100, true);
+  private smoke = new ParticleSystem(1100, false);
+  private rings: Shockwave[] = [];
 
   constructor(scene: THREE.Scene) {
     scene.add(this.fire.mesh, this.smoke.mesh);
+    // Anillos de onda expansiva reutilizables.
+    for (let i = 0; i < 10; i++) {
+      const mesh = new THREE.Mesh(
+        RING,
+        new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
+      );
+      mesh.visible = false;
+      scene.add(mesh);
+      this.rings.push({ mesh, t: 1, dur: 1, radius: 1 });
+    }
+  }
+
+  /** Gran explosión: bola de fuego, columna, escombros y onda expansiva. */
+  blast(x: number, z: number, scale = 1): void {
+    this.explosion(x, z, scale * 1.3);
+    this.fire.emit({ x, z, y: 1.5, count: Math.round(18 * scale), speed: [1, 4], life: [0.5, 1.0], size: [2.5 * scale, 0.8], colors: [0xfff4c0, 0xff3d00], drag: 1, rise: 14 });
+    this.smoke.emit({ x, z, y: 1.2, count: Math.round(22 * scale), speed: [9, 20], life: [0.6, 1.2], size: [0.55, 0.3], colors: [0x2a2420, 0x111111], drag: 0.6, rise: -16 });
+    this.shockwave(x, z, 7 * scale);
+  }
+
+  shockwave(x: number, z: number, radius: number): void {
+    const ring = this.rings.find((r) => r.t >= r.dur) ?? this.rings[0];
+    ring.t = 0;
+    ring.dur = 0.45;
+    ring.radius = radius;
+    ring.mesh.position.set(x, 0.3, z);
+    ring.mesh.visible = true;
   }
 
   /** Explosión de fuego normal o tóxica (verde, para la planta nuclear). */
@@ -183,10 +220,19 @@ export class Effects {
   update(dt: number): void {
     this.fire.update(dt);
     this.smoke.update(dt);
+    for (const r of this.rings) {
+      if (r.t >= r.dur) continue;
+      r.t += dt;
+      const k = Math.min(1, r.t / r.dur);
+      r.mesh.scale.setScalar(0.5 + r.radius * (1 - (1 - k) * (1 - k)));
+      (r.mesh.material as THREE.MeshBasicMaterial).opacity = 0.75 * (1 - k);
+      if (k >= 1) r.mesh.visible = false;
+    }
   }
 
   dispose(): void {
     this.fire.dispose();
     this.smoke.dispose();
+    for (const r of this.rings) (r.mesh.material as THREE.Material).dispose();
   }
 }

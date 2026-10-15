@@ -64,7 +64,7 @@ const ZONE_MOODS: Record<EndlessBiome, Mood[]> = {
   wasteland: ['toxic', 'night', 'sunset'],
 };
 const ZONE_GEN: Record<EndlessBiome, Pick<LevelConfig, 'obstacleWeights' | 'hazardWeights' | 'trafficDensity'>> = {
-  desert: { obstacleWeights: { barrel: 2, crate: 1.5, wreck: 1, rock: 1.5, tumbleweed: 1.5 }, hazardWeights: { sand: 1, oil: 0.3, spikes: 0.3 }, trafficDensity: 1.8 },
+  desert: { obstacleWeights: { barrel: 2, crate: 1.5, wreck: 1, rock: 1.5, tumbleweed: 1.5, fuelBarrel: 0.8 }, hazardWeights: { sand: 1, oil: 0.3, spikes: 0.3 }, trafficDensity: 1.8 },
   city: { obstacleWeights: BASE_LEVELS[1].obstacleWeights, hazardWeights: BASE_LEVELS[1].hazardWeights, trafficDensity: 3 },
   industrial: { obstacleWeights: BASE_LEVELS[2].obstacleWeights, hazardWeights: BASE_LEVELS[2].hazardWeights, trafficDensity: 1.8 },
   wasteland: { obstacleWeights: BASE_LEVELS[3].obstacleWeights, hazardWeights: BASE_LEVELS[3].hazardWeights, trafficDensity: 0 },
@@ -91,6 +91,7 @@ const OBSTACLE_HARDNESS: Record<string, number> = {
   parkedCar: 1.2,
   barrel: 0.7,
   toxicBarrel: 0.7,
+  fuelBarrel: 0.6,
   crate: 0.5,
   cone: 0.25,
   tumbleweed: 0.15,
@@ -142,6 +143,13 @@ export class Level {
   private currentZone = -1;
   /** Habilidad medida en la calibración del nivel infinito (rige su rampa de dificultad). */
   private endlessSkill = 0.5;
+  /** Explosiones pendientes (las reacciones en cadena se escalonan unas décimas). */
+  private blasts: { x: number; z: number; delay: number; big: boolean }[] = [];
+  /** Tiempo bala restante (segundos reales). */
+  private slowmo = 0;
+  private combo = 0;
+  private lastKill = -10;
+  private recentKills: number[] = [];
   private camX = 0;
   private camZ = 0;
   private camH = 50;
@@ -407,6 +415,11 @@ export class Level {
       return;
     }
 
+    // Tiempo bala: tras derribar varios perseguidores casi a la vez, todo va más lento un instante.
+    if (this.slowmo > 0) {
+      this.slowmo -= dt;
+      dt *= 0.35;
+    }
     this.elapsed += dt;
     this.tracker.tick(dt);
     const running = this.state === 'running';
@@ -416,6 +429,7 @@ export class Level {
 
     // ---- perseguidores, tráfico, helicóptero
     if (this.config.pursuers && running) this.updatePursuers(dt);
+    this.processBlasts(dt);
     const probe = (x: number, d: number, dir: number) => this.chunks.obstacleAhead(x, d, dir);
     for (const c of this.civilians) c.update(dt, this.track, this.physics, probe);
     if (this.heli && this.config.pursuers) {
@@ -592,8 +606,17 @@ export class Level {
       this.updateCutscene(p, dt);
       return;
     }
+    if (p.air > 0) {
+      this.updateAir(p, dt);
+      return;
+    }
     if (!input) {
       v.halt(dt, 14);
+      return;
+    }
+    // Red de seguridad: la moto nunca circula sobre el río.
+    if (this.track.isWater(v.px, v.d)) {
+      this.fallInRiver(p);
       return;
     }
 
@@ -610,6 +633,10 @@ export class Level {
 
     for (const h of this.chunks.hazards()) {
       if (Math.abs(v.d - h.d) > h.hd || Math.abs(v.px - h.x) > h.hw) continue;
+      if (h.kind === 'ramp') {
+        if (v.speed > 12) this.launch(p);
+        continue;
+      }
       this.tracker.hazard(dt);
       if (h.kind === 'sand') {
         speedMul *= 0.5;
@@ -730,6 +757,176 @@ export class Level {
     if (v.d > zone.d + 18) v.halt(dt, 30);
     else v.drive(dt, 1, 0, steer, { speedMul: 0.6, accelMul: 1, gripMul: 2 });
     if (v.d > zone.d + 4.5) p.mesh.visible = false;
+  }
+
+  /** Despegue desde una rampa: en el aire no hay colisiones ni se puede girar. */
+  private launch(p: Player): void {
+    const v = p.vehicle;
+    p.airDur = clamp(0.45 + (v.speed / 34) * 0.5, 0.55, 1.1);
+    p.air = p.airDur;
+    p.setGhost(true);
+    v.vx *= 1.05;
+    v.vz *= 1.05;
+    this.fx.dust(v.px, v.pz, 0x9a9a9a, 6, 1.6);
+    this.audio.blip(520);
+  }
+
+  private updateAir(p: Player, dt: number): void {
+    const v = p.vehicle;
+    p.air -= dt;
+    const t = clamp01(1 - p.air / p.airDur);
+    const h = Math.sin(t * Math.PI);
+    p.mesh.position.y = h * 3.2 * (p.airDur / 0.9);
+    p.mesh.scale.setScalar(1 + h * 0.35);
+    p.mesh.rotation.x = (0.5 - t) * 0.8;
+    v.drive(dt, 0, 0, 0);
+    // Nunca aterrizar dentro de un edificio ni sobre el río.
+    const lat = this.track.lateral(v.px, v.d);
+    const edge = this.track.waterEdge(v.d);
+    const maxLat = Math.min(edge !== null ? edge - 1 : Infinity, this.track.halfWidth(v.d) + 1.5);
+    if (Math.abs(lat) > maxLat) {
+      const x = this.track.centerX(v.d) + Math.sign(lat) * maxLat;
+      v.body.setTranslation({ x, y: 1, z: v.pz }, true);
+      v.px = x;
+      v.vx *= 0.3;
+    }
+    if (p.air <= 0) {
+      p.air = 0;
+      p.mesh.position.y = 0;
+      p.mesh.scale.setScalar(1);
+      p.mesh.rotation.x = 0;
+      p.setGhost(false);
+      this.fx.dust(v.px, v.pz, 0x8a8a8a, 10, 2.2);
+      this.fx.sparks(v.px, v.pz, 6);
+      this.audio.crash(0.35);
+      this.shake = Math.max(this.shake, 0.45);
+      this.score += 300;
+      p.turbo = Math.min(1, p.turbo + 0.15);
+      this.hooks.message(`J${p.index + 1}: ¡Salto! +300`, '#ffd27a', 1);
+    }
+  }
+
+  /** Si la moto toca el agua, cae al río y vuelve al centro del puente. */
+  private fallInRiver(p: Player): void {
+    const v = p.vehicle;
+    this.fx.splash(v.px, v.pz, 30);
+    this.audio.crash(0.6);
+    this.damagePlayer(p, 30);
+    if (!p.alive) return;
+    v.teleport(this.track.centerX(v.d), v.pz, this.track.angle(v.d));
+    p.invuln = Math.max(p.invuln, 1.5);
+    this.hooks.message(`J${p.index + 1}: ¡Al río! Vuelves al puente (−30)`, '#7fc8ff', 1.5);
+  }
+
+  // ------------------------------------------------------------ explosiones
+
+  /** Programa una explosión (con retraso para escalonar las reacciones en cadena). */
+  private queueBlast(x: number, z: number, delay: number, big: boolean): void {
+    this.blasts.push({ x, z, delay, big });
+  }
+
+  /** Barril de combustible que estalla. */
+  private explodeBarrel(o: ObstacleRecord, delay: number): void {
+    if (o.dead) return;
+    const t = o.body.translation();
+    this.chunks.destroyObstacle(o);
+    this.queueBlast(t.x, t.z, delay, true);
+  }
+
+  private processBlasts(dt: number): void {
+    if (!this.blasts.length) return;
+    const due = this.blasts.filter((b) => (b.delay -= dt) <= 0);
+    if (!due.length) return;
+    this.blasts = this.blasts.filter((b) => b.delay > 0);
+    for (const b of due) this.detonate(b.x, b.z, b.big);
+  }
+
+  /**
+   * Onda expansiva: daña y empuja a perseguidores (mucho), a las motos (poco),
+   * hace estallar barriles cercanos y revienta zombis y harpías en picada.
+   */
+  private detonate(x: number, z: number, big: boolean): void {
+    const R = big ? 8 : 6;
+    this.fx.blast(x, z, big ? 1.5 : 1.1);
+    this.audio.explosion();
+    const alive = this.alivePlayers;
+    const nearest = Math.min(60, ...alive.map((p) => Math.hypot(p.vehicle.px - x, p.vehicle.pz - z)));
+    this.shake = Math.max(this.shake, clamp(1.7 - nearest / 25, 0.3, 1.7));
+
+    const push = (v: { vx: number; vz: number; px: number; pz: number; body: { setLinvel(v: { x: number; y: number; z: number }, w: boolean): void } }, strength: number) => {
+      const dx = v.px - x;
+      const dz = v.pz - z;
+      const dist = Math.max(0.5, Math.hypot(dx, dz));
+      v.vx += (dx / dist) * strength;
+      v.vz += (dz / dist) * strength;
+      v.body.setLinvel({ x: v.vx, y: 0, z: v.vz }, true);
+    };
+
+    for (const u of this.pursuers) {
+      if (u.wrecked) continue;
+      const dist = Math.hypot(u.vehicle.px - x, u.vehicle.pz - z);
+      if (dist > R) continue;
+      const f = 1 - dist / R;
+      push(u.vehicle, 22 * f);
+      u.vehicle.heading += (this.rng.next() - 0.5) * 1.2 * f;
+      this.damagePursuer(u, (big ? 170 : 80) * f);
+    }
+    for (const p of alive) {
+      if (p.ghost) continue;
+      const dist = Math.hypot(p.vehicle.px - x, p.vehicle.pz - z);
+      const r = R * 0.75;
+      if (dist > r) continue;
+      const f = 1 - dist / r;
+      push(p.vehicle, 10 * f);
+      if (p.canTakeHit('blast', this.elapsed, 0.5)) this.damagePlayer(p, (big ? 16 : 9) * f);
+    }
+    for (const c of this.civilians) {
+      if (Math.hypot(c.vehicle.px - x, c.vehicle.pz - z) > R) continue;
+      push(c.vehicle, 12);
+      c.panic = 2.5;
+    }
+    for (const o of this.chunks.obstacles()) {
+      if (o.dead) continue;
+      const t = o.body.translation();
+      const dist = Math.hypot(t.x - x, t.z - z);
+      if (o.kind === 'fuelBarrel' && dist < 7) this.explodeBarrel(o, this.rng.range(0.12, 0.3));
+      else if (o.kind === 'zombie' && dist < R) this.splatZombie(o);
+    }
+    for (const f of this.flyers) {
+      if (f.alive && f.y < 5 && Math.hypot(f.x - x, f.z - z) < R) {
+        f.shootDown();
+        this.registerKill(1200, 'Harpía');
+      }
+    }
+  }
+
+  /**
+   * Derribos seguidos suman combo: puntos extra, turbo y un poco de vida
+   * (la adrenalina compensa la dificultad). Varios casi a la vez: tiempo bala.
+   */
+  private registerKill(points: number, label: string): void {
+    this.score += points;
+    this.tracker.copWrecked();
+    this.combo = this.elapsed - this.lastKill < 3.5 ? this.combo + 1 : 1;
+    this.lastKill = this.elapsed;
+    this.recentKills = this.recentKills.filter((t) => this.elapsed - t < 1.2);
+    this.recentKills.push(this.elapsed);
+    for (const p of this.alivePlayers) {
+      p.turbo = Math.min(1, p.turbo + 0.2);
+      if (this.combo >= 2) p.hp = Math.min(p.maxHp, p.hp + 4);
+    }
+    if (this.combo >= 2) {
+      const bonus = 400 * (this.combo - 1);
+      this.score += bonus;
+      const word = ['', '', '¡DOBLE!', '¡TRIPLE!', '¡CUÁDRUPLE!'][this.combo] ?? '¡MASACRE!';
+      this.hooks.message(`${word} Combo x${this.combo} +${bonus.toLocaleString('es-CO')}`, '#ff9f43', 1.8);
+    } else {
+      this.hooks.message(`¡${label} fuera de combate! +${points.toLocaleString('es-CO')}`, '#7dd3fc', 1.5);
+    }
+    if (this.recentKills.length >= 2 && this.slowmo <= 0) {
+      this.slowmo = 0.9;
+      if (this.recentKills.length >= 3) this.hooks.flash('#ffe0a0');
+    }
   }
 
   private endCutscene(p: Player, landed: boolean): void {
@@ -862,10 +1059,8 @@ export class Level {
           // A toda velocidad con turbo, la moto embiste a la harpía en picada.
           f.shootDown();
           this.fx.splatter(f.x, f.z, 24);
-          this.tracker.copWrecked();
-          this.score += 1200;
           this.damagePlayer(p, 4);
-          this.hooks.message('¡Harpía derribada! +1.200', '#9dff6a', 1.5);
+          this.registerKill(1200, 'Harpía');
         } else {
           this.fx.splatter(p.vehicle.px, p.vehicle.pz, 14);
           this.audio.crash(0.8);
@@ -981,6 +1176,11 @@ export class Level {
           const o = b.ref as ObstacleRecord;
           if (o.dead) return;
           o.hitMask |= 1 << p.index;
+          if (o.kind === 'fuelBarrel' && impact > 4) {
+            // El daño lo hace la explosión (y a la moto le llega reducido).
+            this.explodeBarrel(o, 0.04);
+            break;
+          }
           const hard = OBSTACLE_HARDNESS[o.kind] ?? 1;
           dmg = Math.max(0, impact - 5) * hard * 0.55;
           if (o.kind === 'zombie') {
@@ -1012,13 +1212,17 @@ export class Level {
       return;
     }
 
-    // Zombis arrollados por perseguidores o civiles.
+    // Zombis arrollados y barriles embestidos por perseguidores o civiles.
     for (const [x, y] of [
       [a, b],
       [b, a],
     ] as const) {
-      if (x.kind === 'obstacle' && (x.ref as ObstacleRecord).kind === 'zombie' && (y.kind === 'pursuer' || y.kind === 'civilian')) {
-        this.splatZombie(x.ref as ObstacleRecord);
+      if (x.kind !== 'obstacle' || (y.kind !== 'pursuer' && y.kind !== 'civilian')) continue;
+      const o = x.ref as ObstacleRecord;
+      if (o.kind === 'zombie') this.splatZombie(o);
+      if (o.kind === 'fuelBarrel') {
+        const other = (y.ref as Pursuer | Civilian).vehicle;
+        if (other.impact() > 5 || Math.hypot(other.vx, other.vz) > 12) this.explodeBarrel(o, 0.04);
       }
     }
 
@@ -1049,16 +1253,12 @@ export class Level {
     if (!u.damage(amount)) return;
     if (u.stats.onFoot) {
       this.fx.splatter(u.vehicle.px, u.vehicle.pz, 20);
-      this.score += 500;
-      this.tracker.copWrecked();
+      this.registerKill(500, u.stats.label);
       return;
     }
-    this.fx.explosion(u.vehicle.px, u.vehicle.pz, 1.1);
-    this.audio.explosion();
-    this.shake = Math.max(this.shake, 0.7);
-    this.tracker.copWrecked();
-    this.score += 1500;
-    this.hooks.message(`¡${u.stats.label} fuera de combate! +1.500`, '#7dd3fc', 1.5);
+    // El vehículo estalla y su onda puede arrastrar a los que estén cerca.
+    this.queueBlast(u.vehicle.px, u.vehicle.pz, 0.05, false);
+    this.registerKill(1500, u.stats.label);
   }
 
   // ------------------------------------------------------------ métricas

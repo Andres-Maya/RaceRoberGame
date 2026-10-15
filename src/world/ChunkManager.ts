@@ -19,6 +19,7 @@ import {
   palm,
   pickupMesh,
   policeVehicle,
+  rampMesh,
   rubble,
   ruin,
   setSiren,
@@ -114,7 +115,7 @@ interface Chunk {
  */
 const ACTIVATE_AHEAD = 85;
 
-const DESERT_WEIGHTS: Partial<Record<ObstacleKind, number>> = { rock: 2.2, barrel: 1.8, tumbleweed: 1.6, wreck: 0.6, crate: 1, cactus: 0.4 };
+const DESERT_WEIGHTS: Partial<Record<ObstacleKind, number>> = { rock: 2.2, barrel: 1.8, tumbleweed: 1.6, wreck: 0.6, crate: 1, cactus: 0.4, fuelBarrel: 0.6 };
 
 const GROUND: Record<Biome, number> = {
   desert: 0xdcb982,
@@ -281,6 +282,23 @@ export class ChunkManager {
   /** Abre la puerta final (banco o planta): queda un hueco oscuro por donde entra la moto. */
   openFinishDoor(): void {
     if (this.finishDoor) this.finishDoor.material = mat(0x0a0a0a);
+  }
+
+  /** Obstáculo que explotó: desaparece y deja una mancha quemada. */
+  destroyObstacle(o: ObstacleRecord): void {
+    if (o.dead) return;
+    o.dead = true;
+    o.drift = null;
+    o.mesh.visible = false;
+    o.body.collider(0).setSensor(true);
+    const c = [...this.chunks.values()].find((ch) => ch.obstacles.includes(o));
+    if (!c) return;
+    const t = o.body.translation();
+    const scorch = new THREE.Mesh(sandGeo, mat(0x1a1612));
+    scorch.scale.set(5.5, 1, 5.5);
+    scorch.position.set(t.x, 0.045, t.z);
+    this.ctx.scene.add(scorch);
+    c.objects.push(scorch);
   }
 
   /** Zombi atropellado: cae al suelo y deja de colisionar. */
@@ -762,9 +780,18 @@ export class ChunkManager {
     }
   }
 
+  /** Cierra el río a los costados del puente en d (nadie puede rodear la baranda). */
+  private riverCaps(c: Chunk, d: number, half: number): void {
+    const inner = half + 2.1;
+    const outer = BOUND + 1;
+    for (const s of [-1, 1]) this.solid(c, d, s * (inner + outer) / 2, (outer - inner) / 2, 0.5);
+  }
+
   private genBridge(c: Chunk): void {
     const rng = this.ctx.rng;
     const half = HALF_WIDTH.bridge;
+    this.riverCaps(c, c.d0 + 0.5, half);
+    this.riverCaps(c, c.d1 - 0.5, half);
     // Oleaje del río
     for (let i = 0; i < 10; i++) this.flat(c, rng.range(4, 14), 0.5, 0x4a93bd, rng.range(c.d0, c.d1), rng.sign() * rng.range(half + 4, 70), 0.0, rng.range(-0.2, 0.2));
     if (this.prevBiome !== 'bridge') {
@@ -792,6 +819,8 @@ export class ChunkManager {
     const face = c.d0 + 22;
     const depth = 30;
     this.bridgeDeck(c, half, c.d0, c.d0 + 10);
+    this.riverCaps(c, c.d0 + 0.5, half);
+    this.riverCaps(c, c.d0 + 10, half);
     this.strip(c, -half - 1.6, half + 1.6, 0x6a5a48, 0.006, c.d0 + 10, face);
     this.road(c, half, 0x34353a, c.d0 + 10, face);
     const mountain = tunnelMountain(96, depth, half * 2);
@@ -1124,6 +1153,9 @@ export class ChunkManager {
     if (hard.length) options.push('chicane', 'wall');
     if (has('parkedCar') || has('container')) options.push('parkedLine');
     if (has('zombie')) options.push('horde', 'horde');
+    if (has('fuelBarrel')) options.push('depot');
+    // Rampa de salto (nunca sobre el puente: el salto podría caer al río).
+    if ((soft.length || hard.length) && c.biome !== 'bridge') options.push('jump');
     if (!options.length) return;
     const start = c.d0 + rng.range(3, 10);
 
@@ -1167,6 +1199,35 @@ export class ChunkManager {
         }
         break;
       }
+      case 'depot': {
+        // Barriles de combustible juntos junto al borde: una trampa para los perseguidores.
+        const d = rng.range(c.d0 + 6, c.d1 - 6);
+        const s = rng.sign();
+        for (let i = 0, n = rng.int(3, 5); i < n; i++) this.placeOnRoad(c, 'fuelBarrel', d + rng.range(-2.5, 2.5), s * (half - rng.range(1, 3.5)));
+        break;
+      }
+      case 'jump': {
+        // Rampa y, poco después, un muro con hueco: se puede saltar por encima o rodearlo.
+        const off = rng.range(-half * 0.4, half * 0.4);
+        const d = Math.min(start, c.d1 - 26);
+        if (d < c.d0 + 2 || !this.isClear(this.track.centerX(d) + off, d, 3)) break;
+        this.hazard(c, 'ramp', d, off, 2.2, 1.6);
+        this.reserve(c, d, off, 3);
+        // El tramo de aterrizaje queda despejado.
+        for (const ahead of [14, 20, 25]) this.reserve(c, d + ahead, off, 2.6);
+        const pool = hard.length ? hard : soft;
+        const k = rng.pick(pool);
+        const spec = OBSTACLE_SPECS[k];
+        const wd = d + 8;
+        const hole = rng.range(-half + 3.5, half - 3.5);
+        const aligned = k === 'barrier' || k === 'wreck';
+        const foot = aligned ? spec.hx : Math.hypot(spec.hx, spec.hz);
+        for (let o = -half + foot; o <= half - foot; o += foot * 2 + 0.4) {
+          if (Math.abs(o - hole) > 2.9 + foot) this.placeOnRoad(c, k, wd, o, aligned ? 0 : undefined);
+        }
+        this.reserve(c, wd, hole, 2.9);
+        break;
+      }
       case 'spill': {
         // Carga derramada: un montón de cajas o barriles juntos.
         const k = rng.pick(soft);
@@ -1202,7 +1263,7 @@ export class ChunkManager {
     const count = rng.poisson((this.ctx.config.hazardDensity * CHUNK) / 100);
     for (let i = 0; i < count; i++) {
       const kind = rng.weighted(weights);
-      const size = { sand: [3.5, 3], oil: [1.8, 1.6], spikes: [3.2, 0.4], acid: [2.2, 2] }[kind];
+      const size = { sand: [3.5, 3], oil: [1.8, 1.6], spikes: [3.2, 0.4], acid: [2.2, 2], ramp: [2.2, 1.6] }[kind];
       const d = rng.range(c.d0 + 3, c.d1 - 3);
       const off = rng.range(-half + size[0], half - size[0]);
       this.hazard(c, kind, d, off, size[0], size[1]);
@@ -1221,6 +1282,8 @@ export class ChunkManager {
       m.scale.set(hw * 2, 1, hd * 2);
       m.position.y = 0.05;
       this.add(c, m, d, off);
+    } else if (kind === 'ramp') {
+      this.add(c, rampMesh(), d, off);
     } else if (kind === 'acid') {
       const m = new THREE.Mesh(sandGeo, mat(0x4cff2a, 0x1fae0a));
       m.scale.set(hw * 2, 1, hd * 2);

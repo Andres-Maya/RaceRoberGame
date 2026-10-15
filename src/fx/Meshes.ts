@@ -210,6 +210,7 @@ export const OBSTACLE_SPECS: Record<ObstacleKind, { hx: number; hz: number; dyna
   parkedCar: { hx: 0.95, hz: 2.0, dynamic: true, density: 4 },
   container: { hx: 1.25, hz: 3.0, dynamic: false, density: 1 },
   toxicBarrel: { hx: 0.5, hz: 0.5, dynamic: true, density: 0.6 },
+  fuelBarrel: { hx: 0.5, hz: 0.5, dynamic: true, density: 0.7 },
   zombie: { hx: 0.4, hz: 0.4, dynamic: true, density: 0.5 },
 };
 
@@ -277,6 +278,14 @@ export function obstacleMesh(kind: ObstacleKind, variant: number): THREE.Object3
       g.add(cyl(0.42, 0.06, 0x39ff14, 0, 1.2, 0));
       (g.children[1] as THREE.Mesh).material = mat(0x39ff14, 0x1f9e0a);
       g.add(box(0.98, 0.18, 0.98, 0x222222, 0, 0.5, 0));
+      break;
+    case 'fuelBarrel':
+      // Barril de combustible: rojo intenso, franja amarilla y tapa con advertencia.
+      g.add(cyl(0.5, 1.25, 0xd41f1f));
+      g.add(cyl(0.52, 0.22, 0xf1c40f, 0, 0.5, 0));
+      g.add(cyl(0.44, 0.05, 0x333333, 0, 1.25, 0));
+      g.add(box(0.36, 0.04, 0.12, 0xf1c40f, 0, 1.28, 0));
+      g.add(box(0.12, 0.04, 0.36, 0xf1c40f, 0, 1.28, 0));
       break;
     case 'zombie':
       // El primer hijo es el cuerpo animable (tambalear, caer).
@@ -932,6 +941,19 @@ export function textPlane(text: string, w: number, h: number, bg: string, fg: st
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex }));
   m.rotation.x = -Math.PI / 2;
   return m;
+}
+
+/** Rampa de salto con franjas de advertencia; la parte alta mira hacia -Z. */
+export function rampMesh(): THREE.Group {
+  const g = new THREE.Group();
+  const deck = new THREE.Group();
+  deck.rotation.x = 0.26;
+  deck.position.y = 0.55;
+  g.add(deck);
+  deck.add(box(4.4, 0.22, 3.4, 0x4a4a4a, 0, -0.11, 0));
+  for (let i = 0; i < 4; i++) deck.add(box(4.42, 0.02, 0.35, i % 2 ? 0x111111 : 0xf1c40f, 0, 0, -1.4 + i * 0.85));
+  for (const s of [-1, 1]) g.add(box(0.2, 1.0, 0.2, 0x333333, s * 2, 0, -1.4));
+  return g;
 }
 
 /** Libera geometrías y texturas no compartidas de un objeto. */
