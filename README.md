@@ -66,6 +66,13 @@ La banda sonora es brutal death metal sintetizado en tiempo real con WebAudio (`
 - Cada nivel tiene su tonalidad, tempo (de 176 a 222 BPM) y escala (frigia, frigia dominante, locria, cromática). Los riffs se generan con semilla, así que se repiten como en una canción.
 - La intensidad sigue a la acción: en calma suenan *chugs* y *breakdowns*; con muchos perseguidores, la tormenta cerca o la meta a la vista, entran los blast beats.
 
+## Adrenalina
+
+- **Barriles de combustible:** explotan al chocarlos, tú o los enemigos, y encadenan a los barriles cercanos. La onda daña mucho a los perseguidores y poco a la moto (máximo ~16 de 150).
+- **Explosiones en cadena:** cuando un perseguidor estalla, su onda daña y empuja a los que tiene al lado. Hay bola de fuego, columna, escombros, onda expansiva y temblor de cámara según la distancia.
+- **Rampas:** saltas por encima de muros, obstáculos y autos (sin colisiones en el aire) y ganas 300 puntos y turbo. Siempre hay un hueco para rodear, por si prefieres no saltar.
+- **Combos:** derribar perseguidores seguidos (menos de 3,5 s entre uno y otro) da puntos extra, turbo y un poco de vida. Si caen dos o más casi a la vez, entra un breve **tiempo bala**.
+
 ## La IA adaptativa
 
 1. **`PerformanceTracker`** (`src/ai/PerformanceTracker.ts`) registra durante el nivel: choques, daño, obstáculos esquivados o golpeados, pasadas al límite, avance real (distancia por segundo), tiempo fuera de la vía o sobre aceite/arena, cambios de dirección y tiempo cerca del peligro (la tormenta o los perseguidores).
@@ -122,7 +129,7 @@ Notas técnicas:
 - **Mapa:** se genera por delante de los jugadores y se libera por detrás, lo que mantiene estable la cantidad de cuerpos físicos y mallas. Cada partida tiene un trazado distinto (frecuencias y amplitudes de curva aleatorias).
 - **Contenido diferido:** el paisaje se crea con anticipación, pero los obstáculos, el tráfico, los zombis y los retenes aparecen cuando la moto está a ~85 m. Así nada los choca antes de que llegues, y los autos de los cruces se programan para atravesarse justo delante de ti.
 - **Formaciones de obstáculos:** además del reparto suelto hay slaloms, muros con un hueco reservado, chicanes, derrames de carga, filas de autos estacionados, hordas de zombis y tramos de respiro. Los huecos siempre dejan paso.
-- **Río:** bajo los puentes hay agua de verdad: los enemigos terrestres que caen en ella se hunden (y cuentan como derribados), y los mutantes nunca aparecen sobre el río.
+- **Río:** bajo los puentes hay agua de verdad: los enemigos terrestres que caen en ella se hunden (y cuentan como derribados), y los mutantes nunca aparecen sobre el río. Los extremos del puente están cerrados para que nadie rodee la baranda; si aun así la moto toca el agua, cae al río (−30) y vuelve al puente.
 - **Ciudad variable:** cruces a intervalos irregulares y parques o estacionamientos entre los edificios. En el desierto aparecen mesetas y oasis.
 
 ## Próximos pasos sugeridos
