@@ -67,7 +67,7 @@ export interface Hazard {
 }
 
 export interface Pickup {
-  kind: 'repair' | 'nitro';
+  kind: 'repair' | 'nitro' | 'ammo';
   x: number;
   d: number;
   mesh: THREE.Object3D;
@@ -1330,11 +1330,12 @@ export class ChunkManager {
   /** Llaves de reparación y latas de nitro sobre la vía. */
   private maybePickup(c: Chunk): void {
     const rng = this.ctx.rng;
-    if (!rng.chance(0.24)) return;
+    if (!rng.chance(0.34)) return;
     const half = this.ctx.track.halfWidth(c.d0 + 20);
     const spot = this.freeSpot(c, half, 1.5);
     if (!spot) return;
-    const kind = rng.chance(0.55) ? 'repair' : 'nitro';
+    const r = rng.next();
+    const kind = r < 0.45 ? 'ammo' : r < 0.77 ? 'repair' : 'nitro';
     const mesh = pickupMesh(kind);
     this.add(c, mesh, spot.d, spot.off, 0);
     c.pickups.push({ kind, x: this.track.centerX(spot.d) + spot.off, d: spot.d, mesh, taken: false });

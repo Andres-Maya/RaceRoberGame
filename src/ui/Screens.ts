@@ -39,6 +39,7 @@ export class Screens {
       ['master', 'Volumen general', ''],
       ['music', 'Música', '<kbd>-</kbd> <kbd>+</kbd>'],
       ['engine', 'Motor de la moto', ''],
+      ['player', 'Disparos de la moto', ''],
       ['enemies', 'Enemigos', 'sirenas y disparos'],
       ['impacts', 'Choques y explosiones', ''],
       ['ui', 'Interfaz', 'avisos y recompensas'],
@@ -178,12 +179,14 @@ export class Screens {
           <p><kbd>W</kbd> acelerar · <kbd>S</kbd> frenar / reversa</p>
           <p><kbd>A</kbd> <kbd>D</kbd> girar</p>
           <p><kbd>Espacio</kbd> / <kbd>Shift izq.</kbd> turbo</p>
+          <p><kbd>F</kbd> disparar al más cercano · <b>clic izquierdo</b> disparar donde apunta la mira</p>
         </div>
         <div class="ctrl-card" style="--pc:#4d9dff">
           <h3>Jugador 2</h3>
           <p><kbd>↑</kbd> acelerar · <kbd>↓</kbd> frenar / reversa</p>
           <p><kbd>←</kbd> <kbd>→</kbd> girar</p>
           <p><kbd>Shift der.</kbd> / <kbd>Enter</kbd> turbo</p>
+          <p><kbd>Ctrl der.</kbd> / <kbd>.</kbd> disparar al más cercano</p>
         </div>
       </div>
       <p class="muted">Con un solo jugador puedes usar cualquiera de los dos esquemas. <kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio · <kbd>N</kbd> música · <kbd>-</kbd> <kbd>+</kbd> volumen de la música.</p>
@@ -194,6 +197,7 @@ export class Screens {
         <li>Charcos verdes = ácido (daño continuo). Los zombis cruzan la vía: si los atropellas, te frenan.</li>
         <li>Las harpías se lanzan en picada: esquívalas o embístelas con turbo a toda velocidad para derribarlas. Su lluvia de ácido deja charcos que queman.</li>
         <li>Un anillo parpadeante en el suelo marca dónde caerá una granada, bomba o gota de ácido: sal de ahí.</li>
+        <li>La munición es limitada (máximo 60): recógela en las cajas amarillas del camino. Disparar a un bidón rojo lo hace estallar.</li>
         <li>Los barriles rojos explotan: atrae a los perseguidores hacia ellos. Los incineradores queman de frente: no te quedes delante.</li>
         <li>Cada disparo que recibes rompe la mochila: pierdes $2.500 del botín.</li>
       </ul>

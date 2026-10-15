@@ -43,7 +43,7 @@ export class Hud {
         <div class="pcard-title">J${p.index + 1} · Moto ${PLAYER_COLORS[p.index].name}</div>
         <div class="bar"><div class="fill hp" data-hp="${p.index}"></div></div>
         <div class="bar small"><div class="fill turbo" data-turbo="${p.index}"></div></div>
-        <div class="pcard-speed"><span data-speed="${p.index}">0</span> km/h</div>
+        <div class="pcard-speed"><span data-speed="${p.index}">0</span> km/h <span class="pcard-ammo" data-ammo-box="${p.index}">BALAS <b data-ammo="${p.index}">0</b></span></div>
       </div>`,
       )
       .join('');
@@ -112,6 +112,11 @@ export class Hud {
       const hp = this.players.querySelector<HTMLElement>(`[data-hp="${p.index}"]`);
       const tb = this.players.querySelector<HTMLElement>(`[data-turbo="${p.index}"]`);
       const sp = this.players.querySelector<HTMLElement>(`[data-speed="${p.index}"]`);
+      const am = this.players.querySelector<HTMLElement>(`[data-ammo="${p.index}"]`);
+      if (am) {
+        this.set(am, `${p.ammo}/${p.maxAmmo}`);
+        am.parentElement?.classList.toggle('low', p.ammo < 6);
+      }
       if (hp) {
         hp.style.width = `${(p.hp / p.maxHp) * 100}%`;
         hp.classList.toggle('low', p.hp < p.maxHp * 0.3);

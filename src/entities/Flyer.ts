@@ -32,6 +32,8 @@ export class Flyer {
   y = CRUISE;
   z: number;
   dead = false;
+  /** Aguanta un par de balazos de la moto. */
+  hp = 40;
   /** Terminó su ciclo de vida o fue derribada: el nivel la retira. */
   gone = false;
   private heading = 0;

@@ -690,7 +690,7 @@ export const CIVILIAN_COLORS = [0x2e86c1, 0xcb4335, 0xf4d03f, 0x27ae60, 0xe67e22
 
 // ---------------------------------------------------------------- recompensas
 
-export function pickupMesh(kind: 'repair' | 'nitro'): THREE.Group {
+export function pickupMesh(kind: 'repair' | 'nitro' | 'ammo'): THREE.Group {
   const g = new THREE.Group();
   const inner = new THREE.Group();
   if (kind === 'repair') {
@@ -698,6 +698,14 @@ export function pickupMesh(kind: 'repair' | 'nitro'): THREE.Group {
     inner.add(box(0.9, 0.25, 0.3, 0xffffff, 0, 0.5, -0.62));
     inner.add(box(0.3, 0.25, 0.9, 0xffffff, 0, 1.22, 0));
     inner.add(box(0.9, 0.04, 0.3, 0xffffff, 0, 1.2, 0));
+  } else if (kind === 'ammo') {
+    // Caja de munición amarilla con balas encima.
+    inner.add(box(1.3, 0.9, 1.0, 0xf4d03f));
+    inner.add(box(1.32, 0.18, 1.02, 0x3a3a3a, 0, 0.35, 0));
+    for (const x of [-0.35, 0, 0.35]) {
+      inner.add(cyl(0.12, 0.5, 0xc8a24a, x, 0.9, 0));
+      inner.add(cyl(0.12, 0.12, 0x8a6a2a, x, 1.4, 0));
+    }
   } else {
     inner.add(cyl(0.45, 1.3, 0x2a6bff));
     inner.add(cyl(0.2, 0.3, 0xdddddd, 0, 1.3, 0));
@@ -707,7 +715,7 @@ export function pickupMesh(kind: 'repair' | 'nitro'): THREE.Group {
   g.add(inner);
   const ring = new THREE.Mesh(
     shareGeometry(new THREE.RingGeometry(1.3, 1.6, 24).rotateX(-Math.PI / 2)),
-    new THREE.MeshBasicMaterial({ color: kind === 'repair' ? 0x2ecc71 : 0x4d9dff, transparent: true, opacity: 0.6 }),
+    new THREE.MeshBasicMaterial({ color: { repair: 0x2ecc71, nitro: 0x4d9dff, ammo: 0xf4d03f }[kind], transparent: true, opacity: 0.6 }),
   );
   ring.position.y = 0.05;
   g.add(ring);

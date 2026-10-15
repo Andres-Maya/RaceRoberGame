@@ -48,6 +48,10 @@ export class Player {
   airTime = 0;
   /** Sin colisiones: la moto atraviesa puertas y escombros durante las escenas. */
   ghost = false;
+  /** Munición del arma de la moto. */
+  ammo = 30;
+  readonly maxAmmo = 60;
+  fireCooldown = 0;
   /** Salto desde una rampa: segundos de vuelo restantes y duración total. */
   air = 0;
   airDur = 0;

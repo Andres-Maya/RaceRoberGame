@@ -77,6 +77,11 @@ const ROSTERS: Record<Faction, PursuerKind[]> = {
 };
 const ALL_KINDS: PursuerKind[] = [...ROSTERS.police, ...ROSTERS.gang, ...ROSTERS.wasteland];
 const FACTION_LABEL: Record<Faction, string> = { police: 'la policía', gang: 'Los Cuervos', wasteland: 'los saqueadores' };
+const TARGET_RING = new THREE.RingGeometry(1.8, 2.2, 32).rotateX(-Math.PI / 2);
+/** Alcance del auto-apuntado del arma de la moto (m). */
+const AIM_RANGE = 45;
+const PLAYER_BULLET_DAMAGE = 20;
+
 const ACID_POOL_GEO = new THREE.CircleGeometry(0.5, 18).rotateX(-Math.PI / 2);
 const ACID_POOL_MAT = new THREE.MeshBasicMaterial({ color: 0x5cff2a, transparent: true, opacity: 0.75, depthWrite: false });
 
@@ -170,6 +175,9 @@ export class Level {
   /** Charcos de ácido temporales que deja la lluvia de las harpías. */
   private acidPools: { x: number; z: number; r: number; life: number; mesh: THREE.Mesh }[] = [];
   private flameWarn = 0;
+  /** Anillo bajo el objetivo al que apunta cada moto con la tecla de disparo. */
+  private targetMarkers: THREE.Mesh[] = [];
+  private ammoWarn = 0;
   /** Tiempo bala restante (segundos reales). */
   private slowmo = 0;
   private combo = 0;
@@ -251,6 +259,12 @@ export class Level {
       this.players.push(p);
     }
     if (config.index === 0) this.storm = new Sandstorm(this.scene, 60);
+    for (const p of this.players) {
+      const marker = new THREE.Mesh(TARGET_RING, new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: 0.85, depthWrite: false }));
+      marker.visible = false;
+      this.scene.add(marker);
+      this.targetMarkers.push(marker);
+    }
     if (config.index === 4) {
       // La calibración arranca con el perseguidor más básico del bando de la primera zona.
       const zone = this.zoneAt(0);
@@ -484,6 +498,7 @@ export class Level {
       },
       onWall: (x, z) => this.fx.sparks(x, z, 5),
       onSegment: (x0, z0, x1, z1) => this.bulletHitsBarrel(x0, z0, x1, z1),
+      onPlayerBullet: (x0, z0, x1, z1) => this.playerBulletHit(x0, z0, x1, z1),
       onExpire: (near) => {
         this.tracker.bullet(false);
         if (near) this.tracker.m.nearMisses++;
@@ -622,6 +637,8 @@ export class Level {
     const v = p.vehicle;
 
     if (!p.alive) {
+      const marker = this.targetMarkers[p.index];
+      if (marker) marker.visible = false;
       v.halt(dt);
       const t = this.respawnTimers.get(p);
       if (t !== undefined) {
@@ -636,6 +653,7 @@ export class Level {
       return;
     }
     if (p.air > 0) {
+      if (input) this.handleShooting(p, input, dt);
       this.updateAir(p, dt);
       return;
     }
@@ -699,6 +717,10 @@ export class Level {
         const repair = Math.round(p.maxHp * 0.3);
         p.hp = Math.min(p.maxHp, p.hp + repair);
         this.hooks.message(`J${p.index + 1}: ¡Reparación! +${repair}`, '#4cd37b', 1);
+      } else if (pk.kind === 'ammo') {
+        const before = p.ammo;
+        p.ammo = Math.min(p.maxAmmo, p.ammo + 20);
+        this.hooks.message(`J${p.index + 1}: ¡Munición! +${p.ammo - before}`, '#f4d03f', 1);
       } else {
         p.turbo = 1;
         this.hooks.message(`J${p.index + 1}: ¡Nitro lleno!`, '#7dd3fc', 1);
@@ -721,6 +743,7 @@ export class Level {
 
     p.steer = input.steer;
     v.drive(dt, input.throttle, input.brake, input.steer, { speedMul, accelMul, gripMul });
+    this.handleShooting(p, input, dt);
     this.tracker.samplePlayer(p.index, dt, Math.max(0, v.speed), BIKE_SPEC.maxSpeed, input.steer, offroad);
 
     // Peligro cercano (para la métrica "sangre fría").
@@ -786,6 +809,112 @@ export class Level {
     if (v.d > zone.d + 18) v.halt(dt, 30);
     else v.drive(dt, 1, 0, steer, { speedMul: 0.6, accelMul: 1, gripMul: 2 });
     if (v.d > zone.d + 4.5) p.mesh.visible = false;
+  }
+
+  // ------------------------------------------------------------ arma de la moto
+
+  /** Enemigo o bidón explosivo más cercano a la vista, dentro del alcance del arma. */
+  private nearestTarget(p: Player): { x: number; z: number; vx: number; vz: number } | null {
+    const v = p.vehicle;
+    let best: { x: number; z: number; vx: number; vz: number } | null = null;
+    let bestD = AIM_RANGE;
+    const consider = (x: number, z: number, vx: number, vz: number, needsSight: boolean) => {
+      const dist = Math.hypot(x - v.px, z - v.pz);
+      if (dist >= bestD || dist < 1.5) return;
+      if (needsSight && this.physics.rayFixed(v.px, v.pz, (x - v.px) / dist, (z - v.pz) / dist, dist - 1) !== null) return;
+      bestD = dist;
+      best = { x, z, vx, vz };
+    };
+    for (const u of this.pursuers) if (!u.wrecked) consider(u.vehicle.px, u.vehicle.pz, u.vehicle.vx, u.vehicle.vz, true);
+    for (const f of this.flyers) if (f.alive) consider(f.x, f.z, 0, 0, false);
+    for (const o of this.chunks.obstacles()) {
+      if (o.kind !== 'fuelBarrel' || o.dead || Math.abs(o.d - v.d) > AIM_RANGE) continue;
+      const t = o.body.translation();
+      consider(t.x, t.z, 0, 0, true);
+    }
+    return best;
+  }
+
+  /**
+   * Arma de la moto: con la tecla dispara solo al objetivo más cercano (marcado
+   * con un anillo); con el ratón, hacia la mira. Usa munición limitada.
+   */
+  private handleShooting(p: Player, input: DriveInput, dt: number): void {
+    const v = p.vehicle;
+    p.fireCooldown -= dt;
+    this.ammoWarn -= dt;
+    const target = input.aim ? null : this.nearestTarget(p);
+    const marker = this.targetMarkers[p.index];
+    if (marker) {
+      marker.visible = !!target && p.ammo > 0;
+      if (target) {
+        marker.position.set(target.x, 0.1, target.z);
+        marker.rotation.y += dt * 3;
+      }
+    }
+    if (!input.shoot || p.fireCooldown > 0 || this.state !== 'running') return;
+    if (p.ammo <= 0) {
+      p.fireCooldown = 0.35;
+      this.audio.emptyClick();
+      if (this.ammoWarn <= 0) {
+        this.ammoWarn = 2.5;
+        this.hooks.message(`J${p.index + 1}: ¡Sin munición! Busca cajas amarillas`, '#f4d03f', 1.4);
+      }
+      return;
+    }
+    let angle = v.heading;
+    if (input.aim) {
+      angle = Math.atan2(-(input.aim.x - v.px), -(input.aim.z - v.pz));
+    } else if (target) {
+      // Se adelanta un poco al movimiento del objetivo.
+      const t = Math.hypot(target.x - v.px, target.z - v.pz) / 62;
+      angle = Math.atan2(-(target.x + target.vx * t - v.px), -(target.z + target.vz * t - v.pz));
+    }
+    p.ammo--;
+    p.fireCooldown = 0.16;
+    this.bullets.fire(v.px, v.pz, angle, PLAYER_BULLET_DAMAGE, false, 'player', true);
+    this.fx.muzzle(v.px - Math.sin(angle) * 1.3, v.pz - Math.cos(angle) * 1.3, angle);
+    this.audio.playerShot();
+  }
+
+  /** Impacto de una bala de la moto: enemigos, harpías, bidones, zombis o civiles. */
+  private playerBulletHit(x0: number, z0: number, x1: number, z1: number): boolean {
+    for (const u of this.pursuers) {
+      if (u.wrecked) continue;
+      const r = (u.stats.spec.hx + u.stats.spec.hz) / 2 + 0.2;
+      if (segmentDistance(x0, z0, x1, z1, u.vehicle.px, u.vehicle.pz) > r) continue;
+      this.fx.sparks(u.vehicle.px, u.vehicle.pz, 6);
+      if (u.stats.onFoot) this.fx.splatter(u.vehicle.px, u.vehicle.pz, 6);
+      this.damagePursuer(u, PLAYER_BULLET_DAMAGE);
+      return true;
+    }
+    for (const f of this.flyers) {
+      if (!f.alive || segmentDistance(x0, z0, x1, z1, f.x, f.z) > 2.2) continue;
+      this.fx.splatter(f.x, f.z, 8);
+      f.hp -= PLAYER_BULLET_DAMAGE;
+      if (f.hp <= 0) {
+        f.shootDown();
+        this.registerKill(1200, 'Harpía');
+      }
+      return true;
+    }
+    const dMin = Math.min(-z0, -z1) - 2;
+    const dMax = Math.max(-z0, -z1) + 2;
+    for (const o of this.chunks.obstacles()) {
+      if (o.dead || o.d < dMin || o.d > dMax || (o.kind !== 'fuelBarrel' && o.kind !== 'zombie')) continue;
+      const t = o.body.translation();
+      if (segmentDistance(x0, z0, x1, z1, t.x, t.z) > (o.kind === 'fuelBarrel' ? 0.8 : 0.6)) continue;
+      if (o.kind === 'fuelBarrel') this.explodeBarrel(o, 0);
+      else this.splatZombie(o);
+      return true;
+    }
+    for (const c of this.civilians) {
+      if (segmentDistance(x0, z0, x1, z1, c.vehicle.px, c.vehicle.pz) > 1.4) continue;
+      this.fx.sparks(c.vehicle.px, c.vehicle.pz, 4);
+      c.panic = 2;
+      return true;
+    }
+    return false;
   }
 
   /** Despegue desde una rampa: en el aire no hay colisiones ni se puede girar. */

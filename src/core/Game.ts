@@ -96,7 +96,22 @@ export class Game {
     for (let t = 0; t < seconds; t += step) this.tick(step, t + step >= seconds);
   }
 
+  private raycaster = new THREE.Raycaster();
+  private aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1);
+  private aimPoint = new THREE.Vector3();
+
+  /** Punto del suelo bajo el cursor (para apuntar con el ratón). */
+  private mouseWorld(): { x: number; z: number } | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((this.input.mouse.x - rect.left) / rect.width) * 2 - 1, -((this.input.mouse.y - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const hit = this.raycaster.ray.intersectPlane(this.aimPlane, this.aimPoint);
+    return hit ? { x: hit.x, z: hit.z } : null;
+  }
+
   private tick(dt: number, render = true): void {
+    // Durante la partida el cursor es una mira.
+    document.body.classList.toggle('aiming', this.state === 'playing');
     if (this.input.wasPressed('KeyM') && this.state !== 'menu') this.toggleMute();
     if (this.input.wasPressed('KeyN') && this.state !== 'menu') this.toggleMusic();
     if (this.input.wasPressed('Minus', 'NumpadSubtract')) this.setVolume('music', this.storage.data.volumes.music - 0.1, true);
@@ -107,6 +122,11 @@ export class Game {
         this.pause();
       } else {
         const inputs = [0, 1].map((i) => this.input.drive(i, this.campaign.players));
+        // Clic izquierdo: el jugador 1 dispara hacia la mira.
+        if (this.input.mouse.down) {
+          inputs[0].shoot = true;
+          inputs[0].aim = this.mouseWorld();
+        }
         this.level.update(dt, inputs);
         this.audio.musicIntensity(this.level.musicIntensity);
         // Cuando caen todas las motos, el metal se corta y entra el réquiem.

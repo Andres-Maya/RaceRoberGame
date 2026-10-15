@@ -1,11 +1,11 @@
 import { Music, type MusicMode } from './Music';
 
 /** Canales de volumen ajustables por el jugador. */
-export type SoundChannel = 'master' | 'music' | 'engine' | 'enemies' | 'impacts' | 'ui';
+export type SoundChannel = 'master' | 'music' | 'engine' | 'player' | 'enemies' | 'impacts' | 'ui';
 
 export type Volumes = Record<SoundChannel, number>;
 
-export const DEFAULT_VOLUMES: Volumes = { master: 1, music: 0.8, engine: 0.8, enemies: 0.8, impacts: 0.9, ui: 0.8 };
+export const DEFAULT_VOLUMES: Volumes = { master: 1, music: 0.8, engine: 0.8, player: 0.8, enemies: 0.8, impacts: 0.9, ui: 0.8 };
 
 /** Ganancia del bus maestro con el volumen general al 100 %. */
 const MASTER_GAIN = 0.5;
@@ -46,7 +46,7 @@ export class Audio {
     this.ctx = ctx;
     this.master = ctx.createGain();
     this.master.connect(ctx.destination);
-    for (const ch of ['music', 'engine', 'enemies', 'impacts', 'ui'] as const) {
+    for (const ch of ['music', 'engine', 'player', 'enemies', 'impacts', 'ui'] as const) {
       const bus = ctx.createGain();
       bus.connect(this.master);
       this.buses[ch] = bus;
@@ -118,6 +118,9 @@ export class Audio {
       }
       case 'enemies':
         this.shot();
+        break;
+      case 'player':
+        this.playerShot();
         break;
       case 'impacts':
         this.crash(0.8);
@@ -203,6 +206,17 @@ export class Audio {
     src.connect(filter).connect(gain).connect(bus);
     src.start();
     src.stop(ctx.currentTime + duration);
+  }
+
+  /** Disparo del arma de la moto (más grave que el de los enemigos). */
+  playerShot(): void {
+    this.burst(this.buses.player, 0.1, 1400, 'highpass', 0.28);
+    this.burst(this.buses.player, 0.14, 300, 'lowpass', 0.3, 0.5);
+  }
+
+  /** Clic del arma sin munición. */
+  emptyClick(): void {
+    this.burst(this.buses.player, 0.03, 4000, 'highpass', 0.15);
   }
 
   /** Disparos de los enemigos. */

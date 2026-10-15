@@ -16,6 +16,8 @@ interface Bullet {
   damage: number;
   /** Disparada desde el aire: ignora paredes. */
   aerial: boolean;
+  /** Disparada por una moto: daña enemigos en lugar de jugadores. */
+  fromPlayer: boolean;
   mesh: THREE.Mesh;
   /** Distancia mínima a cada jugador (para métricas de esquive). */
   closest: number;
@@ -27,6 +29,8 @@ export interface BulletEvents {
   onExpire(nearMiss: boolean): void;
   /** Tramo recorrido por la bala: devuelve true si impactó algo (p. ej. un barril). */
   onSegment?(x0: number, z0: number, x1: number, z1: number): boolean;
+  /** Tramo de una bala de la moto: devuelve true si impactó a un enemigo o un bidón. */
+  onPlayerBullet?(x0: number, z0: number, x1: number, z1: number): boolean;
 }
 
 const GEO = new THREE.BoxGeometry(0.16, 0.16, 1.3);
@@ -35,6 +39,7 @@ const MATS = {
   police: mat(0xffe066, 0xffc400),
   gang: mat(0xff9a3c, 0xff6a00),
   wasteland: mat(0x9dff6a, 0x39ff14),
+  player: mat(0xe8fbff, 0x7fdcff),
 };
 
 export class Projectiles {
@@ -42,7 +47,7 @@ export class Projectiles {
 
   constructor(private scene: THREE.Scene) {}
 
-  fire(x: number, z: number, angle: number, damage: number, aerial = false, style: keyof typeof MATS = 'police'): void {
+  fire(x: number, z: number, angle: number, damage: number, aerial = false, style: keyof typeof MATS = 'police', fromPlayer = false): void {
     const mesh = new THREE.Mesh(GEO, MATS[style]);
     mesh.position.set(x, 1.3, z);
     mesh.rotation.y = angle;
@@ -50,7 +55,8 @@ export class Projectiles {
     const fx = -Math.sin(angle);
     const fz = -Math.cos(angle);
     // Nace delante del tirador para no impactar su propio vehículo.
-    this.bullets.push({ x: x + fx * 2.6, z: z + fz * 2.6, vx: fx * SPEED, vz: fz * SPEED, life: LIFE, damage, aerial, mesh, closest: Infinity });
+    const ahead = fromPlayer ? 1.4 : 2.6;
+    this.bullets.push({ x: x + fx * ahead, z: z + fz * ahead, vx: fx * SPEED, vz: fz * SPEED, life: LIFE, damage, aerial, fromPlayer, mesh, closest: Infinity });
   }
 
   update(dt: number, players: Player[], physics: Physics, ev: BulletEvents): void {
@@ -70,8 +76,10 @@ export class Projectiles {
       if (!done) {
         const nx = b.x + b.vx * dt;
         const nz = b.z + b.vz * dt;
-        if (!b.aerial && ev.onSegment?.(b.x, b.z, nx, nz)) done = true;
-        for (const p of done ? [] : players) {
+        if (b.fromPlayer) {
+          if (ev.onPlayerBullet?.(b.x, b.z, nx, nz)) done = true;
+        } else if (!b.aerial && ev.onSegment?.(b.x, b.z, nx, nz)) done = true;
+        for (const p of done || b.fromPlayer ? [] : players) {
           if (!p.alive) continue;
           const dist = segmentDistance(b.x, b.z, nx, nz, p.vehicle.px, p.vehicle.pz);
           b.closest = Math.min(b.closest, dist);
@@ -87,7 +95,7 @@ export class Projectiles {
 
       b.life -= dt;
       if (!done && b.life <= 0) {
-        ev.onExpire(b.closest < 3);
+        if (!b.fromPlayer) ev.onExpire(b.closest < 3);
         done = true;
       }
       if (done) {
