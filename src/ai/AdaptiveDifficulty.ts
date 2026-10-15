@@ -4,7 +4,7 @@ import { clamp, clamp01 } from '../core/math';
 import type { SkillProfile } from './SkillClassifier';
 
 /** Peso relativo de cada tipo habilitado, del más común al más raro. */
-const TYPE_WEIGHTS = [1, 0.75, 0.55, 0.45, 0.35];
+const TYPE_WEIGHTS = [1, 0.75, 0.6, 0.55, 0.45, 0.35];
 
 /** Campos que la IA modifica en caliente al terminar la calibración. */
 export type Adjustment = Pick<
@@ -121,6 +121,7 @@ export function kindLabel(k: PursuerKind): string {
     buggy: 'buggies',
     mutant: 'mutantes',
     flyer: 'harpías mutantes',
+    pyro: 'incineradores con lanzallamas',
     raider: 'moteros mutantes',
     rig: 'camiones de guerra',
   }[k];

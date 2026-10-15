@@ -12,8 +12,9 @@ import { Civilian } from '../entities/Civilian';
 import { Flyer } from '../entities/Flyer';
 import { Helicopter } from '../entities/Helicopter';
 import { BIKE_SPEC, Player, TURBO_MUL } from '../entities/Player';
-import { Projectiles } from '../entities/Projectiles';
-import { Pursuer, PURSUER_STATS, type FireRequest } from '../entities/Pursuer';
+import { Lobs, type Lob } from '../entities/Lobs';
+import { Projectiles, segmentDistance } from '../entities/Projectiles';
+import { FLAME_ANGLE, FLAME_RANGE, Pursuer, PURSUER_STATS, type FireRequest } from '../entities/Pursuer';
 import { Sandstorm } from '../entities/Sandstorm';
 import { mat } from '../fx/Meshes';
 import { Effects } from '../fx/Particles';
@@ -64,7 +65,7 @@ const ZONE_MOODS: Record<EndlessBiome, Mood[]> = {
   wasteland: ['toxic', 'night', 'sunset'],
 };
 const ZONE_GEN: Record<EndlessBiome, Pick<LevelConfig, 'obstacleWeights' | 'hazardWeights' | 'trafficDensity'>> = {
-  desert: { obstacleWeights: { barrel: 2, crate: 1.5, wreck: 1, rock: 1.5, tumbleweed: 1.5, fuelBarrel: 0.8 }, hazardWeights: { sand: 1, oil: 0.3, spikes: 0.3 }, trafficDensity: 1.8 },
+  desert: { obstacleWeights: { barrel: 2, crate: 1.5, wreck: 1, rock: 1.5, tumbleweed: 1.5, fuelBarrel: 1.6 }, hazardWeights: { sand: 1, oil: 0.3, spikes: 0.3 }, trafficDensity: 1.8 },
   city: { obstacleWeights: BASE_LEVELS[1].obstacleWeights, hazardWeights: BASE_LEVELS[1].hazardWeights, trafficDensity: 3 },
   industrial: { obstacleWeights: BASE_LEVELS[2].obstacleWeights, hazardWeights: BASE_LEVELS[2].hazardWeights, trafficDensity: 1.8 },
   wasteland: { obstacleWeights: BASE_LEVELS[3].obstacleWeights, hazardWeights: BASE_LEVELS[3].hazardWeights, trafficDensity: 0 },
@@ -76,6 +77,25 @@ const ROSTERS: Record<Faction, PursuerKind[]> = {
 };
 const ALL_KINDS: PursuerKind[] = [...ROSTERS.police, ...ROSTERS.gang, ...ROSTERS.wasteland];
 const FACTION_LABEL: Record<Faction, string> = { police: 'la policía', gang: 'Los Cuervos', wasteland: 'los saqueadores' };
+const ACID_POOL_GEO = new THREE.CircleGeometry(0.5, 18).rotateX(-Math.PI / 2);
+const ACID_POOL_MAT = new THREE.MeshBasicMaterial({ color: 0x5cff2a, transparent: true, opacity: 0.75, depthWrite: false });
+
+/** Biomas donde las explosiones y el fuego son verdes (estética tóxica). */
+const TOXIC_BIOMES = new Set<Biome>(['wasteland', 'plantBack', 'safeZone']);
+
+interface BlastSpec {
+  radius: number;
+  pursuerDmg: number;
+  playerDmg: number;
+  scale: number;
+}
+const BLASTS = {
+  barrel: { radius: 8, pursuerDmg: 170, playerDmg: 16, scale: 1.5 },
+  vehicle: { radius: 6, pursuerDmg: 80, playerDmg: 9, scale: 1.1 },
+  grenade: { radius: 5.5, pursuerDmg: 60, playerDmg: 14, scale: 1.15 },
+  bomb: { radius: 4.5, pursuerDmg: 60, playerDmg: 11, scale: 1 },
+} satisfies Record<string, BlastSpec>;
+
 const MUSIC_BY_BIOME: Record<EndlessBiome, number> = { desert: 0, city: 1, industrial: 2, wasteland: 3 };
 
 /** Duración del salto al salir de una estructura (s). */
@@ -144,7 +164,12 @@ export class Level {
   /** Habilidad medida en la calibración del nivel infinito (rige su rampa de dificultad). */
   private endlessSkill = 0.5;
   /** Explosiones pendientes (las reacciones en cadena se escalonan unas décimas). */
-  private blasts: { x: number; z: number; delay: number; big: boolean }[] = [];
+  private blasts: { x: number; z: number; delay: number; spec: BlastSpec }[] = [];
+  /** Granadas, bombas y gotas de ácido en el aire. */
+  private lobs: Lobs;
+  /** Charcos de ácido temporales que deja la lluvia de las harpías. */
+  private acidPools: { x: number; z: number; r: number; life: number; mesh: THREE.Mesh }[] = [];
+  private flameWarn = 0;
   /** Tiempo bala restante (segundos reales). */
   private slowmo = 0;
   private combo = 0;
@@ -193,6 +218,7 @@ export class Level {
     this.track = new Track(this.rng);
     this.fx = new Effects(this.scene);
     this.bullets = new Projectiles(this.scene);
+    this.lobs = new Lobs(this.scene);
     this.tracker = new PerformanceTracker(playerCount);
 
     this.chunks = new ChunkManager(
@@ -430,6 +456,8 @@ export class Level {
     // ---- perseguidores, tráfico, helicóptero
     if (this.config.pursuers && running) this.updatePursuers(dt);
     this.processBlasts(dt);
+    this.lobs.update(dt, (l) => this.lobLanded(l));
+    this.updateAcidPools(dt);
     const probe = (x: number, d: number, dir: number) => this.chunks.obstacleAhead(x, d, dir);
     for (const c of this.civilians) c.update(dt, this.track, this.physics, probe);
     if (this.heli && this.config.pursuers) {
@@ -455,6 +483,7 @@ export class Level {
         this.damagePlayer(p, dmg);
       },
       onWall: (x, z) => this.fx.sparks(x, z, 5),
+      onSegment: (x0, z0, x1, z1) => this.bulletHitsBarrel(x0, z0, x1, z1),
       onExpire: (near) => {
         this.tracker.bullet(false);
         if (near) this.tracker.m.nearMisses++;
@@ -478,7 +507,7 @@ export class Level {
       u.smokeTimer -= dt;
       if (u.smokeTimer <= 0) {
         u.smokeTimer = 0.12;
-        this.fx.smokeTrail(u.vehicle.px, u.vehicle.pz);
+        this.fx.smokeTrail(u.vehicle.px, u.vehicle.pz, this.toxicAt(u.vehicle.pz));
       }
     }
 
@@ -821,8 +850,13 @@ export class Level {
   // ------------------------------------------------------------ explosiones
 
   /** Programa una explosión (con retraso para escalonar las reacciones en cadena). */
-  private queueBlast(x: number, z: number, delay: number, big: boolean): void {
-    this.blasts.push({ x, z, delay, big });
+  private queueBlast(x: number, z: number, delay: number, spec: BlastSpec): void {
+    this.blasts.push({ x, z, delay, spec });
+  }
+
+  /** En la tierra baldía todo explota y arde en verde. */
+  private toxicAt(z: number): boolean {
+    return TOXIC_BIOMES.has(this.track.biomeAt(-z)) || this.config.index === 3;
   }
 
   /** Barril de combustible que estalla. */
@@ -830,7 +864,102 @@ export class Level {
     if (o.dead) return;
     const t = o.body.translation();
     this.chunks.destroyObstacle(o);
-    this.queueBlast(t.x, t.z, delay, true);
+    this.queueBlast(t.x, t.z, delay, BLASTS.barrel);
+  }
+
+  /** Una bala que roza un barril de combustible lo hace estallar. */
+  private bulletHitsBarrel(x0: number, z0: number, x1: number, z1: number): boolean {
+    const dMin = Math.min(-z0, -z1) - 2;
+    const dMax = Math.max(-z0, -z1) + 2;
+    for (const o of this.chunks.obstacles()) {
+      if (o.kind !== 'fuelBarrel' || o.dead || o.d < dMin || o.d > dMax) continue;
+      const t = o.body.translation();
+      if (segmentDistance(x0, z0, x1, z1, t.x, t.z) < 0.75) {
+        this.explodeBarrel(o, 0);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Cae una granada, bomba o gota de ácido. */
+  private lobLanded(l: Lob): void {
+    if (l.kind === 'acid') {
+      this.fx.splatter(l.x1, l.z1, 10);
+      for (const p of this.alivePlayers) {
+        if (p.ghost || Math.hypot(p.vehicle.px - l.x1, p.vehicle.pz - l.z1) > 1.6) continue;
+        if (p.canTakeHit('acidDrop', this.elapsed, 0.3)) this.damagePlayer(p, l.damage);
+      }
+      if (this.rng.chance(0.45)) this.addAcidPool(l.x1, l.z1);
+      return;
+    }
+    this.detonate(l.x1, l.z1, l.kind === 'grenade' ? { ...BLASTS.grenade, playerDmg: l.damage } : { ...BLASTS.bomb, playerDmg: l.damage });
+  }
+
+  private addAcidPool(x: number, z: number): void {
+    if (this.acidPools.length > 14) return;
+    const mesh = new THREE.Mesh(ACID_POOL_GEO, ACID_POOL_MAT);
+    const r = this.rng.range(1.3, 2);
+    mesh.scale.set(r * 2, 1, r * 2);
+    mesh.position.set(x, 0.06, z);
+    this.scene.add(mesh);
+    this.acidPools.push({ x, z, r, life: 4.5, mesh });
+  }
+
+  /** Los charcos de ácido queman mientras la moto está encima y se secan solos. */
+  private updateAcidPools(dt: number): void {
+    for (let i = this.acidPools.length - 1; i >= 0; i--) {
+      const pool = this.acidPools[i];
+      pool.life -= dt;
+      const k = Math.min(1, pool.life / 0.6);
+      pool.mesh.scale.set(pool.r * 2 * k, 1, pool.r * 2 * k);
+      for (const p of this.alivePlayers) {
+        if (p.ghost || p.air > 0 || Math.hypot(p.vehicle.px - pool.x, p.vehicle.pz - pool.z) > pool.r) continue;
+        this.damagePlayer(p, dt * 12);
+        this.tracker.hazard(dt);
+        if (this.rng.chance(dt * 6)) this.fx.splatter(p.vehicle.px, p.vehicle.pz, 2);
+      }
+      if (pool.life <= 0) {
+        this.scene.remove(pool.mesh);
+        this.acidPools.splice(i, 1);
+      }
+    }
+  }
+
+  /** Lanzallamas: daño continuo en el cono de fuego; incendia barriles y zombis. */
+  private updateFlames(dt: number): void {
+    this.flameWarn -= dt;
+    for (const u of this.pursuers) {
+      if (!u.flaming) continue;
+      const v = u.vehicle;
+      const fx = -Math.sin(v.heading);
+      const fz = -Math.cos(v.heading);
+      const nx = v.px + fx * 3.2;
+      const nz = v.pz + fz * 3.2;
+      const toxic = this.toxicAt(v.pz);
+      this.fx.flame(nx, nz, v.heading, FLAME_RANGE, toxic);
+      const inCone = (x: number, z: number) => {
+        const dx = x - nx;
+        const dz = z - nz;
+        const dist = Math.hypot(dx, dz);
+        return dist < FLAME_RANGE && Math.abs(wrapAngle(Math.atan2(-dx, -dz) - v.heading)) < FLAME_ANGLE + 0.6 / Math.max(1, dist);
+      };
+      for (const p of this.alivePlayers) {
+        if (p.ghost || p.air > 0 || !inCone(p.vehicle.px, p.vehicle.pz)) continue;
+        this.damagePlayer(p, dt * 15);
+        if (this.flameWarn <= 0) {
+          this.flameWarn = 2;
+          this.hooks.message(`J${p.index + 1}: ¡Te queman!`, toxic ? '#9dff6a' : '#ff7a45', 1);
+        }
+      }
+      for (const o of this.chunks.obstacles()) {
+        if (o.dead || (o.kind !== 'fuelBarrel' && o.kind !== 'zombie')) continue;
+        const t = o.body.translation();
+        if (!inCone(t.x, t.z)) continue;
+        if (o.kind === 'fuelBarrel') this.explodeBarrel(o, 0.2);
+        else this.splatZombie(o);
+      }
+    }
   }
 
   private processBlasts(dt: number): void {
@@ -838,16 +967,16 @@ export class Level {
     const due = this.blasts.filter((b) => (b.delay -= dt) <= 0);
     if (!due.length) return;
     this.blasts = this.blasts.filter((b) => b.delay > 0);
-    for (const b of due) this.detonate(b.x, b.z, b.big);
+    for (const b of due) this.detonate(b.x, b.z, b.spec);
   }
 
   /**
    * Onda expansiva: daña y empuja a perseguidores (mucho), a las motos (poco),
    * hace estallar barriles cercanos y revienta zombis y harpías en picada.
    */
-  private detonate(x: number, z: number, big: boolean): void {
-    const R = big ? 8 : 6;
-    this.fx.blast(x, z, big ? 1.5 : 1.1);
+  private detonate(x: number, z: number, spec: BlastSpec): void {
+    const R = spec.radius;
+    this.fx.blast(x, z, spec.scale, this.toxicAt(z));
     this.audio.explosion();
     const alive = this.alivePlayers;
     const nearest = Math.min(60, ...alive.map((p) => Math.hypot(p.vehicle.px - x, p.vehicle.pz - z)));
@@ -869,7 +998,7 @@ export class Level {
       const f = 1 - dist / R;
       push(u.vehicle, 22 * f);
       u.vehicle.heading += (this.rng.next() - 0.5) * 1.2 * f;
-      this.damagePursuer(u, (big ? 170 : 80) * f);
+      this.damagePursuer(u, spec.pursuerDmg * f);
     }
     for (const p of alive) {
       if (p.ghost) continue;
@@ -878,7 +1007,7 @@ export class Level {
       if (dist > r) continue;
       const f = 1 - dist / r;
       push(p.vehicle, 10 * f);
-      if (p.canTakeHit('blast', this.elapsed, 0.5)) this.damagePlayer(p, (big ? 16 : 9) * f);
+      if (p.canTakeHit('blast', this.elapsed, 0.5)) this.damagePlayer(p, spec.playerDmg * f);
     }
     for (const c of this.civilians) {
       if (Math.hypot(c.vehicle.px - x, c.vehicle.pz - z) > R) continue;
@@ -953,7 +1082,7 @@ export class Level {
 
   private wreckPlayer(p: Player): void {
     const v = p.vehicle;
-    this.fx.explosion(v.px, v.pz, 1.3);
+    this.fx.blast(v.px, v.pz, 1.1, this.toxicAt(v.pz));
     this.audio.explosion();
     this.shake = 1.2;
     const mats: THREE.Material[] = [];
@@ -1018,6 +1147,7 @@ export class Level {
       const shot = u.update({ dt, players: this.players, track: this.track, physics: this.physics, config: cfg, rng: this.rng });
       if (shot) this.fire(shot, false);
     }
+    this.updateFlames(dt);
     this.updateFlyers(dt, cfg);
 
     // Los enemigos terrestres que pisan el río se hunden.
@@ -1037,7 +1167,7 @@ export class Level {
       const u = this.pursuers[i];
       const tooFar = u.vehicle.d < minD - (u.wrecked ? 60 : 95) || u.vehicle.d > this.maxD + 200;
       const burnedOut = u.wrecked && u.wreckTime > (u.sinking ? 2.2 : u.stats.onFoot ? 2.5 : 7);
-      if (burnedOut && !u.stats.onFoot && !u.sinking) this.fx.explosion(u.vehicle.px, u.vehicle.pz, 0.5);
+      if (burnedOut && !u.stats.onFoot && !u.sinking) this.fx.blast(u.vehicle.px, u.vehicle.pz, 0.6, this.toxicAt(u.vehicle.pz));
       if (tooFar || burnedOut) {
         this.removeVehicle(u.vehicle.body, u.vehicle.mesh);
         this.pursuers.splice(i, 1);
@@ -1051,8 +1181,15 @@ export class Level {
     const minD = Math.min(...this.alivePlayers.map((p) => p.vehicle.d));
     for (let i = this.flyers.length - 1; i >= 0; i--) {
       const f = this.flyers[i];
-      const { shot, attack } = f.update(dt, this.players, cfg, this.rng);
-      if (shot) this.fire(shot, true);
+      const { rain, attack } = f.update(dt, this.players, cfg, this.rng);
+      if (rain) {
+        // Lluvia de ácido verde: gotas que caen alrededor de la moto.
+        for (let k = 0, n = this.rng.int(5, 8); k < n; k++) {
+          const a = this.rng.range(0, Math.PI * 2);
+          const r = this.rng.range(0, 4.5);
+          this.lobs.launch('acid', f.x + this.rng.range(-1, 1), f.z + this.rng.range(-1, 1), rain.x + Math.cos(a) * r, rain.z + Math.sin(a) * r, this.rng.range(0.55, 0.95), 6, true);
+        }
+      }
       if (attack) {
         const p = attack.player;
         if (p.turboActive && attack.playerSpeed > 30) {
@@ -1134,6 +1271,13 @@ export class Level {
   }
 
   private fire(shot: FireRequest, aerial: boolean): void {
+    if (shot.lob) {
+      const { x, z, dur, kind } = shot.lob;
+      this.lobs.launch(kind, shot.x, shot.z, x, z, dur, shot.damage, this.toxicAt(z));
+      this.fx.muzzle(shot.x - Math.sin(shot.angle) * 2.4, shot.z - Math.cos(shot.angle) * 2.4, shot.angle);
+      this.audio.crash(0.15);
+      return;
+    }
     this.bullets.fire(shot.x, shot.z, shot.angle, shot.damage, aerial, shot.faction);
     this.fx.muzzle(shot.x - Math.sin(shot.angle) * 2.4, shot.z - Math.cos(shot.angle) * 2.4, shot.angle);
     this.audio.shot();
@@ -1257,7 +1401,7 @@ export class Level {
       return;
     }
     // El vehículo estalla y su onda puede arrastrar a los que estén cerca.
-    this.queueBlast(u.vehicle.px, u.vehicle.pz, 0.05, false);
+    this.queueBlast(u.vehicle.px, u.vehicle.pz, 0.05, BLASTS.vehicle);
     this.registerKill(1500, u.stats.label);
   }
 
@@ -1451,6 +1595,7 @@ export class Level {
     this.state = 'ending';
     this.endTimer = delay;
     this.bullets.clear();
+    this.lobs.clear();
     if (outcome === 'complete') for (const p of this.players) p.invuln = 99;
   }
 
@@ -1513,6 +1658,7 @@ export class Level {
     this.audio.stopLoops();
     this.chunks.dispose();
     this.bullets.clear();
+    this.lobs.clear();
     this.heli?.dispose();
     for (const f of this.flyers) f.dispose();
     this.storm?.dispose();

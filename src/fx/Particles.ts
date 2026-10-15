@@ -158,21 +158,30 @@ export class Effects {
     }
   }
 
-  /** Gran explosión: bola de fuego, columna, escombros y onda expansiva. */
-  blast(x: number, z: number, scale = 1): void {
-    this.explosion(x, z, scale * 1.3);
-    this.fire.emit({ x, z, y: 1.5, count: Math.round(18 * scale), speed: [1, 4], life: [0.5, 1.0], size: [2.5 * scale, 0.8], colors: [0xfff4c0, 0xff3d00], drag: 1, rise: 14 });
-    this.smoke.emit({ x, z, y: 1.2, count: Math.round(22 * scale), speed: [9, 20], life: [0.6, 1.2], size: [0.55, 0.3], colors: [0x2a2420, 0x111111], drag: 0.6, rise: -16 });
-    this.shockwave(x, z, 7 * scale);
+  /** Gran explosión: bola de fuego, columna, escombros y onda expansiva (verde en la tierra baldía). */
+  blast(x: number, z: number, scale = 1, toxic = false): void {
+    this.explosion(x, z, scale * 1.3, toxic);
+    const column: [number, number] = toxic ? [0xeaffc0, 0x2fd10f] : [0xfff4c0, 0xff3d00];
+    const debris: [number, number] = toxic ? [0x2a3a1e, 0x10180a] : [0x2a2420, 0x111111];
+    this.fire.emit({ x, z, y: 1.5, count: Math.round(18 * scale), speed: [1, 4], life: [0.5, 1.0], size: [2.5 * scale, 0.8], colors: column, drag: 1, rise: 14 });
+    this.smoke.emit({ x, z, y: 1.2, count: Math.round(22 * scale), speed: [9, 20], life: [0.6, 1.2], size: [0.55, 0.3], colors: debris, drag: 0.6, rise: -16 });
+    this.shockwave(x, z, 7 * scale, toxic);
   }
 
-  shockwave(x: number, z: number, radius: number): void {
+  shockwave(x: number, z: number, radius: number, toxic = false): void {
     const ring = this.rings.find((r) => r.t >= r.dur) ?? this.rings[0];
     ring.t = 0;
     ring.dur = 0.45;
     ring.radius = radius;
     ring.mesh.position.set(x, 0.3, z);
+    (ring.mesh.material as THREE.MeshBasicMaterial).color.set(toxic ? 0xb6ff8a : 0xffd9a0);
     ring.mesh.visible = true;
+  }
+
+  /** Chorro de lanzallamas en un cono (fuego verde en la tierra baldía). */
+  flame(x: number, z: number, angle: number, range: number, toxic: boolean): void {
+    const colors: [number, number] = toxic ? [0xeaffb0, 0x1fae0a] : [0xfff1a8, 0xff3d00];
+    this.fire.emit({ x, z, y: 1.1, count: 6, speed: [range * 2.2, range * 3.2], life: [0.18, 0.32], size: [0.5, 1.9], colors, dir: angle, spread: 0.7, drag: 2.5, rise: 2 });
   }
 
   /** Explosión de fuego normal o tóxica (verde, para la planta nuclear). */

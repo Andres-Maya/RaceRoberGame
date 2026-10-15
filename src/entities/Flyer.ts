@@ -4,7 +4,6 @@ import { clamp, damp, wrapAngle } from '../core/math';
 import type { Rng } from '../core/Rng';
 import { disposeUnique, harpy, type HarpyMesh } from '../fx/Meshes';
 import type { Player } from './Player';
-import type { FireRequest } from './Pursuer';
 
 const CRUISE = 10;
 const DIVE_SPEED = 34;
@@ -17,14 +16,15 @@ export interface FlyerAttack {
 }
 
 export interface FlyerResult {
-  shot: FireRequest | null;
+  /** Lluvia de ácido: centro de la zona donde caerán las gotas. */
+  rain: { x: number; z: number } | null;
   attack: FlyerAttack | null;
 }
 
 /**
  * Harpía mutante (nivel 3 y nivel infinito). Vuela sin física: acecha en
- * círculos por delante del jugador escupiendo ácido y, de vez en cuando, se
- * lanza en picada contra él. Tras un rato se aleja.
+ * círculos por delante del jugador dejando caer lluvia de ácido y, de vez en
+ * cuando, se lanza en picada contra él. Tras un rato se aleja.
  */
 export class Flyer {
   readonly model: HarpyMesh;
@@ -65,7 +65,7 @@ export class Flyer {
 
   update(dt: number, players: Player[], cfg: PursuerConfig, rng: Rng): FlyerResult {
     this.t += dt;
-    const result: FlyerResult = { shot: null, attack: null };
+    const result: FlyerResult = { rain: null, attack: null };
     const targets = players.filter((p) => p.alive && !p.ghost);
     const target = targets.length ? targets[Math.floor(this.t / 10) % targets.length] : null;
     let tx = this.x;
@@ -95,10 +95,10 @@ export class Flyer {
           this.timer -= dt;
           this.spit -= dt;
           if (this.spit <= 0) {
-            this.spit = (1.4 / Math.max(0.1, cfg.fireRate)) * rng.range(0.8, 1.3);
-            const spread = (1 - cfg.accuracy) * 0.3;
-            const angle = Math.atan2(-(tv.px - this.x), -(tv.pz - this.z)) + rng.range(-spread, spread);
-            result.shot = { x: this.x, z: this.z, angle, damage: 7, faction: 'wasteland' };
+            // Lluvia de ácido verde sobre donde estará la moto.
+            this.spit = (2.4 / Math.max(0.1, cfg.fireRate)) * rng.range(0.8, 1.3);
+            const lead = 0.6 + cfg.accuracy * 0.5;
+            result.rain = { x: tv.px + tv.vx * lead, z: tv.pz + tv.vz * lead };
           }
           if (this.timer <= 0) {
             // Picada: apunta a donde estará la moto.

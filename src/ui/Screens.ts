@@ -192,7 +192,9 @@ export class Screens {
         <li>Manchas negras = aceite (derrapas). Tiras metálicas = púas (pinchazo).</li>
         <li>Los perseguidores que chocan fuerte contra muros u obstáculos quedan fuera de combate.</li>
         <li>Charcos verdes = ácido (daño continuo). Los zombis cruzan la vía: si los atropellas, te frenan.</li>
-        <li>Las harpías se lanzan en picada: esquívalas o embístelas con turbo a toda velocidad para derribarlas.</li>
+        <li>Las harpías se lanzan en picada: esquívalas o embístelas con turbo a toda velocidad para derribarlas. Su lluvia de ácido deja charcos que queman.</li>
+        <li>Un anillo parpadeante en el suelo marca dónde caerá una granada, bomba o gota de ácido: sal de ahí.</li>
+        <li>Los barriles rojos explotan: atrae a los perseguidores hacia ellos. Los incineradores queman de frente: no te quedes delante.</li>
         <li>Cada disparo que recibes rompe la mochila: pierdes $2.500 del botín.</li>
       </ul>
       <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button></div>`,

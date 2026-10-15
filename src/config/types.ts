@@ -52,6 +52,7 @@ export type PursuerKind =
   | 'buggy'
   | 'mutant'
   | 'flyer'
+  | 'pyro'
   | 'raider'
   | 'rig';
 

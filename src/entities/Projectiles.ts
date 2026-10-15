@@ -25,6 +25,8 @@ export interface BulletEvents {
   onHit(player: Player, damage: number, x: number, z: number): void;
   onWall(x: number, z: number): void;
   onExpire(nearMiss: boolean): void;
+  /** Tramo recorrido por la bala: devuelve true si impactó algo (p. ej. un barril). */
+  onSegment?(x0: number, z0: number, x1: number, z1: number): boolean;
 }
 
 const GEO = new THREE.BoxGeometry(0.16, 0.16, 1.3);
@@ -68,7 +70,8 @@ export class Projectiles {
       if (!done) {
         const nx = b.x + b.vx * dt;
         const nz = b.z + b.vz * dt;
-        for (const p of players) {
+        if (!b.aerial && ev.onSegment?.(b.x, b.z, nx, nz)) done = true;
+        for (const p of done ? [] : players) {
           if (!p.alive) continue;
           const dist = segmentDistance(b.x, b.z, nx, nz, p.vehicle.px, p.vehicle.pz);
           b.closest = Math.min(b.closest, dist);
@@ -102,7 +105,7 @@ export class Projectiles {
   }
 }
 
-function segmentDistance(ax: number, az: number, bx: number, bz: number, px: number, pz: number): number {
+export function segmentDistance(ax: number, az: number, bx: number, bz: number, px: number, pz: number): number {
   const dx = bx - ax;
   const dz = bz - az;
   const len2 = dx * dx + dz * dz;

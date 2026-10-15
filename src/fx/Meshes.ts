@@ -578,6 +578,7 @@ export function harpy(): HarpyMesh {
 
 /** Vehículos de la banda rival y de la tierra baldía. */
 export function outlawVehicle(kind: Exclude<PursuerKind, 'patrol' | 'moto' | 'suv' | 'swat' | 'mutant' | 'flyer'>): THREE.Group {
+  if (kind === 'pyro') return pyroVehicle();
   const g = new THREE.Group();
   const headlights = (w: number, l: number, y = 0.6) => {
     g.add(box(0.4, 0.15, 0.06, 0xfff4c0, -w * 0.3, y, -l / 2 - 0.02));
@@ -941,6 +942,52 @@ export function textPlane(text: string, w: number, h: number, bg: string, fg: st
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex }));
   m.rotation.x = -Math.PI / 2;
   return m;
+}
+
+/**
+ * Incinerador: semioruga blindada con dos tanques de combustible a la espalda,
+ * boquilla de lanzallamas al frente con piloto encendido y conductor con máscara.
+ */
+function pyroVehicle(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(2.0, 0.7, 4.4, 0x5a4a3a, 0, 0.3, 0));
+  for (const s of [-1, 1]) g.add(box(0.5, 0.75, 4.2, 0x1a1a1a, s * 1.05, 0, 0));
+  g.add(box(1.6, 0.7, 1.3, 0x3d3228, 0, 1.0, -0.7));
+  for (let i = 0; i < 4; i++) g.add(box(2.04, 0.1, 0.3, 0x8a5a2a, 0, 1.0, -1.9 + i * 0.95));
+  for (const s of [-1, 1]) {
+    g.add(cyl(0.42, 1.8, 0xb03a2e, s * 0.5, 1.0, 1.3));
+    g.add(cyl(0.44, 0.15, 0xf1c40f, s * 0.5, 1.9, 1.3));
+  }
+  // Conductor con máscara de gas
+  g.add(box(0.6, 0.6, 0.45, 0x2a2a2a, 0, 1.3, 0.1));
+  g.add(ball(0.26, 0x6b6b6b, 0, 2.05, 0.1));
+  g.add(box(0.36, 0.12, 0.06, 0x111111, 0, 2.08, -0.15));
+  // Boquilla con piloto encendido
+  g.add(box(0.22, 0.22, 1.6, 0x333333, 0, 1.0, -2.6));
+  const pilot = ball(0.16, 0x9dff6a, 0, 1.11, -3.45);
+  pilot.material = mat(0x9dff6a, 0x39ff14);
+  g.add(pilot);
+  return g;
+}
+
+/** Proyectiles lanzados en arco: granada, bomba o gota de ácido. */
+export function lobMesh(kind: 'grenade' | 'bomb' | 'acid'): THREE.Group {
+  const g = new THREE.Group();
+  if (kind === 'grenade') {
+    g.add(ball(0.32, 0x3d4a2a));
+    g.add(box(0.5, 0.12, 0.5, 0xc0c0c0, 0, -0.06, 0));
+  } else if (kind === 'bomb') {
+    g.add(ball(0.42, 0x111111));
+    const fuse = ball(0.12, 0xffd27a, 0, 0.45, 0);
+    fuse.material = mat(0xffd27a, 0xff8800);
+    g.add(fuse);
+  } else {
+    const drop = ball(0.3, 0x6dff3a);
+    drop.material = mat(0x6dff3a, 0x2fd10f);
+    drop.scale.y = 1.6;
+    g.add(drop);
+  }
+  return g;
 }
 
 /** Rampa de salto con franjas de advertencia; la parte alta mira hacia -Z. */

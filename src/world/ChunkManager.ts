@@ -115,7 +115,7 @@ interface Chunk {
  */
 const ACTIVATE_AHEAD = 85;
 
-const DESERT_WEIGHTS: Partial<Record<ObstacleKind, number>> = { rock: 2.2, barrel: 1.8, tumbleweed: 1.6, wreck: 0.6, crate: 1, cactus: 0.4, fuelBarrel: 0.6 };
+const DESERT_WEIGHTS: Partial<Record<ObstacleKind, number>> = { rock: 2.2, barrel: 1.8, tumbleweed: 1.6, wreck: 0.6, crate: 1, cactus: 0.4, fuelBarrel: 1.2 };
 
 const GROUND: Record<Biome, number> = {
   desert: 0xdcb982,
@@ -1153,7 +1153,7 @@ export class ChunkManager {
     if (hard.length) options.push('chicane', 'wall');
     if (has('parkedCar') || has('container')) options.push('parkedLine');
     if (has('zombie')) options.push('horde', 'horde');
-    if (has('fuelBarrel')) options.push('depot');
+    if (has('fuelBarrel')) options.push('depot', 'depot');
     // Rampa de salto (nunca sobre el puente: el salto podría caer al río).
     if ((soft.length || hard.length) && c.biome !== 'bridge') options.push('jump');
     if (!options.length) return;

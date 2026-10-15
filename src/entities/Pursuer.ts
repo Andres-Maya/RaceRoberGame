@@ -22,7 +22,15 @@ interface PursuerStats {
   onFoot?: boolean;
   /** Harpías: vuelan, no usan física (ver Flyer). */
   flying?: boolean;
+  /** Arma: pistola (por defecto), lanzagranadas, bombas a mano o lanzallamas. */
+  weapon?: Weapon;
 }
+
+export type Weapon = 'gun' | 'grenade' | 'bomb' | 'flame';
+
+/** Alcance del lanzallamas (m) y semiángulo del cono (rad). */
+export const FLAME_RANGE = 10;
+export const FLAME_ANGLE = 0.45;
 
 const spec = (maxSpeed: number, accel: number, steerRate: number, grip: number, hx: number, hz: number, density: number): VehicleSpec => ({
   maxSpeed,
@@ -41,19 +49,20 @@ export const PURSUER_STATS: Record<PursuerKind, PursuerStats> = {
   patrol: { faction: 'police', spec: spec(33, 20, 2.0, 6, 1.0, 2.1, 3), hp: 100, ram: 14, shooter: 0.4, bulletDamage: 6, label: 'Patrulla' },
   moto: { faction: 'police', spec: spec(38, 26, 2.8, 8, 0.45, 1.1, 2), hp: 40, ram: 6, shooter: 1, bulletDamage: 6, label: 'Moto policial' },
   suv: { faction: 'police', spec: spec(35, 22, 1.9, 6, 1.15, 2.4, 4), hp: 160, ram: 22, shooter: 0.2, bulletDamage: 7, label: 'SUV' },
-  swat: { faction: 'police', spec: spec(31, 16, 1.6, 5, 1.3, 2.8, 6), hp: 260, ram: 30, shooter: 1, bulletDamage: 8, label: 'SWAT' },
+  swat: { faction: 'police', spec: spec(31, 16, 1.6, 5, 1.3, 2.8, 6), hp: 260, ram: 30, shooter: 1, bulletDamage: 14, label: 'SWAT', weapon: 'grenade' },
   // ---- Banda rival
   muscle: { faction: 'gang', spec: spec(37, 24, 2.1, 6, 1.0, 2.2, 3), hp: 110, ram: 18, shooter: 0.25, bulletDamage: 6, label: 'Muscle car' },
-  biker: { faction: 'gang', spec: spec(38, 26, 2.8, 8, 0.45, 1.1, 2), hp: 40, ram: 6, shooter: 1, bulletDamage: 6, label: 'Motero' },
-  pickup: { faction: 'gang', spec: spec(33, 18, 1.9, 6, 1.1, 2.5, 4), hp: 150, ram: 18, shooter: 1, bulletDamage: 7, label: 'Pickup armada' },
+  biker: { faction: 'gang', spec: spec(38, 26, 2.8, 8, 0.45, 1.1, 2), hp: 40, ram: 6, shooter: 1, bulletDamage: 11, label: 'Motero', weapon: 'bomb' },
+  pickup: { faction: 'gang', spec: spec(33, 18, 1.9, 6, 1.1, 2.5, 4), hp: 150, ram: 18, shooter: 1, bulletDamage: 14, label: 'Pickup con lanzagranadas', weapon: 'grenade' },
   truck: { faction: 'gang', spec: spec(30, 13, 1.25, 5, 1.45, 4.6, 6), hp: 380, ram: 38, shooter: 0.7, bulletDamage: 8, label: 'Tráiler' },
   van: { faction: 'gang', spec: spec(30, 15, 1.6, 5, 1.3, 2.9, 6), hp: 260, ram: 30, shooter: 0.5, bulletDamage: 8, label: 'Furgón blindado' },
   // ---- Tierra baldía
   buggy: { faction: 'wasteland', spec: spec(39, 28, 2.6, 7, 0.95, 1.8, 2.5), hp: 70, ram: 14, shooter: 0.3, bulletDamage: 6, label: 'Buggy saqueador' },
   mutant: { faction: 'wasteland', spec: spec(26, 40, 4.5, 12, 0.45, 0.45, 1.5), hp: 25, ram: 10, shooter: 0, bulletDamage: 0, label: 'Mutante', onFoot: true },
   flyer: { faction: 'wasteland', spec: spec(30, 30, 3, 8, 0.5, 0.5, 1), hp: 1, ram: 12, shooter: 1, bulletDamage: 7, label: 'Harpía mutante', flying: true },
-  raider: { faction: 'wasteland', spec: spec(39, 26, 2.8, 8, 0.45, 1.1, 2), hp: 45, ram: 7, shooter: 1, bulletDamage: 7, label: 'Motero mutante' },
-  rig: { faction: 'wasteland', spec: spec(29, 14, 1.4, 5, 1.5, 3.4, 7), hp: 340, ram: 36, shooter: 0.6, bulletDamage: 9, label: 'Camión de guerra' },
+  pyro: { faction: 'wasteland', spec: spec(37, 24, 2.3, 6, 1.05, 2.3, 3.5), hp: 130, ram: 16, shooter: 1, bulletDamage: 0, label: 'Incinerador', weapon: 'flame' },
+  raider: { faction: 'wasteland', spec: spec(39, 26, 2.8, 8, 0.45, 1.1, 2), hp: 45, ram: 7, shooter: 1, bulletDamage: 11, label: 'Motero mutante', weapon: 'bomb' },
+  rig: { faction: 'wasteland', spec: spec(29, 14, 1.4, 5, 1.5, 3.4, 7), hp: 340, ram: 36, shooter: 0.8, bulletDamage: 14, label: 'Camión de guerra', weapon: 'grenade' },
 };
 
 export interface FireRequest {
@@ -63,6 +72,8 @@ export interface FireRequest {
   damage: number;
   /** Bando del tirador: define el color de la bala. */
   faction: Faction;
+  /** Proyectil en arco (granada o bomba): punto de caída y tiempo de vuelo. */
+  lob?: { x: number; z: number; dur: number; kind: 'grenade' | 'bomb' };
 }
 
 export interface PursuerContext {
@@ -101,6 +112,9 @@ export class Pursuer {
   private sirenPhase = false;
   private t = 0;
   private stride = 0;
+  /** Lanzallamas encendido en este instante (el nivel aplica el daño y el fuego). */
+  flaming = false;
+  private flameTimer = 0;
 
   constructor(
     physics: Physics,
@@ -124,6 +138,7 @@ export class Pursuer {
     const dt = ctx.dt;
     this.t += dt;
     if (this.wrecked) {
+      this.flaming = false;
       this.wreckTime += dt;
       v.halt(dt, this.sinking ? 60 : 28);
       if (this.sinking) {
@@ -241,6 +256,34 @@ export class Pursuer {
 
     // ---- disparo
     this.fireCooldown -= dt;
+    const weapon = this.stats.weapon ?? 'gun';
+    if (weapon === 'flame') {
+      // Ráfagas de ~1,4 s con pausas, solo si el objetivo está delante y cerca.
+      this.flameTimer -= dt;
+      const facing = Math.abs(wrapAngle(Math.atan2(-dx, -dz) - v.heading)) < 0.7;
+      if (this.flaming && this.flameTimer <= 0) {
+        this.flaming = false;
+        this.flameTimer = ctx.rng.range(0.9, 1.6) * (1.3 - cfg.aggression * 0.5);
+      } else if (!this.flaming && this.flameTimer <= 0 && facing && dist < FLAME_RANGE + 5) {
+        this.flaming = true;
+        this.flameTimer = ctx.rng.range(1.1, 1.7);
+      }
+      return null;
+    }
+    if (weapon !== 'gun') {
+      // Lanzagranadas y bombas: tiro en arco hacia donde estará la moto.
+      const maxRange = weapon === 'grenade' ? 42 : 28;
+      if (this.armed && this.fireCooldown <= 0 && dist > 7 && dist < maxRange) {
+        this.fireCooldown = ((weapon === 'grenade' ? 2.0 : 1.6) / Math.max(0.05, cfg.fireRate)) * ctx.rng.range(0.8, 1.3);
+        const dur = clamp(dist / 26, 0.7, 1.5);
+        const err = (1 - cfg.accuracy) * 5;
+        const x = tv.px + tv.vx * dur * (0.5 + cfg.accuracy * 0.5) + ctx.rng.range(-err, err);
+        const z = tv.pz + tv.vz * dur * (0.5 + cfg.accuracy * 0.5) + ctx.rng.range(-err, err);
+        const angle = Math.atan2(-(x - v.px), -(z - v.pz));
+        return { x: v.px, z: v.pz, angle, damage: this.stats.bulletDamage, faction: this.stats.faction, lob: { x, z, dur, kind: weapon } };
+      }
+      return null;
+    }
     if (this.armed && this.fireCooldown <= 0 && dist < 34 && dist > 4) {
       const blocked = ctx.physics.rayFixed(v.px, v.pz, dx / dist, dz / dist, dist);
       if (blocked === null) {
