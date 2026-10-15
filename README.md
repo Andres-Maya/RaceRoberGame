@@ -19,10 +19,12 @@ npm run preview    # sirve el build de producción
 |---|---|---|
 | **0 — La Ruta del Polvo** (prólogo) | Tormenta de arena | Desierto → afueras → ciudad. Termina cuando la moto atraviesa la puerta del Banco Central. |
 | **1 — El Golpe** | Policía: patrullas, motos, SUVs, SWAT y helicóptero | Explosión de la bóveda y salto por la puerta del banco → ciudad → puente del río. Termina al entrar al túnel de la montaña. |
-| **2 — Territorio Enemigo** | Los Cuervos: muscle cars, moteros, pickups con tirador, furgón blindado | Salida del túnel → zona industrial con contenedores y barricadas. Termina al entrar a la planta nuclear, que explota. |
-| **3 — Tierra Baldía** | Saqueadores: buggies, mutantes a pie, moteros mutantes, camiones de guerra | Explosión verde y salto desde dentro de la planta → ruinas con zombis que cruzan la vía y charcos de ácido. Termina al cruzar la zona segura. |
+| **2 — Territorio Enemigo** | Los Cuervos: muscle cars, moteros, pickups con tirador, tráileres, furgón blindado | Salida del túnel → zona industrial con contenedores y barricadas. Termina al entrar a la planta nuclear, que explota. |
+| **3 — Tierra Baldía** | Saqueadores: buggies, mutantes a pie (con esqueleto articulado), harpías mutantes voladoras, moteros mutantes, camiones de guerra | Explosión verde y salto desde dentro de la planta → ruinas con zombis que cruzan la vía y charcos de ácido. Termina al cruzar la zona segura. |
 
-Todos los niveles terminan **por distancia**: el HUD muestra cuánto falta para la meta. Cada disparo que recibes te quita $2.500 del botín.
+| **∞ — Carretera Sin Fin** | Cualquier enemigo de los tres bandos | Sin meta. Zonas de 500–900 m que cambian bioma (desierto, ciudad, industrial, tierra baldía), iluminación (día, tarde, atardecer, noche, tóxico) y música; puentes o afueras unen las zonas. Cada zona suma tipos de enemigos, perseguidores y obstáculos. Se guarda el récord de distancia. |
+
+Los niveles 0 a 3 terminan **por distancia**: el HUD muestra cuánto falta para la meta. Cada disparo que recibes te quita $2.500 del botín.
 
 Desde **Seleccionar nivel** puedes empezar en cualquier nivel: cada uno calibra tu habilidad por su cuenta.
 
@@ -34,7 +36,7 @@ Desde **Seleccionar nivel** puedes empezar en cualquier nivel: cada uno calibra 
 | Girar | `A` / `D` | `←` / `→` |
 | Turbo | `Espacio` o `Shift izq.` | `Shift der.` o `Enter` |
 
-Con un solo jugador sirven ambos esquemas. `Esc`/`P` pausa, `M` silencia todo el sonido y `N` activa o desactiva la música.
+Con un solo jugador sirven ambos esquemas. `Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen (también hay un control deslizante en el menú y en la pausa).
 
 Modo cooperativo (mismo teclado): la cámara sigue a las dos motos. Si un jugador cae, reaparece a los 6 s junto a su compañero (cuesta $20.000). Si uno se queda muy atrás, se le trae de vuelta junto al otro.
 
@@ -93,7 +95,8 @@ src/
     ChunkManager.ts       Generación procedural por tramos de 40 m (y su liberación)
     Level.ts              Una partida: calibración, reglas, colisiones, escenas, cámara
   entities/               Vehicle (controlador arcade), Player, Pursuer (IA de policía,
-                          banda y mutantes), Civilian, Helicopter, Projectiles, Sandstorm
+                          banda y mutantes), Flyer (harpías), Civilian, Helicopter,
+                          Projectiles, Sandstorm
   fx/                     Modelos low-poly y partículas instanciadas
   ui/                     HUD y pantallas HTML/CSS
 ```
