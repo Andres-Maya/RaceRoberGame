@@ -68,13 +68,22 @@ export class Hud {
 
   update(level: Level): void {
     const cfg = level.config;
-    // Meta por distancia
-    const goal = { bank: 'BANCO', tunnel: 'TÚNEL', plant: 'PLANTA', safeZone: 'ZONA SEGURA' }[cfg.finish];
-    this.set(this.timerLabel, `${goal} EN`);
-    const left = level.remainingDistance;
-    this.set(this.timer, left >= 1000 ? `${(left / 1000).toFixed(2)} km` : `${Math.round(left)} m`);
-    this.timer.classList.toggle('urgent', left < 150);
-    this.progressBar.style.width = `${Math.round(level.progress * 100)}%`;
+    const km = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`);
+    const zone = level.zoneInfo;
+    if (cfg.finish === 'none') {
+      // Nivel infinito: distancia recorrida y avance dentro de la zona.
+      this.set(this.timerLabel, zone ? `ZONA ${zone.index} · ${zone.name.toUpperCase()}` : 'RECORRIDO');
+      this.set(this.timer, km(level.maxD));
+      this.progressBar.style.width = `${Math.round((zone?.progress ?? 0) * 100)}%`;
+    } else {
+      // Meta por distancia
+      const goal = { bank: 'BANCO', tunnel: 'TÚNEL', plant: 'PLANTA', safeZone: 'ZONA SEGURA' }[cfg.finish];
+      this.set(this.timerLabel, `${goal} EN`);
+      const left = level.remainingDistance;
+      this.set(this.timer, km(left));
+      this.timer.classList.toggle('urgent', left < 150);
+      this.progressBar.style.width = `${Math.round(level.progress * 100)}%`;
+    }
 
     // El Analista: calibración y veredicto
     this.aiBar.style.width = `${Math.round(level.aiProgress * 100)}%`;

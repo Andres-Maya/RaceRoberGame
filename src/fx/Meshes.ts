@@ -95,6 +95,8 @@ export interface PursuerMesh {
   blue: THREE.Mesh | null;
   /** Cuerpo animable (mutantes que corren). */
   body?: THREE.Object3D;
+  /** Esqueleto articulado del mutante a pie. */
+  rig?: MutantRig;
 }
 
 const RED_ON = mat(0xff2a2a, 0xff0000);
@@ -115,11 +117,14 @@ export function pursuerMesh(kind: PursuerKind): PursuerMesh {
     case 'swat':
       return policeVehicle(kind);
     case 'mutant': {
-      const body = humanoid(0x5fbf3a, 0x3a2a1a, false, 1.45);
+      const rig = mutantRig();
       const group = new THREE.Group();
-      group.add(body);
-      return { group, red: null, blue: null, body };
+      group.add(rig.root);
+      return { group, red: null, blue: null, body: rig.root, rig };
     }
+    case 'flyer':
+      // Las harpías no usan este modelo: tienen su propia entidad voladora (ver harpy()).
+      return { group: new THREE.Group(), red: null, blue: null };
     default:
       return { group: outlawVehicle(kind), red: null, blue: null };
   }
@@ -313,8 +318,257 @@ export function humanoid(skin: number, cloth: number, armsForward: boolean, scal
   return g;
 }
 
+// ---------------------------------------------------------------- criaturas
+
+/** Esqueleto del mutante a pie: cada articulación es un grupo que puede rotar. */
+export interface MutantRig {
+  root: THREE.Group;
+  torso: THREE.Group;
+  head: THREE.Group;
+  jaw: THREE.Group;
+  arms: { upper: THREE.Group; lower: THREE.Group }[];
+  legs: { thigh: THREE.Group; shin: THREE.Group }[];
+}
+
+/** Segmento de una extremidad: un pivote con la pieza colgando hacia abajo. */
+function limb(w: number, len: number, d: number, color: number, x: number, y: number, z: number): THREE.Group {
+  const pivot = new THREE.Group();
+  pivot.position.set(x, y, z);
+  const m = box(w, len, d, color, 0, -len, 0);
+  pivot.add(m);
+  return pivot;
+}
+
+function claws(parent: THREE.Object3D, y: number, size: number): void {
+  for (const x of [-0.08, 0, 0.08]) {
+    const c = new THREE.Mesh(CONE, mat(0xe8e2c8));
+    c.scale.set(0.07 * size, 0.28 * size, 0.07 * size);
+    c.rotation.x = Math.PI;
+    c.position.set(x * size, y, -0.04);
+    parent.add(c);
+  }
+}
+
+/**
+ * Mutante a pie: encorvado, con un brazo derecho descomunal, púas en la
+ * espalda, venas moradas y ojos rojos. Mira hacia -Z.
+ */
+export function mutantRig(): MutantRig {
+  const skin = 0x9cb87a;
+  const dark = 0x5e7444;
+  const vein = 0x7d3f8f;
+  const rags = 0x3b2a1e;
+  const root = new THREE.Group();
+
+  const pelvis = box(0.7, 0.35, 0.45, rags, 0, 1.05, 0);
+  root.add(pelvis);
+
+  const legs = [-1, 1].map((s) => {
+    const thigh = limb(0.3, 0.6, 0.34, dark, s * 0.24, 1.15, 0);
+    const shin = limb(0.24, 0.55, 0.28, skin, 0, -0.6, 0);
+    thigh.add(shin);
+    const foot = box(0.3, 0.14, 0.55, dark, 0, -0.62, -0.12);
+    shin.add(foot);
+    claws(foot, 0.05, 1);
+    foot.children.forEach((c) => (c.rotation.x = -Math.PI / 2));
+    root.add(thigh);
+    return { thigh, shin };
+  });
+
+  const torso = new THREE.Group();
+  torso.position.set(0, 1.25, 0);
+  torso.rotation.x = -0.45;
+  root.add(torso);
+  torso.add(box(0.95, 0.75, 0.6, skin, 0, 0.25, 0));
+  torso.add(box(0.75, 0.4, 0.5, dark, 0, -0.05, 0));
+  torso.add(box(0.12, 0.6, 0.05, vein, -0.25, 0.35, -0.31));
+  torso.add(box(0.08, 0.45, 0.05, vein, 0.2, 0.3, -0.31));
+  // Púas en la espalda
+  for (let i = 0; i < 4; i++) {
+    const spike = new THREE.Mesh(CONE, mat(0xd8d0b0));
+    spike.scale.set(0.16, 0.42 - i * 0.05, 0.16);
+    spike.rotation.x = 0.9;
+    spike.position.set(0, 0.85 - i * 0.22, 0.32);
+    spike.castShadow = true;
+    torso.add(spike);
+  }
+
+  const head = new THREE.Group();
+  head.position.set(0, 1.05, -0.12);
+  torso.add(head);
+  head.add(box(0.48, 0.42, 0.5, skin, 0, 0, 0));
+  head.add(box(0.5, 0.12, 0.2, dark, 0, 0.36, -0.12));
+  for (const x of [-0.12, 0.12]) {
+    const eye = box(0.1, 0.07, 0.04, 0xff3b1f, x, 0.2, -0.26);
+    eye.material = mat(0xff3b1f, 0xff2000);
+    head.add(eye);
+  }
+  const jaw = new THREE.Group();
+  jaw.position.set(0, 0.05, 0.12);
+  head.add(jaw);
+  jaw.add(box(0.42, 0.12, 0.42, dark, 0, -0.12, -0.2));
+  for (const x of [-0.12, 0, 0.12]) {
+    const tooth = new THREE.Mesh(CONE, mat(0xf2ecd2));
+    tooth.scale.set(0.05, 0.12, 0.05);
+    tooth.position.set(x, 0.04, -0.38);
+    jaw.add(tooth);
+  }
+
+  // Brazo izquierdo normal y brazo derecho descomunal
+  const arms = [
+    { s: -1, k: 1 },
+    { s: 1, k: 1.6 },
+  ].map(({ s, k }) => {
+    const upper = limb(0.28 * k, 0.55 * k, 0.28 * k, skin, s * (0.55 + 0.1 * k), 0.75, 0);
+    const lower = limb(0.25 * k, 0.55 * k, 0.25 * k, dark, 0, -0.55 * k, 0);
+    upper.add(lower);
+    const hand = box(0.3 * k, 0.18 * k, 0.3 * k, skin, 0, -0.62 * k, 0);
+    lower.add(hand);
+    claws(hand, -0.05 * k, k);
+    torso.add(upper);
+    return { upper, lower };
+  });
+
+  root.scale.setScalar(1.3);
+  return { root, torso, head, jaw, arms, legs };
+}
+
+/**
+ * Animación de carrera del mutante. `phase` avanza con la velocidad y `run`
+ * (0..1) mezcla entre postura quieta y zancada completa.
+ */
+export function animateMutant(rig: MutantRig, phase: number, run: number): void {
+  const a = Math.sin(phase);
+  rig.legs.forEach((leg, i) => {
+    const s = i === 0 ? 1 : -1;
+    leg.thigh.rotation.x = s * a * 0.95 * run;
+    // La rodilla se dobla sobre todo cuando la pierna vuelve hacia adelante.
+    leg.shin.rotation.x = -(0.15 + 1.15 * Math.max(0, Math.cos(phase + (i === 0 ? 0 : Math.PI)))) * run;
+  });
+  rig.arms.forEach((arm, i) => {
+    const s = i === 0 ? -1 : 1;
+    arm.upper.rotation.x = s * a * 0.85 * run - 0.25;
+    arm.upper.rotation.z = (i === 0 ? -1 : 1) * 0.18;
+    arm.lower.rotation.x = 0.7 + 0.45 * Math.max(0, s * a) * run;
+  });
+  rig.root.position.y = Math.abs(Math.sin(phase)) * 0.18 * run;
+  rig.torso.rotation.x = -0.45 - 0.15 * run + Math.sin(phase * 2) * 0.05 * run;
+  rig.torso.rotation.z = a * 0.1 * run;
+  rig.torso.rotation.y = a * 0.12 * run;
+  rig.head.rotation.x = 0.25 * run + Math.sin(phase * 2 + 1) * 0.08;
+  rig.jaw.rotation.x = -(0.12 + 0.3 * Math.abs(Math.sin(phase * 0.75)));
+}
+
+/** Pose de mutante derribado: de bruces y con las extremidades abiertas. */
+export function knockOutMutant(rig: MutantRig): void {
+  rig.root.rotation.x = -1.45;
+  rig.root.position.y = 0.45;
+  rig.arms.forEach((arm, i) => {
+    arm.upper.rotation.set(-1.2, 0, (i === 0 ? -1 : 1) * 1.1);
+    arm.lower.rotation.x = 0.3;
+  });
+  rig.legs.forEach((leg, i) => {
+    leg.thigh.rotation.set(0.2, 0, (i === 0 ? -1 : 1) * 0.35);
+    leg.shin.rotation.x = -0.4;
+  });
+  rig.jaw.rotation.x = -0.5;
+}
+
+export interface HarpyMesh {
+  group: THREE.Group;
+  body: THREE.Group;
+  wings: { inner: THREE.Group; outer: THREE.Group }[];
+  tail: THREE.Group;
+  jaw: THREE.Group;
+  shadow: THREE.Mesh;
+}
+
+/** Harpía mutante: criatura voladora de alas membranosas que escupe ácido. */
+export function harpy(): HarpyMesh {
+  const hide = 0x6b4a6e;
+  const belly = 0xa08a7a;
+  const membrane = 0x8a3f5a;
+  const bone = 0x2e2228;
+  const group = new THREE.Group();
+  const body = new THREE.Group();
+  group.add(body);
+  body.add(box(0.9, 0.7, 2.2, hide, 0, -0.35, 0));
+  body.add(box(0.7, 0.3, 1.6, belly, 0, -0.5, 0.1));
+  // Cuello, cabeza con pico y ojos verdes
+  body.add(box(0.45, 0.45, 0.9, hide, 0, -0.2, -1.4));
+  const head = new THREE.Group();
+  head.position.set(0, 0, -2.0);
+  body.add(head);
+  head.add(box(0.6, 0.5, 0.7, hide, 0, -0.25, 0));
+  const beak = new THREE.Mesh(CONE, mat(0xd8c08a));
+  beak.scale.set(0.35, 0.9, 0.3);
+  beak.rotation.x = -Math.PI / 2;
+  beak.position.set(0, 0.05, -0.75);
+  head.add(beak);
+  const jaw = new THREE.Group();
+  jaw.position.set(0, -0.1, -0.3);
+  head.add(jaw);
+  const lower = new THREE.Mesh(CONE, mat(0xb8a070));
+  lower.scale.set(0.28, 0.6, 0.2);
+  lower.rotation.x = -Math.PI / 2;
+  lower.position.set(0, -0.08, -0.35);
+  jaw.add(lower);
+  for (const x of [-0.2, 0.2]) {
+    const eye = box(0.1, 0.1, 0.06, 0x39ff14, x, 0.1, -0.34);
+    eye.material = mat(0x39ff14, 0x2fd10f);
+    head.add(eye);
+  }
+  // Cresta ósea
+  for (let i = 0; i < 3; i++) {
+    const c = new THREE.Mesh(CONE, mat(bone));
+    c.scale.set(0.12, 0.5 - i * 0.1, 0.12);
+    c.rotation.x = 1.2;
+    c.position.set(0, 0.25, 0.1 + i * 0.25);
+    head.add(c);
+  }
+  // Alas: pivote en el hombro y segunda articulación en el "codo"
+  const wings = [-1, 1].map((s) => {
+    const inner = new THREE.Group();
+    inner.position.set(s * 0.45, 0, -0.3);
+    body.add(inner);
+    inner.add(box(2.4, 0.06, 1.5, membrane, s * 1.2, 0, 0.2));
+    inner.add(box(2.4, 0.12, 0.12, bone, s * 1.2, 0.03, -0.5));
+    const outer = new THREE.Group();
+    outer.position.set(s * 2.4, 0, 0);
+    inner.add(outer);
+    outer.add(box(2.3, 0.05, 1.2, membrane, s * 1.15, 0, 0.35));
+    outer.add(box(2.4, 0.1, 0.1, bone, s * 1.2, 0.03, -0.2));
+    const talon = new THREE.Mesh(CONE, mat(0xe8e2c8));
+    talon.scale.set(0.12, 0.4, 0.12);
+    talon.rotation.z = s * -Math.PI / 2;
+    talon.position.set(s * 2.5, 0, -0.2);
+    outer.add(talon);
+    return { inner, outer };
+  });
+  // Cola larga terminada en púa
+  const tail = new THREE.Group();
+  tail.position.set(0, -0.3, 1.1);
+  body.add(tail);
+  tail.add(box(0.2, 0.15, 1.8, hide, 0, 0, 0.9));
+  const spade = new THREE.Mesh(CONE, mat(bone));
+  spade.scale.set(0.4, 0.6, 0.15);
+  spade.rotation.x = Math.PI / 2;
+  spade.position.set(0, 0, 2.0);
+  tail.add(spade);
+  // Garras colgantes
+  for (const x of [-0.25, 0.25]) body.add(box(0.12, 0.5, 0.12, bone, x, -1.0, 0.3));
+
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(2.6, 18),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32, depthWrite: false }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.scale.set(1.6, 0.6, 1);
+  return { group, body, wings, tail, jaw, shadow };
+}
+
 /** Vehículos de la banda rival y de la tierra baldía. */
-export function outlawVehicle(kind: Exclude<PursuerKind, 'patrol' | 'moto' | 'suv' | 'swat' | 'mutant'>): THREE.Group {
+export function outlawVehicle(kind: Exclude<PursuerKind, 'patrol' | 'moto' | 'suv' | 'swat' | 'mutant' | 'flyer'>): THREE.Group {
   const g = new THREE.Group();
   const headlights = (w: number, l: number, y = 0.6) => {
     g.add(box(0.4, 0.15, 0.06, 0xfff4c0, -w * 0.3, y, -l / 2 - 0.02));
@@ -358,6 +612,23 @@ export function outlawVehicle(kind: Exclude<PursuerKind, 'patrol' | 'moto' | 'su
       }
       headlights(2.1, 4.8);
       break;
+    case 'truck': {
+      // Tráiler de la banda: cabina roja con defensa de tubos y caja larga grafiteada.
+      g.add(box(2.7, 1.9, 2.4, 0x7a1f1f, 0, 0.35, -3.3));
+      g.add(box(2.4, 0.7, 0.1, 0x1d2a35, 0, 1.6, -4.52));
+      g.add(box(2.8, 0.25, 0.4, 0x9a9a9a, 0, 0.3, -4.7));
+      for (const x of [-0.9, -0.3, 0.3, 0.9]) g.add(box(0.12, 1.0, 0.12, 0x9a9a9a, x, 0.2, -4.7));
+      g.add(cyl(0.16, 2.2, 0x555555, -1.2, 1.6, -2.3));
+      g.add(cyl(0.16, 2.2, 0x555555, 1.2, 1.6, -2.3));
+      g.add(box(2.8, 2.6, 6.2, 0xd9d4c7, 0, 0.45, 1.3));
+      g.add(box(2.82, 0.6, 3.2, 0xe67e22, 0, 1.5, 1.6));
+      g.add(box(2.82, 0.4, 2.0, 0x8e44ad, 0, 0.9, 0.2));
+      const gunner = humanoid(0xd2a07a, 0x222222, false, 0.8);
+      gunner.position.set(0, 3.05, 3.4);
+      g.add(gunner);
+      headlights(2.7, 9.4, 0.7);
+      break;
+    }
     case 'van':
       g.add(box(2.6, 1.8, 5.8, 0x2b2b2b, 0, 0.25, 0));
       g.add(box(2.2, 0.6, 0.1, 0x1d2a35, 0, 1.2, -2.92));

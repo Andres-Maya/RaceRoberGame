@@ -68,7 +68,7 @@ export class Helicopter {
       this.burst--;
       const spread = (1 - cfg.accuracy) * 0.3;
       const angle = Math.atan2(-(tv.px - this.x), -(tv.pz - this.z)) + rng.range(-spread, spread);
-      return { x: this.x, z: this.z, angle, damage: 8 };
+      return { x: this.x, z: this.z, angle, damage: 8, faction: 'police' };
     }
     return null;
   }

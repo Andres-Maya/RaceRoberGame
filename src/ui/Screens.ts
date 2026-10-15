@@ -14,12 +14,38 @@ export class Screens {
   private el = document.querySelector('#screen') as HTMLElement;
   private actions = new Map<string, Action>();
   private keys: [string[], string][] = [];
+  /** Recibe el volumen (0..1) cuando se mueve el control deslizante de la música. */
+  onVolume: ((v: number) => void) | null = null;
 
   constructor() {
     this.el.addEventListener('click', (e) => {
       const t = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
       if (t?.dataset.action) this.run(t.dataset.action);
     });
+    this.el.addEventListener('input', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (t.dataset.volume === undefined) return;
+      const v = Number(t.value) / 100;
+      this.showVolume(v);
+      this.onVolume?.(v);
+    });
+  }
+
+  /** Control deslizante del volumen de la música. */
+  private volumeSlider(v: number): string {
+    return `<label class="volume">
+      <span>Volumen de la música <kbd>-</kbd> <kbd>+</kbd></span>
+      <input type="range" min="0" max="100" step="5" value="${Math.round(v * 100)}" data-volume />
+      <b data-volume-label>${Math.round(v * 100)}%</b>
+    </label>`;
+  }
+
+  /** Actualiza el control si está en pantalla (p. ej. al cambiar el volumen con el teclado). */
+  showVolume(v: number): void {
+    const input = this.el.querySelector<HTMLInputElement>('input[data-volume]');
+    const label = this.el.querySelector<HTMLElement>('[data-volume-label]');
+    if (input && document.activeElement !== input) input.value = String(Math.round(v * 100));
+    if (label) label.textContent = `${Math.round(v * 100)}%`;
   }
 
   get visible(): boolean {
@@ -75,7 +101,8 @@ export class Screens {
         <button data-action="music" class="ghost">${save.musicOn ? 'MÚSICA: DEATH METAL' : 'MÚSICA: APAGADA'} <kbd>N</kbd></button>
         <button data-action="mute" class="ghost">${save.muted ? 'SONIDO: APAGADO' : 'SONIDO: ENCENDIDO'} <kbd>M</kbd></button>
       </div>
-      <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)}</div>`,
+      ${this.volumeSlider(save.musicVolume)}
+      <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)} · Récord infinito: ${(save.bestEndless / 1000).toFixed(2)} km</div>`,
       a,
       [
         [['Digit1', 'Numpad1', 'Enter'], 'one'],
@@ -89,17 +116,17 @@ export class Screens {
   }
 
   levelSelect(save: SaveData, start: (level: number, players: number) => void, back: Action): void {
-    const names = ['La Ruta del Polvo', 'El Golpe', 'Avenida en Llamas', 'Último Cerco'];
+    const names = ['La Ruta del Polvo', 'El Golpe', 'Territorio Enemigo', 'Tierra Baldía', 'Carretera Sin Fin'];
     const rows = names
       .map(
         (n, i) => `<div class="level-row">
-          <div><b>Nivel ${i}</b> — ${n}</div>
+          <div><b>Nivel ${i === 4 ? '∞' : i}</b> — ${n}${i === 4 ? ` <small class="muted">(récord ${(save.bestEndless / 1000).toFixed(2)} km)</small>` : ''}</div>
           <div><button data-action="l${i}p1">1 jugador</button><button data-action="l${i}p2">2 jugadores</button></div>
         </div>`,
       )
       .join('');
     const actions: Record<string, Action> = { back };
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       actions[`l${i}p1`] = () => start(i, 1);
       actions[`l${i}p2`] = () => start(i, 2);
     }
@@ -126,12 +153,13 @@ export class Screens {
           <p><kbd>Shift der.</kbd> / <kbd>Enter</kbd> turbo</p>
         </div>
       </div>
-      <p class="muted">Con un solo jugador puedes usar cualquiera de los dos esquemas. <kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio · <kbd>N</kbd> música.</p>
+      <p class="muted">Con un solo jugador puedes usar cualquiera de los dos esquemas. <kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio · <kbd>N</kbd> música · <kbd>-</kbd> <kbd>+</kbd> volumen de la música.</p>
       <ul class="tips">
         <li>Fuera del asfalto en el desierto la moto pierde velocidad.</li>
         <li>Manchas negras = aceite (derrapas). Tiras metálicas = púas (pinchazo).</li>
         <li>Los perseguidores que chocan fuerte contra muros u obstáculos quedan fuera de combate.</li>
         <li>Charcos verdes = ácido (daño continuo). Los zombis cruzan la vía: si los atropellas, te frenan.</li>
+        <li>Las harpías se lanzan en picada: esquívalas o embístelas con turbo a toda velocidad para derribarlas.</li>
         <li>Cada disparo que recibes rompe la mochila: pierdes $2.500 del botín.</li>
       </ul>
       <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button></div>`,
@@ -182,13 +210,15 @@ export class Screens {
       ? `<div class="ai-notes"><h3>El Analista ajustó este nivel</h3><ul>${cfg.adaptiveNotes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`
       : '';
     const km = (m: number) => `${(m / 1000).toFixed(1)} km`;
-    const target = { bank: 'el Banco Central', tunnel: 'el túnel del puente', plant: 'la planta nuclear', safeZone: 'la zona segura' }[cfg.finish];
+    const target = { bank: 'el Banco Central', tunnel: 'el túnel del puente', plant: 'la planta nuclear', safeZone: 'la zona segura', none: '' }[cfg.finish];
     const goal =
-      cfg.index === 0
+      cfg.index === 4
+        ? `No hay meta: cada zona cambia el paisaje, la luz y los enemigos (de cualquier bando) y es más difícil que la anterior. Los primeros <b>${cfg.calibration} m</b> son de calibración. Récord a batir: distancia recorrida.`
+        : cfg.index === 0
         ? `Recorre <b>${km(cfg.distance)}</b> hasta ${target}. La IA te observará todo el camino.`
         : `Llega a ${target}: unos <b>${km(cfg.distance)}</b>. Los primeros <b>${cfg.calibration} m</b> son de calibración: El Analista medirá tu habilidad y ajustará en este mismo nivel los tipos de vehículos, cuántos te persiguen, los obstáculos y la distancia.`;
     this.show(
-      `<div class="level-tag">${cfg.index === 0 ? 'PRÓLOGO' : `NIVEL ${cfg.index} DE 3`}</div>
+      `<div class="level-tag">${cfg.index === 0 ? 'PRÓLOGO' : cfg.index === 4 ? 'NIVEL INFINITO' : `NIVEL ${cfg.index} DE 3`}</div>
       <h1>${esc(cfg.name.split('—')[1]?.trim() ?? cfg.name)}</h1>
       <div class="story">${story}</div>
       <p class="goal">${goal} ${players > 1 ? '<br><span class="muted">Cooperativo: si un compañero cae, vuelve a los 6 s mientras el otro siga vivo.</span>' : ''}</p>
@@ -203,14 +233,15 @@ export class Screens {
     );
   }
 
-  pause(resume: Action, restart: Action, menu: Action): void {
+  pause(volume: number, resume: Action, restart: Action, menu: Action): void {
     this.show(
       `<h2>Pausa</h2>
       <div class="menu-buttons">
         <button data-action="resume" class="primary">Continuar <kbd>Esc</kbd></button>
         <button data-action="restart">Reiniciar nivel <kbd>R</kbd></button>
         <button data-action="menu" class="ghost">Salir al menú <kbd>Q</kbd></button>
-      </div>`,
+      </div>
+      ${this.volumeSlider(volume)}`,
       { resume, restart, menu },
       [
         [['Escape', 'KeyP'], 'resume'],
@@ -258,7 +289,7 @@ export class Screens {
       : '';
     this.show(
       `<div class="level-tag">${cfg.index === 0 ? 'PRÓLOGO COMPLETADO' : `NIVEL ${cfg.index} SUPERADO`}</div>
-      <h2>${{ bank: '¡Dentro del Banco Central!', tunnel: '¡A salvo en el túnel!', plant: '¡La planta nuclear voló!', safeZone: '¡Zona segura!' }[cfg.finish]}</h2>
+      <h2>${{ bank: '¡Dentro del Banco Central!', tunnel: '¡A salvo en el túnel!', plant: '¡La planta nuclear voló!', safeZone: '¡Zona segura!', none: '' }[cfg.finish]}</h2>
       <div class="kv-grid">${table}</div>
       ${ai}
       <div class="menu-buttons"><button data-action="next" class="primary">Continuar <kbd>Enter</kbd></button><button data-action="menu" class="ghost">Menú</button></div>`,
@@ -268,13 +299,17 @@ export class Screens {
     );
   }
 
-  gameOver(cfg: LevelConfig, m: PerformanceMetrics, score: number, retry: Action, menu: Action): void {
+  gameOver(cfg: LevelConfig, m: PerformanceMetrics, score: number, retry: Action, menu: Action, endless?: { zone: number; best: number; record: boolean }): void {
+    const titles = ['La tormenta los alcanzó', '¡Los atrapó la policía!', '¡Los Cuervos se quedaron con el botín!', '¡La tierra baldía los devoró!', 'Fin del camino'];
     this.show(
       `<div class="level-tag danger">${cfg.name}</div>
-      <h2>${['La tormenta los alcanzó', '¡Los atrapó la policía!', '¡Los Cuervos se quedaron con el botín!', '¡La tierra baldía los devoró!'][cfg.index]}</h2>
+      <h2>${titles[cfg.index]}</h2>
+      ${endless ? `<div class="big-cash">${(m.distance / 1000).toFixed(2)} km</div>${endless.record ? '<p class="goal">¡Nuevo récord!</p>' : `<p class="muted">Récord: ${(endless.best / 1000).toFixed(2)} km</p>`}` : ''}
       <div class="kv-grid">
         <div class="kv"><span>Tiempo resistido</span><b>${formatTime(m.time)}</b></div>
         <div class="kv"><span>Distancia</span><b>${Math.round(m.distance)} m</b></div>
+        ${endless ? `<div class="kv"><span>Zona alcanzada</span><b>${endless.zone}</b></div>` : ''}
+        <div class="kv"><span>Perseguidores derribados</span><b>${m.copsWrecked}</b></div>
         <div class="kv"><span>Puntaje del nivel</span><b>${Math.round(score).toLocaleString('es-CO')}</b></div>
       </div>
       ${cfg.index > 0 ? '<p class="muted">En el reintento, El Analista volverá a calibrar tu habilidad desde el inicio.</p>' : ''}
@@ -288,7 +323,7 @@ export class Screens {
     );
   }
 
-  victory(text: string[], cash: number, score: number, profile: SkillProfile | null, menu: Action): void {
+  victory(text: string[], cash: number, score: number, profile: SkillProfile | null, menu: Action, endless: Action): void {
     this.show(
       `<div class="level-tag">FUGA COMPLETADA</div>
       <h1>¡El botín es suyo!</h1>
@@ -298,9 +333,13 @@ export class Screens {
         <div class="kv"><span>Puntaje total</span><b>${Math.round(score).toLocaleString('es-CO')}</b></div>
         ${profile ? `<div class="kv"><span>Perfil final</span><b>${profile.tier} (${Math.round(profile.skill * 100)}%)</b></div>` : ''}
       </div>
-      <div class="menu-buttons"><button data-action="menu" class="primary">Volver al menú <kbd>Enter</kbd></button></div>`,
-      { menu },
-      [[['Enter', 'Escape', 'NumpadEnter'], 'menu']],
+      <p class="muted">¿Quieres más? En el nivel infinito te persiguen todos a la vez.</p>
+      <div class="menu-buttons"><button data-action="endless" class="primary">Nivel infinito <kbd>Enter</kbd></button><button data-action="menu" class="ghost">Volver al menú <kbd>Esc</kbd></button></div>`,
+      { menu, endless },
+      [
+        [['Enter', 'NumpadEnter'], 'endless'],
+        [['Escape'], 'menu'],
+      ],
       'victory',
     );
   }

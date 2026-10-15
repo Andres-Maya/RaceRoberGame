@@ -4,7 +4,7 @@ import { clamp, clamp01 } from '../core/math';
 import type { SkillProfile } from './SkillClassifier';
 
 /** Peso relativo de cada tipo habilitado, del más común al más raro. */
-const TYPE_WEIGHTS = [1, 0.75, 0.55, 0.4];
+const TYPE_WEIGHTS = [1, 0.75, 0.55, 0.45, 0.35];
 
 /** Campos que la IA modifica en caliente al terminar la calibración. */
 export type Adjustment = Pick<
@@ -30,6 +30,7 @@ export type Adjustment = Pick<
 export class AdaptiveDifficulty {
   /** Configuración neutral para la fase de calibración. */
   calibrationConfig(level: 1 | 2 | 3, players = 1): LevelConfig {
+    // (el nivel infinito tiene su propia rampa: ver Level.enterZone)
     const base = structuredClone(BASE_LEVELS[level]);
     const p = base.pursuers!;
     base.pursuers = {
@@ -52,7 +53,7 @@ export class AdaptiveDifficulty {
     const f = profile.features;
 
     // Número de tipos de vehículo: 1 para novatos, los 4 para expertos.
-    const typeCount = clamp(Math.round(1 + s * 2.6 + (level - 1) * 0.4), 1, base.roster.length);
+    const typeCount = clamp(Math.round(1 + s * (base.roster.length - 1) * 0.9 + (level - 1) * 0.4), 1, base.roster.length);
     const kinds: Partial<Record<PursuerKind, number>> = {};
     base.roster.slice(0, typeCount).forEach((k, i) => (kinds[k] = TYPE_WEIGHTS[i]));
 
@@ -115,9 +116,11 @@ export function kindLabel(k: PursuerKind): string {
     muscle: 'muscle cars',
     biker: 'moteros',
     pickup: 'pickups armadas',
+    truck: 'tráileres',
     van: 'furgón blindado',
     buggy: 'buggies',
     mutant: 'mutantes',
+    flyer: 'harpías mutantes',
     raider: 'moteros mutantes',
     rig: 'camiones de guerra',
   }[k];

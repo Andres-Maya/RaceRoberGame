@@ -2,7 +2,7 @@ import type * as THREE from 'three';
 import type { Faction, PursuerConfig, PursuerKind } from '../config/types';
 import { clamp, lerp, wrapAngle } from '../core/math';
 import type { Rng } from '../core/Rng';
-import { mat, pursuerMesh, setSiren, type PursuerMesh } from '../fx/Meshes';
+import { animateMutant, knockOutMutant, mat, pursuerMesh, setSiren, type PursuerMesh } from '../fx/Meshes';
 import type { Physics } from '../world/Physics';
 import type { Track } from '../world/Track';
 import type { Player } from './Player';
@@ -20,6 +20,8 @@ interface PursuerStats {
   label: string;
   /** Mutantes a pie: mueren al ser atropellados. */
   onFoot?: boolean;
+  /** Harpías: vuelan, no usan física (ver Flyer). */
+  flying?: boolean;
 }
 
 const spec = (maxSpeed: number, accel: number, steerRate: number, grip: number, hx: number, hz: number, density: number): VehicleSpec => ({
@@ -44,10 +46,12 @@ export const PURSUER_STATS: Record<PursuerKind, PursuerStats> = {
   muscle: { faction: 'gang', spec: spec(37, 24, 2.1, 6, 1.0, 2.2, 3), hp: 110, ram: 18, shooter: 0.25, bulletDamage: 6, label: 'Muscle car' },
   biker: { faction: 'gang', spec: spec(38, 26, 2.8, 8, 0.45, 1.1, 2), hp: 40, ram: 6, shooter: 1, bulletDamage: 6, label: 'Motero' },
   pickup: { faction: 'gang', spec: spec(33, 18, 1.9, 6, 1.1, 2.5, 4), hp: 150, ram: 18, shooter: 1, bulletDamage: 7, label: 'Pickup armada' },
+  truck: { faction: 'gang', spec: spec(30, 13, 1.25, 5, 1.45, 4.6, 6), hp: 380, ram: 38, shooter: 0.7, bulletDamage: 8, label: 'Tráiler' },
   van: { faction: 'gang', spec: spec(30, 15, 1.6, 5, 1.3, 2.9, 6), hp: 260, ram: 30, shooter: 0.5, bulletDamage: 8, label: 'Furgón blindado' },
   // ---- Tierra baldía
   buggy: { faction: 'wasteland', spec: spec(39, 28, 2.6, 7, 0.95, 1.8, 2.5), hp: 70, ram: 14, shooter: 0.3, bulletDamage: 6, label: 'Buggy saqueador' },
   mutant: { faction: 'wasteland', spec: spec(26, 40, 4.5, 12, 0.45, 0.45, 1.5), hp: 25, ram: 10, shooter: 0, bulletDamage: 0, label: 'Mutante', onFoot: true },
+  flyer: { faction: 'wasteland', spec: spec(30, 30, 3, 8, 0.5, 0.5, 1), hp: 1, ram: 12, shooter: 1, bulletDamage: 7, label: 'Harpía mutante', flying: true },
   raider: { faction: 'wasteland', spec: spec(39, 26, 2.8, 8, 0.45, 1.1, 2), hp: 45, ram: 7, shooter: 1, bulletDamage: 7, label: 'Motero mutante' },
   rig: { faction: 'wasteland', spec: spec(29, 14, 1.4, 5, 1.5, 3.4, 7), hp: 340, ram: 36, shooter: 0.6, bulletDamage: 9, label: 'Camión de guerra' },
 };
@@ -57,6 +61,8 @@ export interface FireRequest {
   z: number;
   angle: number;
   damage: number;
+  /** Bando del tirador: define el color de la bala. */
+  faction: Faction;
 }
 
 export interface PursuerContext {
@@ -92,6 +98,7 @@ export class Pursuer {
   private sirenTimer = 0;
   private sirenPhase = false;
   private t = 0;
+  private stride = 0;
 
   constructor(
     physics: Physics,
@@ -128,10 +135,11 @@ export class Pursuer {
         setSiren(this.model, this.sirenPhase);
       }
     }
-    // Mutantes: zancadas exageradas al correr.
-    if (this.model.body) {
-      this.model.body.position.y = Math.abs(Math.sin(this.t * 11)) * 0.35;
-      this.model.body.rotation.z = Math.sin(this.t * 11) * 0.12;
+    // Mutantes: carrera articulada; la zancada se acelera con la velocidad.
+    if (this.model.rig) {
+      const sp = Math.abs(v.speed);
+      this.stride += dt * (3 + sp * 0.42);
+      animateMutant(this.model.rig, this.stride, clamp(sp / 9, 0.15, 1));
     }
 
     const target = this.nearest(ctx.players);
@@ -234,7 +242,7 @@ export class Pursuer {
         const pz = tv.pz + tv.vz * t * cfg.accuracy;
         const spread = (1 - cfg.accuracy) * 0.28;
         const angle = Math.atan2(-(px - v.px), -(pz - v.pz)) + ctx.rng.range(-spread, spread);
-        return { x: v.px, z: v.pz, angle, damage: this.stats.bulletDamage };
+        return { x: v.px, z: v.pz, angle, damage: this.stats.bulletDamage, faction: this.stats.faction };
       }
     }
     return null;
@@ -247,10 +255,9 @@ export class Pursuer {
     if (this.hp <= 0) {
       this.wrecked = true;
       this.vehicle.body.setLinearDamping(3);
-      if (this.model.body) {
-        // El mutante cae al suelo.
-        this.model.body.rotation.set(-Math.PI / 2, 0, 0);
-        this.model.body.position.y = 0.4;
+      if (this.model.rig) {
+        // El mutante cae de bruces.
+        knockOutMutant(this.model.rig);
       } else {
         const burnt = mat(0x2a2522);
         this.model.group.traverse((o) => {

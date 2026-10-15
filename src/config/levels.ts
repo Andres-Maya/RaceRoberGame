@@ -71,13 +71,13 @@ export const BASE_LEVELS: Record<1 | 2 | 3, LevelConfig> = {
     intro: [
       'Al salir del túnel no hay patrullas... sino algo peor.',
       'Los Cuervos, la banda rival, se enteraron del golpe y quieren el botín.',
-      'Muscle cars, moteros armados, pickups con tiradores y un furgón blindado cierran el paso en la zona industrial.',
+      'Muscle cars, moteros armados, pickups con tiradores, tráileres y un furgón blindado cierran el paso en la zona industrial.',
       'El único escondite es la vieja planta nuclear al final de la carretera.',
     ],
     distance: 2700,
     calibration: 550,
     faction: 'gang',
-    roster: ['muscle', 'biker', 'pickup', 'van'],
+    roster: ['muscle', 'biker', 'pickup', 'truck', 'van'],
     start: 'tunnel',
     finish: 'plant',
     obstacleDensity: 7.5,
@@ -98,13 +98,13 @@ export const BASE_LEVELS: Record<1 | 2 | 3, LevelConfig> = {
     intro: [
       'Los Cuervos los siguieron dentro de la planta... y el reactor no aguantó.',
       'Una explosión verde los lanza fuera mientras la radiación cubre todo el valle.',
-      'Saqueadores en buggies, moteros mutantes, camiones de guerra y mutantes a pie salen de las ruinas.',
+      'Saqueadores en buggies, moteros mutantes, camiones de guerra y mutantes a pie salen de las ruinas; harpías mutantes vigilan desde el cielo.',
       'Los zombis vagan por la carretera y los charcos de ácido queman. Llega a la zona segura.',
     ],
     distance: 3000,
     calibration: 550,
     faction: 'wasteland',
-    roster: ['buggy', 'mutant', 'raider', 'rig'],
+    roster: ['buggy', 'mutant', 'flyer', 'raider', 'rig'],
     start: 'plant',
     finish: 'safeZone',
     obstacleDensity: 8,
@@ -118,6 +118,38 @@ export const BASE_LEVELS: Record<1 | 2 | 3, LevelConfig> = {
     mood: 'toxic',
     adaptiveNotes: [],
   },
+};
+
+/**
+ * Nivel infinito: sin meta. El mapa cambia por zonas (bioma, iluminación,
+ * música) y puede aparecer cualquier enemigo; la dificultad sube con cada zona.
+ */
+export const ENDLESS_LEVEL: LevelConfig = {
+  index: 4,
+  name: 'Nivel ∞ — Carretera Sin Fin',
+  subtitle: '¿Hasta dónde llegas antes de que te atrapen?',
+  intro: [
+    'Con el botín a salvo, la banda se vuelve leyenda... y todos quieren su cabeza.',
+    'Policía, Los Cuervos y los saqueadores de la tierra baldía los buscan a la vez.',
+    'La carretera no termina: desierto, ciudad, zonas industriales y ruinas se suceden sin fin.',
+    'Cada zona es más peligrosa que la anterior. ¿Cuántos kilómetros aguantas?',
+  ],
+  distance: Infinity,
+  calibration: 550,
+  faction: 'police',
+  roster: [],
+  start: 'road',
+  finish: 'none',
+  obstacleDensity: 6,
+  obstacleWeights: { cone: 2, barrel: 2, crate: 1.5, barrier: 1, parkedCar: 1.5, dumpster: 1 },
+  hazardDensity: 1.2,
+  hazardWeights: { oil: 1, sand: 0.5 },
+  trafficDensity: 2.5,
+  pursuers: { maxActive: 2, spawnInterval: 6, kinds: { patrol: 1 }, aggression: 0.4, accuracy: 0.25, fireRate: 0.3 },
+  roadblockEvery: 0,
+  helicopter: false,
+  mood: 'day',
+  adaptiveNotes: [],
 };
 
 export const VICTORY_TEXT = [

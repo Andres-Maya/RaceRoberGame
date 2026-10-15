@@ -2,12 +2,14 @@ import * as THREE from 'three';
 import { AdaptiveDifficulty, kindLabel } from '../ai/AdaptiveDifficulty';
 import { PerformanceTracker } from '../ai/PerformanceTracker';
 import { buildProfile, type SkillClassifier, type SkillProfile } from '../ai/SkillClassifier';
-import type { Biome, FinishScene, LevelConfig, PursuerKind } from '../config/types';
+import { BASE_LEVELS } from '../config/levels';
+import type { Biome, Faction, FinishScene, LevelConfig, Mood, PursuerConfig, PursuerKind } from '../config/types';
 import type { Audio } from '../core/Audio';
 import type { DriveInput } from '../core/Input';
 import { clamp, clamp01, damp, wrapAngle } from '../core/math';
 import { Rng } from '../core/Rng';
 import { Civilian } from '../entities/Civilian';
+import { Flyer } from '../entities/Flyer';
 import { Helicopter } from '../entities/Helicopter';
 import { BIKE_SPEC, Player, TURBO_MUL } from '../entities/Player';
 import { Projectiles } from '../entities/Projectiles';
@@ -32,7 +34,49 @@ const MOODS = {
   afternoon: { bg: 0xcdb89a, sky: 0xffeacc, ground: 0x8a7a66, hemi: 1.6, sun: 0xffe2b8, sunI: 2.4 },
   sunset: { bg: 0x7a5468, sky: 0xffc7a0, ground: 0x6a4a5a, hemi: 1.4, sun: 0xff9d5c, sunI: 2.2 },
   toxic: { bg: 0x3a3d2c, sky: 0xe4ecc8, ground: 0x4a4030, hemi: 1.5, sun: 0xf2ffd6, sunI: 2.1 },
+  night: { bg: 0x10131d, sky: 0x6a7aaa, ground: 0x1a1a24, hemi: 0.9, sun: 0x9fb4ff, sunI: 1.0 },
 };
+
+// ---- Nivel infinito: zonas que cambian bioma, bando, iluminación y música.
+type EndlessBiome = 'desert' | 'city' | 'industrial' | 'wasteland';
+
+interface Zone {
+  index: number;
+  d0: number;
+  d1: number;
+  biome: EndlessBiome;
+  faction: Faction;
+  mood: Mood;
+  /** Tramo de unión con la zona siguiente. */
+  connector: 'bridge' | 'outskirts';
+}
+
+const ZONE_NAMES: Record<EndlessBiome, string> = {
+  desert: 'Desierto abierto',
+  city: 'Ciudad',
+  industrial: 'Zona industrial',
+  wasteland: 'Tierra baldía',
+};
+const ZONE_MOODS: Record<EndlessBiome, Mood[]> = {
+  desert: ['day', 'afternoon', 'sunset', 'night'],
+  city: ['afternoon', 'sunset', 'night', 'day'],
+  industrial: ['sunset', 'night', 'afternoon'],
+  wasteland: ['toxic', 'night', 'sunset'],
+};
+const ZONE_GEN: Record<EndlessBiome, Pick<LevelConfig, 'obstacleWeights' | 'hazardWeights' | 'trafficDensity'>> = {
+  desert: { obstacleWeights: { barrel: 2, crate: 1.5, wreck: 1, rock: 1.5, tumbleweed: 1.5 }, hazardWeights: { sand: 1, oil: 0.3, spikes: 0.3 }, trafficDensity: 1.8 },
+  city: { obstacleWeights: BASE_LEVELS[1].obstacleWeights, hazardWeights: BASE_LEVELS[1].hazardWeights, trafficDensity: 3 },
+  industrial: { obstacleWeights: BASE_LEVELS[2].obstacleWeights, hazardWeights: BASE_LEVELS[2].hazardWeights, trafficDensity: 1.8 },
+  wasteland: { obstacleWeights: BASE_LEVELS[3].obstacleWeights, hazardWeights: BASE_LEVELS[3].hazardWeights, trafficDensity: 0 },
+};
+const ROSTERS: Record<Faction, PursuerKind[]> = {
+  police: BASE_LEVELS[1].roster,
+  gang: BASE_LEVELS[2].roster,
+  wasteland: BASE_LEVELS[3].roster,
+};
+const ALL_KINDS: PursuerKind[] = [...ROSTERS.police, ...ROSTERS.gang, ...ROSTERS.wasteland];
+const FACTION_LABEL: Record<Faction, string> = { police: 'la policía', gang: 'Los Cuervos', wasteland: 'los saqueadores' };
+const MUSIC_BY_BIOME: Record<EndlessBiome, number> = { desert: 0, city: 1, industrial: 2, wasteland: 3 };
 
 /** Duración del salto al salir de una estructura (s). */
 const JUMP_TIME = 0.8;
@@ -74,6 +118,7 @@ export class Level {
   readonly pursuers: Pursuer[] = [];
   readonly civilians: Civilian[] = [];
   heli: Helicopter | null = null;
+  readonly flyers: Flyer[] = [];
   storm: Sandstorm | null = null;
 
   state: LevelState = 'countdown';
@@ -91,6 +136,12 @@ export class Level {
 
   private difficulty = new AdaptiveDifficulty();
   private sun: THREE.DirectionalLight;
+  private hemi: THREE.HemisphereLight;
+  private moodTarget: (typeof MOODS)[Mood] | null = null;
+  private zones: Zone[] = [];
+  private currentZone = -1;
+  /** Habilidad medida en la calibración del nivel infinito (rige su rampa de dificultad). */
+  private endlessSkill = 0.5;
   private camX = 0;
   private camZ = 0;
   private camH = 50;
@@ -116,7 +167,8 @@ export class Level {
   ) {
     const mood = MOODS[config.mood];
     this.scene.background = new THREE.Color(mood.bg);
-    this.scene.add(new THREE.HemisphereLight(mood.sky, mood.ground, mood.hemi));
+    this.hemi = new THREE.HemisphereLight(mood.sky, mood.ground, mood.hemi);
+    this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(mood.sun, mood.sunI);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
@@ -164,7 +216,13 @@ export class Level {
       this.scene.add(p.mesh);
       this.players.push(p);
     }
-    if (config.start === 'road') this.storm = new Sandstorm(this.scene, 60);
+    if (config.index === 0) this.storm = new Sandstorm(this.scene, 60);
+    if (config.index === 4) {
+      // La calibración arranca con el perseguidor más básico del bando de la primera zona.
+      const zone = this.zoneAt(0);
+      config.faction = zone.faction;
+      config.pursuers = { ...config.pursuers!, kinds: { [ROSTERS[zone.faction][0]]: 1 } };
+    }
 
     this.camX = this.track.centerX(startD);
     this.camZ = -startD - 8;
@@ -190,12 +248,106 @@ export class Level {
       case 2:
         if (i < 0) return 'tunnelExit';
         return d0 >= end - CHUNK ? 'plantEnd' : 'industrial';
+      case 4: {
+        if (i < 1) return 'desert';
+        const zone = this.zoneAt(d0);
+        this.applyZoneGeneration(zone);
+        // Los dos últimos tramos de cada zona la unen con la siguiente.
+        if (d0 >= zone.d1 - 2 * CHUNK) return zone.connector;
+        return zone.biome;
+      }
       case 3:
       default:
         if (i < 0) return 'plantBack';
         if (d0 >= end) return 'desert';
         return d0 >= end - CHUNK ? 'safeZone' : 'wasteland';
     }
+  }
+
+  /** Zona del nivel infinito que contiene la distancia d (se generan bajo demanda). */
+  private zoneAt(d: number): Zone {
+    while (!this.zones.length || this.zones[this.zones.length - 1].d1 <= d) {
+      const prev = this.zones[this.zones.length - 1];
+      const index = this.zones.length;
+      const d0 = prev ? prev.d1 : 0;
+      const biomes = (['desert', 'city', 'industrial', 'wasteland'] as EndlessBiome[]).filter((b) => b !== prev?.biome);
+      const biome: EndlessBiome = index === 0 ? 'desert' : this.rng.pick(biomes);
+      const len = (index === 0 ? 9 : this.rng.int(13, 22)) * CHUNK;
+      const faction: Faction =
+        biome === 'city' ? 'police' : biome === 'industrial' ? 'gang' : biome === 'wasteland' ? 'wasteland' : this.rng.pick(['police', 'gang', 'wasteland'] as Faction[]);
+      this.zones.push({
+        index,
+        d0,
+        d1: d0 + len,
+        biome,
+        faction,
+        mood: index === 0 ? 'day' : this.rng.pick(ZONE_MOODS[biome]),
+        connector: this.rng.chance(0.5) ? 'bridge' : 'outskirts',
+      });
+    }
+    return this.zones.find((z) => d < z.d1) ?? this.zones[0];
+  }
+
+  /** Ajusta la generación de los tramos de una zona: obstáculos, peligros, tráfico y retenes. */
+  private applyZoneGeneration(zone: Zone): void {
+    const cfg = this.config;
+    Object.assign(cfg, ZONE_GEN[zone.biome]);
+    cfg.faction = zone.faction;
+    cfg.obstacleDensity = Math.min(16, (5.5 + zone.index * 0.8) * (0.7 + 0.6 * this.endlessSkill));
+    cfg.hazardDensity = Math.min(3.5, 1 + zone.index * 0.2);
+    cfg.roadblockEvery = zone.index >= 2 ? Math.max(350, 900 - zone.index * 60) : 0;
+  }
+
+  /** Perseguidores de una zona: su bando primero y, zona tras zona, cualquier enemigo. */
+  private endlessPursuers(zone: Zone): PursuerConfig {
+    const s = this.endlessSkill;
+    const own = ROSTERS[zone.faction];
+    const others = ALL_KINDS.filter((k) => !own.includes(k));
+    for (let i = others.length - 1; i > 0; i--) {
+      const j = this.rng.int(0, i);
+      [others[i], others[j]] = [others[j], others[i]];
+    }
+    const count = clamp(2 + zone.index + Math.round(s * 2), 2, ALL_KINDS.length);
+    const kinds: Partial<Record<PursuerKind, number>> = {};
+    for (const k of [...own, ...others].slice(0, count)) kinds[k] = own.includes(k) ? 1 : 0.55;
+    return {
+      maxActive: Math.min(10, 3 + Math.floor(zone.index * 0.7) + Math.round(s * 2) + (this.playerCount - 1)),
+      spawnInterval: Math.max(1.6, 5.2 - zone.index * 0.35 - s),
+      kinds,
+      aggression: Math.min(0.95, 0.45 + 0.05 * zone.index + 0.2 * (s - 0.5)),
+      accuracy: Math.min(0.85, 0.28 + 0.04 * zone.index + 0.15 * (s - 0.5)),
+      fireRate: Math.min(1, 0.35 + 0.04 * zone.index),
+    };
+  }
+
+  /** Al entrar en una zona: nueva iluminación, nuevos enemigos y aviso. */
+  private enterZone(zone: Zone): void {
+    this.currentZone = zone.index;
+    this.moodTarget = MOODS[zone.mood];
+    if (!this.calibrating) {
+      this.config.pursuers = this.endlessPursuers(zone);
+      this.config.helicopter = zone.faction === 'police' && zone.index >= 2;
+      if (!this.config.helicopter && this.heli) {
+        this.heli.dispose();
+        this.heli = null;
+      }
+      this.spawnTimer = Math.min(this.spawnTimer, 1.5);
+    }
+    this.hooks.message(`ZONA ${zone.index + 1}: ${ZONE_NAMES[zone.biome]} · te persigue ${FACTION_LABEL[zone.faction]}`, '#f4d03f', 3);
+  }
+
+  /** Zona actual del nivel infinito (para el HUD). */
+  get zoneInfo(): { index: number; name: string; progress: number } | null {
+    if (this.config.index !== 4 || this.currentZone < 0) return null;
+    const z = this.zones[this.currentZone];
+    return { index: z.index + 1, name: ZONE_NAMES[z.biome], progress: clamp01((this.maxD - z.d0) / (z.d1 - z.d0)) };
+  }
+
+  /** Estilo musical: en el nivel infinito depende del bioma de la zona. */
+  get musicStyle(): number {
+    if (this.config.index !== 4) return this.config.index;
+    const z = this.zones[Math.max(0, this.currentZone)];
+    return z ? MUSIC_BY_BIOME[z.biome] : 0;
   }
 
   private spawnCivilian(s: CivilianSpawn): void {
@@ -229,7 +381,7 @@ export class Level {
   }
 
   get activePursuers(): number {
-    return this.pursuers.filter((p) => !p.wrecked).length;
+    return this.pursuers.filter((p) => !p.wrecked).length + this.flyers.filter((f) => f.alive).length;
   }
 
   /** 0..1: qué tan brutal debe sonar la música (perseguidores, tormenta, meta cerca). */
@@ -320,9 +472,9 @@ export class Level {
     const sp = ref.reduce((s, p) => s + Math.abs(p.vehicle.speed), 0) / ref.length / BIKE_SPEC.maxSpeed;
     this.audio.engine(clamp01(sp), alive.length > 0);
     let nearest = Infinity;
-    if (this.config.faction === 'police') {
+    {
       for (const u of this.pursuers) {
-        if (u.wrecked) continue;
+        if (u.wrecked || u.stats.faction !== 'police') continue;
         for (const p of alive) nearest = Math.min(nearest, Math.hypot(u.vehicle.px - p.vehicle.px, u.vehicle.pz - p.vehicle.pz));
       }
     }
@@ -330,6 +482,11 @@ export class Level {
 
     this.updateAnalysis(dt);
     this.updateBlast(dt);
+    if (this.config.index === 4) {
+      const zone = this.zoneAt(this.maxD);
+      if (zone.index !== this.currentZone) this.enterZone(zone);
+    }
+    this.updateMood(dt);
     if (running) this.checkEnd(dt);
     else if (this.state === 'ending') {
       this.endTimer -= dt;
@@ -340,6 +497,20 @@ export class Level {
     }
     this.fx.update(dt);
     this.shake = Math.max(0, this.shake - dt * 2.5);
+  }
+
+  /** Transición suave de la iluminación hacia la de la zona actual. */
+  private updateMood(dt: number): void {
+    const m = this.moodTarget;
+    if (!m) return;
+    const k = 1 - Math.exp(-0.8 * dt);
+    const bg = this.scene.background as THREE.Color;
+    bg.lerp(new THREE.Color(m.bg), k);
+    this.hemi.color.lerp(new THREE.Color(m.sky), k);
+    this.hemi.groundColor.lerp(new THREE.Color(m.ground), k);
+    this.hemi.intensity += (m.hemi - this.hemi.intensity) * k;
+    this.sun.color.lerp(new THREE.Color(m.sun), k);
+    this.sun.intensity += (m.sunI - this.sun.intensity) * k;
   }
 
   /** Escena inicial al terminar la cuenta regresiva. */
@@ -356,7 +527,7 @@ export class Level {
     };
     switch (this.config.start) {
       case 'road':
-        this.hooks.message('¡Acelera! La tormenta se acerca', '#ffd27a');
+        this.hooks.message(this.config.index === 4 ? 'Carretera sin fin: ¿hasta dónde llegas?' : '¡Acelera! La tormenta se acerca', '#ffd27a');
         break;
       case 'bank':
         if (f) {
@@ -648,6 +819,7 @@ export class Level {
       const shot = u.update({ dt, players: this.players, track: this.track, physics: this.physics, config: cfg, rng: this.rng });
       if (shot) this.fire(shot, false);
     }
+    this.updateFlyers(dt, cfg);
 
     // Reciclar unidades que quedaron muy atrás o ya se consumieron.
     const minD = Math.min(...alive.map((p) => p.vehicle.d));
@@ -664,9 +836,47 @@ export class Level {
     }
   }
 
+  /** Harpías: acechan, escupen ácido y se lanzan en picada. */
+  private updateFlyers(dt: number, cfg: PursuerConfig): void {
+    const minD = Math.min(...this.alivePlayers.map((p) => p.vehicle.d));
+    for (let i = this.flyers.length - 1; i >= 0; i--) {
+      const f = this.flyers[i];
+      const { shot, attack } = f.update(dt, this.players, cfg, this.rng);
+      if (shot) this.fire(shot, true);
+      if (attack) {
+        const p = attack.player;
+        if (p.turboActive && attack.playerSpeed > 30) {
+          // A toda velocidad con turbo, la moto embiste a la harpía en picada.
+          f.shootDown();
+          this.fx.splatter(f.x, f.z, 24);
+          this.tracker.copWrecked();
+          this.score += 1200;
+          this.damagePlayer(p, 4);
+          this.hooks.message('¡Harpía derribada! +1.200', '#9dff6a', 1.5);
+        } else {
+          this.fx.splatter(p.vehicle.px, p.vehicle.pz, 14);
+          this.audio.crash(0.8);
+          this.shake = Math.max(this.shake, 0.9);
+          this.damagePlayer(p, 10 + cfg.aggression * 8);
+          this.hooks.message(`J${p.index + 1}: ¡Ataque de harpía!`, '#c08aff', 1);
+        }
+      }
+      if (f.gone || -f.z < minD - 90) {
+        f.dispose();
+        this.flyers.splice(i, 1);
+      }
+    }
+  }
+
   private spawnPursuer(fromSide: boolean): void {
     const cfg = this.config.pursuers!;
     const kind = this.rng.weighted(cfg.kinds) as PursuerKind;
+    if (PURSUER_STATS[kind].flying) {
+      // Las harpías llegan volando desde adelante, a un costado de la vía.
+      const d = this.maxD + this.rng.range(50, 80);
+      this.flyers.push(new Flyer(this.scene, this.track.centerX(d) + this.rng.sign() * this.rng.range(10, 25), -d, this.rng));
+      return;
+    }
     const alive = this.alivePlayers;
     const minD = Math.min(...alive.map((p) => p.vehicle.d));
     let x: number;
@@ -714,7 +924,7 @@ export class Level {
   }
 
   private fire(shot: FireRequest, aerial: boolean): void {
-    this.bullets.fire(shot.x, shot.z, shot.angle, shot.damage, aerial, this.config.faction ?? 'police');
+    this.bullets.fire(shot.x, shot.z, shot.angle, shot.damage, aerial, shot.faction);
     this.fx.muzzle(shot.x - Math.sin(shot.angle) * 2.4, shot.z - Math.cos(shot.angle) * 2.4, shot.angle);
     this.audio.shot();
   }
@@ -924,6 +1134,19 @@ export class Level {
     const profile = buildProfile(this.classifier, this.tracker.m);
     this.calibratedProfile = profile;
     this.liveProfile = profile;
+    if (this.config.index === 4) {
+      // Nivel infinito: la habilidad medida fija el punto de partida de la rampa.
+      this.endlessSkill = profile.skill;
+      const zone = this.zoneAt(this.maxD);
+      this.config.pursuers = this.endlessPursuers(zone);
+      this.config.adaptiveNotes = [
+        `Habilidad medida: ${Math.round(profile.skill * 100)}% (${profile.tier})`,
+        'Cada zona suma tipos de enemigos de cualquier bando, más perseguidores y más obstáculos',
+      ];
+      this.hooks.message(`El Analista: perfil ${profile.tier}. Que empiece la cacería sin fin`, '#9be7a1', 4);
+      this.spawnTimer = Math.min(this.spawnTimer, 0.8);
+      return;
+    }
     const adj = this.difficulty.adjust(this.config.index as 1 | 2 | 3, profile, this.playerCount);
     Object.assign(this.config, adj);
     const kinds = Object.keys(adj.pursuers!.kinds) as PursuerKind[];
@@ -973,6 +1196,7 @@ export class Level {
       tunnel: ['¡Al túnel! La policía se queda atrás', '#9be7a1'],
       plant: ['Adentro de la planta nuclear... ¡algo anda mal!', '#ff9a3c'],
       safeZone: ['¡Zona segura! Escaparon de la tierra baldía', '#9be7a1'],
+      none: ['', '#ffffff'],
     };
     this.hooks.message(...texts[kind], 2.5);
     if (kind === 'plant') {
@@ -1072,6 +1296,7 @@ export class Level {
     this.chunks.dispose();
     this.bullets.clear();
     this.heli?.dispose();
+    for (const f of this.flyers) f.dispose();
     this.storm?.dispose();
     this.fx.dispose();
     this.physics.dispose();

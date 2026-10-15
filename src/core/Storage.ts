@@ -22,6 +22,10 @@ export interface SaveData {
   history: RunRecord[];
   muted: boolean;
   musicOn: boolean;
+  /** Volumen de la música (0..1). */
+  musicVolume: number;
+  /** Mejor distancia (m) en el nivel infinito. */
+  bestEndless: number;
 }
 
 const defaults = (): SaveData => ({
@@ -34,6 +38,8 @@ const defaults = (): SaveData => ({
   history: [],
   muted: false,
   musicOn: true,
+  musicVolume: 0.8,
+  bestEndless: 0,
 });
 
 export class Storage {
@@ -64,8 +70,8 @@ export class Storage {
   }
 
   reset(): void {
-    const { muted, musicOn } = this.data;
-    this.data = { ...defaults(), muted, musicOn };
+    const { muted, musicOn, musicVolume } = this.data;
+    this.data = { ...defaults(), muted, musicOn, musicVolume };
     this.save();
   }
 }

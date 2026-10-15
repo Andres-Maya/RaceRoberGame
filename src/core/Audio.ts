@@ -19,6 +19,7 @@ export class Audio {
   private pendingMusic: { mode: MusicMode; level: number } = { mode: 'calm', level: 0 };
   muted = false;
   musicOn = true;
+  musicVolume = 0.8;
 
   /** Debe llamarse tras una interacción del usuario (política de autoplay). */
   unlock(): void {
@@ -60,12 +61,18 @@ export class Audio {
 
     this.music = new Music(ctx, this.master);
     this.music.setEnabled(this.musicOn);
+    this.music.setVolume(this.musicVolume);
     this.music.setMode(this.pendingMusic.mode, this.pendingMusic.level);
   }
 
   playMusic(mode: MusicMode, level = 0): void {
     this.pendingMusic = { mode, level };
     this.music?.setMode(mode, level);
+  }
+
+  setMusicVolume(v: number): void {
+    this.musicVolume = v;
+    this.music?.setVolume(v);
   }
 
   setMusicOn(on: boolean): void {

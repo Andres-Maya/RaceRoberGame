@@ -44,10 +44,12 @@ export type PursuerKind =
   | 'muscle'
   | 'biker'
   | 'pickup'
+  | 'truck'
   | 'van'
   // Tierra baldía (nivel 3)
   | 'buggy'
   | 'mutant'
+  | 'flyer'
   | 'raider'
   | 'rig';
 
@@ -66,11 +68,15 @@ export interface PursuerConfig {
   fireRate: number;
 }
 
+export type Mood = 'day' | 'afternoon' | 'sunset' | 'night' | 'toxic';
+
 export type StartScene = 'road' | 'bank' | 'tunnel' | 'plant';
-export type FinishScene = 'bank' | 'tunnel' | 'plant' | 'safeZone';
+/** 'none': nivel infinito, sin meta. */
+export type FinishScene = 'bank' | 'tunnel' | 'plant' | 'safeZone' | 'none';
 
 export interface LevelConfig {
-  index: 0 | 1 | 2 | 3;
+  /** 4 = nivel infinito. */
+  index: 0 | 1 | 2 | 3 | 4;
   name: string;
   subtitle: string;
   intro: string[];
@@ -95,7 +101,7 @@ export interface LevelConfig {
   /** Metros entre retenes / barricadas (0 = ninguno). */
   roadblockEvery: number;
   helicopter: boolean;
-  mood: 'day' | 'afternoon' | 'sunset' | 'toxic';
+  mood: Mood;
   /** Explicación legible de los ajustes que hizo la IA. */
   adaptiveNotes: string[];
 }

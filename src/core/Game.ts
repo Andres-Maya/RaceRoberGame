@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { AdaptiveDifficulty } from '../ai/AdaptiveDifficulty';
 import { buildProfile, RuleBasedClassifier, type SkillProfile } from '../ai/SkillClassifier';
-import { LEVEL_0, VICTORY_TEXT } from '../config/levels';
+import { ENDLESS_LEVEL, LEVEL_0, VICTORY_TEXT } from '../config/levels';
 import type { LevelConfig } from '../config/types';
 import { Hud } from '../ui/Hud';
 import { Screens } from '../ui/Screens';
@@ -60,6 +60,8 @@ export class Game {
     }
     this.audio.muted = this.storage.data.muted;
     this.audio.musicOn = this.storage.data.musicOn;
+    this.audio.musicVolume = this.storage.data.musicVolume;
+    this.screens.onVolume = (v) => this.setMusicVolume(v, false);
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
@@ -97,6 +99,8 @@ export class Game {
   private tick(dt: number, render = true): void {
     if (this.input.wasPressed('KeyM') && this.state !== 'menu') this.toggleMute();
     if (this.input.wasPressed('KeyN') && this.state !== 'menu') this.toggleMusic();
+    if (this.input.wasPressed('Minus', 'NumpadSubtract')) this.setMusicVolume(this.storage.data.musicVolume - 0.1, true);
+    if (this.input.wasPressed('Equal', 'NumpadAdd')) this.setMusicVolume(this.storage.data.musicVolume + 0.1, true);
 
     if (this.state === 'playing' && this.level) {
       if (this.input.wasPressed('Escape', 'KeyP')) {
@@ -107,6 +111,8 @@ export class Game {
         this.audio.musicIntensity(this.level.musicIntensity);
         // Cuando caen todas las motos, el metal se corta y entra el réquiem.
         if (this.level.outcome === 'failed') this.audio.playMusic('death');
+        // En el nivel infinito la música cambia de estilo con cada zona.
+        else this.audio.playMusic('level', this.level.musicStyle);
         this.hud.update(this.level);
         if (this.level.state === 'done') this.onLevelDone();
       }
@@ -167,6 +173,18 @@ export class Game {
     this.audio.setMuted(this.storage.data.muted);
   }
 
+  /** Volumen de la música (0..1): desde el control deslizante o con las teclas - y +. */
+  private setMusicVolume(v: number, fromKeys: boolean): void {
+    const vol = Math.round(Math.max(0, Math.min(1, v)) * 20) / 20;
+    this.storage.data.musicVolume = vol;
+    this.storage.save();
+    this.audio.setMusicVolume(vol);
+    if (fromKeys) {
+      this.screens.showVolume(vol);
+      if (this.state === 'playing') this.hud.toast(`Música: ${Math.round(vol * 100)}%`, '#cccccc', 0.8);
+    }
+  }
+
   private toggleMusic(): void {
     this.storage.data.musicOn = !this.storage.data.musicOn;
     this.storage.save();
@@ -189,6 +207,7 @@ export class Game {
    */
   private configFor(level: number): LevelConfig {
     if (level === 0) return structuredClone(LEVEL_0);
+    if (level === 4) return structuredClone(ENDLESS_LEVEL);
     return this.difficulty.calibrationConfig(level as 1 | 2 | 3, this.campaign.players);
   }
 
@@ -212,7 +231,7 @@ export class Game {
     this.level = new Level(cfg, this.campaign.players, this.audio, hooks, this.classifier);
     this.hud.show(this.level, this.campaign.cash);
     this.audio.duckMusic(false);
-    this.audio.playMusic('level', cfg.index);
+    this.audio.playMusic('level', this.level.musicStyle);
     this.state = 'playing';
     this.last = performance.now();
   }
@@ -223,6 +242,7 @@ export class Game {
     this.audio.stopLoops();
     this.audio.duckMusic(true);
     this.screens.pause(
+      this.storage.data.musicVolume,
       () => {
         this.screens.hide();
         this.audio.duckMusic(false);
@@ -249,7 +269,14 @@ export class Game {
       this.hud.hide();
       this.audio.playMusic('death');
       this.saveBest(this.campaign.score + level.score, 0);
-      this.screens.gameOver(cfg, m, level.score, () => this.showIntro(), () => this.showMenu());
+      let endless: { zone: number; best: number; record: boolean } | undefined;
+      if (cfg.index === 4) {
+        const record = level.maxD > data.bestEndless;
+        if (record) data.bestEndless = Math.round(level.maxD);
+        this.storage.save();
+        endless = { zone: level.zoneInfo?.index ?? 1, best: data.bestEndless, record };
+      }
+      this.screens.gameOver(cfg, m, level.score, () => this.showIntro(), () => this.showMenu(), endless);
       return;
     }
 
@@ -266,7 +293,17 @@ export class Game {
       this.state = 'victory';
       data.victories++;
       this.saveBest(this.campaign.score, this.campaign.cash);
-      this.screens.victory(VICTORY_TEXT, this.campaign.cash, this.campaign.score, this.campaign.profile, () => this.showMenu());
+      this.screens.victory(
+        VICTORY_TEXT,
+        this.campaign.cash,
+        this.campaign.score,
+        this.campaign.profile,
+        () => this.showMenu(),
+        () => {
+          this.campaign.level = 4;
+          this.showIntro();
+        },
+      );
       return;
     }
 
