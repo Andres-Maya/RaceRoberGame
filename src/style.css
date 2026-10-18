@@ -1373,3 +1373,58 @@ body.touch #hud-toasts {
       0 4px 10px rgba(0, 0, 0, 0.6);
   }
 }
+
+/* ------------------------------------------------------------ esperando reaparecer */
+
+#hud-spectate {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  padding: 10px 26px 12px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--line);
+  text-align: center;
+}
+
+#hud.spectating #hud-spectate {
+  display: block;
+}
+
+/* Mientras se espera, solo queda la cuenta regresiva: fuera barras, avisos y paneles. */
+#hud.spectating .hud-top,
+#hud.spectating #hud-players,
+#hud.spectating #hud-ai,
+#hud.spectating #hud-storm,
+#hud.spectating #hud-toasts,
+#hud.spectating #hud-countdown {
+  display: none;
+}
+
+.spec-title {
+  font: 1.2rem var(--display);
+  letter-spacing: 0.12em;
+  color: var(--red);
+}
+
+.spec-label {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.spec-count {
+  font: 3.2rem var(--display);
+  line-height: 1;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.spec-dist {
+  margin-top: 4px;
+  font: 1rem var(--display);
+  letter-spacing: 0.05em;
+  color: #e6e6e6;
+}

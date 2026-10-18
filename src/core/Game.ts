@@ -178,7 +178,9 @@ export class Game {
     const guest = this.state === 'guest' && !!this.net?.view && this.net.playing && !this.screens.visible;
     // Durante la partida se oculta el cursor; en celular aparecen los controles táctiles.
     document.body.classList.toggle('in-game', playing || guest);
-    this.touch.show(IS_TOUCH && (playing || guest));
+    // Caído o capturado esperando reaparecer: sin controles, solo se mira al compañero.
+    const waiting = playing && this.level ? this.level.respawnLeft(this.level.players[0]) !== null : guest ? this.net!.view!.hud.players[1]?.respawn != null : false;
+    this.touch.show(IS_TOUCH && (playing || guest) && !waiting);
     const typing = this.state === 'online' || (this.state === 'menu' && this.screens.visible);
     if (this.input.wasPressed('KeyM') && !typing) this.toggleMute();
     if (this.input.wasPressed('KeyN') && !typing) this.toggleMusic();
@@ -220,13 +222,17 @@ export class Game {
     } else if (render) {
       this.renderer.clear();
     }
-    this.updateMates(playing, guest);
+    this.updateMates(playing, guest, waiting);
     this.input.endFrame();
   }
 
   /** Indicadores en el borde de la pantalla para el compañero que quedó fuera de cámara. */
-  private updateMates(playing: boolean, guest: boolean): void {
+  private updateMates(playing: boolean, guest: boolean, waiting: boolean): void {
     const me = playing ? 0 : 1;
+    if (waiting) {
+      this.offscreen.hide();
+      return;
+    }
     let mates: Mate[] = [];
     let mine: { x: number; z: number } | null = null;
     if (playing && this.level && this.level.players.length > 1) {
@@ -690,15 +696,17 @@ export class Game {
         }
         net.peer = vehicleById(String(m.vehicle)).id;
         net.link.send({ t: 'welcome', v: PROTOCOL });
-        if (net.inRoom) this.showRoom();
-        else {
+        if (net.inRoom) {
+          this.screens.roomGuest(vehicleById(net.peer).name);
+          net.link.send({ t: 'lobby', text: 'El anfitrión está eligiendo el nivel…' });
+        } else {
           net.link.send({ t: 'lobby', text: 'La partida ya empezó: entrarás en el próximo nivel.' });
           if (this.state === 'playing') this.hud.toast('El jugador 2 se conectó: entra en el próximo nivel', '#4cd37b', 3);
         }
         break;
       case 'vehicle':
         net.peer = vehicleById(String(m.vehicle)).id;
-        if (net.inRoom) this.showRoom();
+        if (net.inRoom) this.screens.roomGuest(vehicleById(net.peer).name);
         break;
       case 'input':
         if (Array.isArray(m.i) && m.i.length === 8) net.remote = this.cleanInput(m.i);
@@ -733,7 +741,7 @@ export class Game {
       this.level.dropPlayer(1);
       this.hud.toast('El jugador 2 se desconectó', '#ff7a45', 3);
     }
-    if (net.inRoom) this.showRoom();
+    if (net.inRoom) this.screens.roomGuest(null);
   }
 
   /** Reenvía al invitado las pantallas de historia, pausa y resultados. */

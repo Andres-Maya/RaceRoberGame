@@ -232,9 +232,7 @@ export class Screens {
       info.kind === 'code'
         ? `<div class="net-code">${esc(info.code)}</div><p class="muted small">El otro jugador elige <b>EN LÍNEA › Unirse con código</b>. Ambos necesitan internet (los datos del hotspot sirven); la partida va directo entre los dos dispositivos.</p>`
         : `<div class="net-addresses">${info.addresses.map((ip) => `<div class="net-code small">${esc(ip)}</div>`).join('')}</div><p class="muted small">Conecta el otro dispositivo a la misma red Wi-Fi o al hotspot, abre esa dirección en su navegador y elige <b>EN LÍNEA › Unirse por IP</b>.</p>`;
-    const guest = info.guest
-      ? `<p class="net-status ok">Jugador 2 conectado · ${esc(info.guest)}</p>`
-      : `<p class="net-status wait">Esperando al jugador 2…</p>`;
+    const guest = `<p class="net-status" data-room-guest></p>`;
     this.show(
       `<h2>Tu partida</h2>
       ${share}
@@ -251,6 +249,21 @@ export class Screens {
         [['Escape'], 'leave'],
       ],
     );
+    this.roomGuest(info.guest);
+  }
+
+  /**
+   * Actualiza en la sala solo la línea del invitado y el botón de jugar, sin
+   * redibujar la pantalla (el anfitrión puede estar leyendo o eligiendo).
+   */
+  roomGuest(guest: string | null): void {
+    const line = this.el.querySelector<HTMLElement>('[data-room-guest]');
+    if (!line) return;
+    line.textContent = guest ? `Jugador 2 conectado · ${guest}` : 'Esperando al jugador 2…';
+    line.classList.toggle('ok', !!guest);
+    line.classList.toggle('wait', !guest);
+    const play = this.el.querySelector<HTMLButtonElement>('[data-action="play"]');
+    if (play) play.disabled = !guest;
   }
 
   /** Estado de la conexión (conectando, esperando al anfitrión...). */
@@ -388,7 +401,7 @@ export class Screens {
         <p><kbd>F</kbd> / <kbd>Ctrl der.</kbd> disparar al objetivo más cercano</p>
       </div>
       <div class="ctrl-card" style="--pc:#4d9dff">
-        <p><b>En celular:</b> el vehículo acelera solo y va hacia donde apuntes el joystick de la izquierda (arriba = hacia arriba de la pantalla; si apuntas hacia atrás, retrocede). Botones de <b>TURBO</b> y <b>DISPARO</b> a la derecha y pausa abajo al centro. Mejor con el teléfono en horizontal.</p>
+        <p><b>En celular:</b> el vehículo va hacia donde apuntes el joystick de la izquierda (arriba = hacia arriba de la pantalla; si apuntas hacia atrás, retrocede) y se detiene al soltarlo. Botones de <b>TURBO</b> y <b>DISPARO</b> a la derecha y pausa abajo al centro. Mejor con el teléfono en horizontal.</p>
       </div>
       <p class="muted"><kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio · <kbd>N</kbd> música · <kbd>-</kbd> <kbd>+</kbd> volumen de la música.</p>
       <ul class="tips">

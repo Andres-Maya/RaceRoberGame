@@ -19,6 +19,10 @@ export interface HudPlayer {
   /** Velocidad en m/s. */
   speed: number;
   flash: number;
+  /** Fuera de la carrera esperando reaparecer: destruido o capturado. */
+  down: 'dead' | 'captured' | null;
+  /** Segundos para reaparecer (null si no está esperando). */
+  respawn: number | null;
 }
 
 /**
@@ -87,6 +91,8 @@ export function hudState(level: Level): HudState {
       maxAmmo: p.maxAmmo,
       speed: p.vehicle.speed,
       flash: p.flash,
+      down: level.respawnLeft(p) !== null ? (p.captured ? 'captured' : 'dead') : null,
+      respawn: level.respawnLeft(p),
     })),
   };
 }
@@ -116,11 +122,18 @@ export class Hud {
   private damageOverlay = $('#damage-overlay');
   private flashOverlay = $('#flash-overlay');
   private progressBar = $('#hud-progress-bar');
+  private spectateTitle = $('#hud-spectate .spec-title');
+  private spectateCount = $('#hud-spectate .spec-count');
+  private spectateDist = $('#hud-spectate .spec-dist');
+  /** Jugador de este dispositivo. */
+  private me = 0;
   private cache = new Map<HTMLElement, string>();
 
   /** `me`: índice del jugador de este dispositivo (en línea, su tarjeta se marca como "TÚ"). */
   show(level: HudState, baseCash: number, me = 0): void {
     this.root.classList.remove('hidden');
+    this.root.classList.remove('spectating');
+    this.me = me;
     this.levelName.textContent = level.levelName;
     this.objective.textContent = level.subtitle;
     this.ai.classList.remove('hidden');
@@ -148,6 +161,7 @@ export class Hud {
 
   hide(): void {
     this.root.classList.add('hidden');
+    this.root.classList.remove('spectating');
     this.stormOverlay.style.opacity = '0';
     this.damageOverlay.style.opacity = '0';
   }
@@ -158,7 +172,23 @@ export class Hud {
     el.textContent = text;
   }
 
+  /** Este jugador está fuera de la carrera esperando reaparecer (en pantalla queda solo la cuenta regresiva). */
+  spectating(level: HudState): boolean {
+    return level.players[this.me]?.respawn != null;
+  }
+
   update(level: HudState): void {
+    // Caído o capturado: se oculta todo menos la distancia recorrida y la cuenta regresiva.
+    const own = level.players[this.me];
+    const waiting = own?.respawn != null;
+    this.root.classList.toggle('spectating', waiting);
+    if (waiting && own) {
+      this.set(this.spectateTitle, own.down === 'captured' ? 'TE CAPTURARON' : 'VEHÍCULO DESTRUIDO');
+      this.set(this.spectateCount, String(Math.max(1, Math.ceil(own.respawn ?? 0))));
+      this.set(this.spectateDist, `Recorrido: ${level.maxD >= 1000 ? `${(level.maxD / 1000).toFixed(2)} km` : `${Math.round(level.maxD)} m`}`);
+      this.damageOverlay.style.opacity = '0';
+      return;
+    }
     const km = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`);
     const zone = level.zone;
     if (level.finish === 'none') {

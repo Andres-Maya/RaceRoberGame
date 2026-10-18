@@ -128,6 +128,11 @@ const OBSTACLE_HARDNESS: Record<string, number> = {
 /** Cómo anuncia El Analista los refuerzos de cada facción. */
 const REINFORCEMENTS = { police: 'La policía envía', gang: 'Los Cuervos mandan', wasteland: 'De las ruinas salen' };
 
+/** Distancia (m) por detrás del compañero a la que un jugador es capturado. */
+const CAPTURE_GAP = 60;
+/** Segundos que tarda en reaparecer un jugador caído o capturado. */
+const RESPAWN_TIME = 6;
+
 /**
  * Una partida de un nivel: escena, física, mapa procedural, jugadores,
  * perseguidores, tráfico, calibración de la IA y reglas de victoria/derrota.
@@ -767,16 +772,30 @@ export class Level {
     const minAllowed = this.maxD - 115;
     if (v.d < minAllowed) v.teleport(this.track.centerX(minAllowed + 2), -(minAllowed + 2), 0);
 
-    // Cooperativo: el rezagado es arrastrado junto a su compañero.
+    // Cooperativo: quien se queda muy atrás es capturado y reaparece junto a su compañero.
     if (this.playerCount > 1) {
       const leader = this.alivePlayers.reduce((a, b) => (a.vehicle.d > b.vehicle.d ? a : b));
-      if (leader !== p && leader.vehicle.d - v.d > 60) {
-        const d = leader.vehicle.d - 6;
-        v.teleport(this.track.centerX(d) + (leader.vehicle.px > this.track.centerX(d) ? -2.5 : 2.5), -d, 0);
-        this.damagePlayer(p, 10);
-        this.hooks.message(`${this.who(p)}¡Rezagado!`, p.color, 1.2);
-      }
+      if (leader !== p && leader.vehicle.d - v.d > CAPTURE_GAP) this.capturePlayer(p);
     }
+  }
+
+  /** El rezagado queda fuera de la carrera hasta la cuenta regresiva (como si hubiera caído). */
+  private capturePlayer(p: Player): void {
+    const v = p.vehicle;
+    p.alive = false;
+    p.captured = true;
+    p.setGhost(true);
+    p.mesh.visible = false;
+    this.targetMarkers[p.index].visible = false;
+    this.fx.dust(v.px, v.pz, 0x8a8a8a, 10, 2.4);
+    this.audio.crash(0.5);
+    this.respawnTimers.set(p, RESPAWN_TIME);
+    this.hooks.message(`¡J${p.index + 1} se quedó atrás y lo capturaron! Vuelve en ${RESPAWN_TIME} s`, p.color, 2.5);
+  }
+
+  /** Segundos para que reaparezca un jugador caído o capturado (null si no espera reaparecer). */
+  respawnLeft(p: Player): number | null {
+    return this.respawnTimers.get(p) ?? null;
   }
 
   /** Escenas automáticas: salir de la estructura inicial y entrar en la final. */
@@ -1243,8 +1262,8 @@ export class Level {
     });
     this.origMaterials.set(p, mats);
     if (this.alivePlayers.length > 0 && !p.dropped) {
-      this.respawnTimers.set(p, 6);
-      this.hooks.message(`¡J${p.index + 1} cayó! Tu compañero vuelve por ti en 6 s`, p.color, 2.5);
+      this.respawnTimers.set(p, RESPAWN_TIME);
+      this.hooks.message(`¡J${p.index + 1} cayó! Vuelve en ${RESPAWN_TIME} s`, p.color, 2.5);
     }
   }
 
@@ -1265,11 +1284,17 @@ export class Level {
     const partner = this.alivePlayers[0];
     if (!partner) return;
     const mats = this.origMaterials.get(p) ?? [];
+    this.origMaterials.delete(p);
     let i = 0;
     p.mesh.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh && mats[i]) m.material = mats[i++];
     });
+    if (p.captured) {
+      p.captured = false;
+      p.setGhost(false);
+      p.mesh.visible = true;
+    }
     const d = partner.vehicle.d - 5;
     p.vehicle.teleport(this.track.centerX(d) + (partner.vehicle.px > this.track.centerX(d) ? -2.5 : 2.5), -d, 0);
     p.alive = true;

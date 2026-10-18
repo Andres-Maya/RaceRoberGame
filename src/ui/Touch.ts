@@ -8,7 +8,7 @@ export const IS_TOUCH =
  * Controles en pantalla para celular: un joystick a la izquierda y botones de
  * turbo y disparo a la derecha. El joystick marca la dirección en la pantalla
  * hacia donde debe ir el vehículo (arriba = hacia arriba de la pantalla); sin
- * tocarlo, el vehículo sigue acelerando de frente.
+ * tocarlo, el vehículo no acelera.
  */
 export class TouchControls {
   private root: HTMLElement;
@@ -122,12 +122,10 @@ export class TouchControls {
   apply(input: DriveInput): DriveInput {
     if (this.root.classList.contains('hidden')) return input;
     // La cámara mira hacia abajo con el norte (-Z) arriba: derecha de la pantalla = +X, abajo = +Z.
+    // Sin tocar el joystick el vehículo no acelera (se detiene poco a poco).
     const active = Math.hypot(this.sx, this.sy) > 0.3;
-    const keyboard = input.throttle > 0 || input.brake > 0 || input.steer !== 0;
     return {
       ...input,
-      // Sin joystick ni teclas, el vehículo acelera solo de frente.
-      throttle: keyboard ? input.throttle : 1,
       dir: active ? Math.atan2(-this.sx, -this.sy) : null,
       turbo: input.turbo || this.turbo,
       shoot: input.shoot || this.shoot,

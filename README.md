@@ -40,13 +40,13 @@ En el menú, **En línea** (tecla `5`). Un jugador crea la partida y el otro se 
 | **Con código** | El anfitrión elige *Crear con código* y dicta el código de 5 letras; el otro elige *Unirse con código*. | Internet en ambos dispositivos solo para encontrarse (los datos del hotspot sirven). Después la partida va directo entre los dos (WebRTC); en un hotspot, por la red local. Funciona desde Vercel. |
 | **Por IP** | Un PC ejecuta `npm run lan` y muestra su dirección (por ejemplo `http://192.168.43.20:8080`). El anfitrión abre esa dirección y elige *Crear partida por IP*; el otro dispositivo, conectado al mismo Wi-Fi o hotspot, abre la misma dirección y elige *Unirse por IP*. | Misma red local, sin internet. Si alguien escribe la IP desde la versión de Vercel, el juego lo lleva a la dirección del anfitrión. |
 
-Cada jugador tiene su propia cámara, que sigue a su vehículo y no se aleja aunque el compañero se separe (si tu vehículo cae, la cámara sigue al compañero hasta que reaparezcas). Cuando el compañero queda fuera de la pantalla, en el borde aparece un círculo con la foto de su vehículo, una flecha que apunta hacia él y la distancia.
+Cada jugador tiene su propia cámara, que sigue a su vehículo y no se aleja aunque el compañero se separe. Si un jugador se queda más de 60 m atrás, lo **capturan**; si su vehículo es destruido, cae. En ambos casos su pantalla sigue al compañero, desaparecen los botones y las barras, y solo quedan la distancia recorrida y una cuenta regresiva de 6 s; luego reaparece junto al compañero (cuesta $20.000). Cuando el compañero queda fuera de la pantalla, en el borde aparece un círculo con la foto de su vehículo, una flecha que apunta hacia él y la distancia.
 
 Si el invitado se desconecta a mitad de nivel, su vehículo sale de la carrera y el anfitrión sigue jugando; si se vuelve a conectar, entra en el siguiente nivel.
 
 ## Celular
 
-El juego detecta la pantalla táctil y muestra controles en pantalla. El vehículo acelera solo y **va hacia donde apunta la bolita del joystick** (arriba = hacia arriba de la pantalla, derecha = hacia la derecha; si apunta hacia atrás, retrocede en esa dirección); sin tocar el joystick sigue de frente. A la derecha están los botones de **TURBO** y **DISPARO** (apuntado automático); la pausa está abajo al centro. Al empezar a jugar pasa a pantalla completa en horizontal cuando el navegador lo permite. En celulares se dibuja a menor resolución y con sombras más livianas para mantener la fluidez.
+El juego detecta la pantalla táctil y muestra controles en pantalla. El vehículo **va hacia donde apunta la bolita del joystick** (arriba = hacia arriba de la pantalla, derecha = hacia la derecha; si apunta hacia atrás, retrocede en esa dirección); al soltar el joystick deja de acelerar y se detiene. A la derecha están los botones de **TURBO** y **DISPARO** (apuntado automático); la pausa está abajo al centro. Al empezar a jugar pasa a pantalla completa en horizontal cuando el navegador lo permite. En celulares se dibuja a menor resolución y con sombras más livianas para mantener la fluidez.
 
 ## Historia y niveles
 
@@ -106,7 +106,7 @@ En el menú principal, **Sonido** (tecla `4`) abre un apartado con volúmenes in
 | Choques y explosiones | Colisiones, vehículos destruidos y la planta nuclear |
 | Interfaz | Cuenta regresiva, recompensas y avisos |
 
-El modo de dos jugadores en el mismo teclado se retiró del menú para preparar el juego en línea. El nivel sigue admitiendo varios jugadores por dentro (cámara compartida, reaparición del compañero a los 6 s por $20.000 y arrastre del rezagado), que es la base para conectar jugadores remotos.
+El modo de dos jugadores en el mismo teclado se retiró del menú para preparar el juego en línea. El nivel sigue admitiendo varios jugadores por dentro, que es la base del modo en línea.
 
 ## Música
 

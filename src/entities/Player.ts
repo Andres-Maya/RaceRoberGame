@@ -34,6 +34,8 @@ export class Player {
   ghost = false;
   /** Se desconectó en una partida en línea: no vuelve a aparecer. */
   dropped = false;
+  /** Se quedó muy atrás y lo capturaron: reaparece junto al compañero tras la cuenta regresiva. */
+  captured = false;
   /** Munición del arma de la moto. */
   ammo: number;
   readonly maxAmmo: number;
