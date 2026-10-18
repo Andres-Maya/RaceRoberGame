@@ -59,7 +59,7 @@ El juego detecta la pantalla táctil y muestra controles en pantalla. El vehícu
 | Nivel | Perseguidores | Inicio → final |
 |---|---|---|
 | **0 — La Ruta del Polvo** (prólogo) | Tormenta de arena | Desierto → afueras → ciudad. Termina cuando la moto atraviesa la puerta del Banco Central. |
-| **1 — El Golpe** | Policía: patrullas, motos, SUVs, SWAT con lanzagranadas y helicóptero | Explosión de la bóveda y salto por la puerta del banco → ciudad → puente del río. Termina al entrar al túnel de la montaña. |
+| **1 — El Golpe** | Policía: patrullas, motos, SUVs, SWAT con lanzagranadas y helicóptero | Explosión de la bóveda y salto por la puerta del banco → ciudad → puente del río. Termina al entrar al túnel de la montaña; al escapar, el helicóptero apaga el reflector, sube y se aleja. |
 | **2 — Territorio Enemigo** | Los Cuervos: muscle cars, moteros que lanzan bombas, pickups con lanzagranadas, tráileres, furgón blindado | Salida del túnel → zona industrial con contenedores y barricadas. Termina al entrar a la planta nuclear, que explota. |
 | **3 — Tierra Baldía** | Saqueadores: buggies, mutantes a pie (con esqueleto articulado), harpías mutantes que lanzan lluvia de ácido, incineradores con lanzallamas, moteros mutantes que lanzan bombas, camiones de guerra con lanzagranadas | Explosión verde y salto desde dentro de la planta → ruinas con zombis que cruzan la vía y charcos de ácido. Termina al cruzar la zona segura. |
 
@@ -67,7 +67,7 @@ El juego detecta la pantalla táctil y muestra controles en pantalla. El vehícu
 
 Los niveles 0 a 3 terminan **por distancia**: el HUD muestra cuánto falta para la meta. Cada disparo que recibes te quita $2.500 del botín.
 
-El juego recuerda tu campaña: **JUGAR** pasa a ser **CONTINUAR** y te lleva al nivel en que quedaste, con el botín y el puntaje acumulados (si superaste un nivel y volviste al menú, al siguiente; tras ganar la campaña, al nivel infinito). Desde **Seleccionar nivel** puedes empezar en cualquier nivel, y la campaña sigue desde ahí (el prólogo es una partida nueva); cada nivel calibra tu habilidad por su cuenta.
+El juego recuerda tu campaña. Al tocar **JUGAR** con una campaña empezada puedes elegir **Continuar** (vuelves al nivel en que quedaste, con el botín y el puntaje acumulados; si superaste un nivel y volviste al menú, al siguiente; tras ganar la campaña, al nivel infinito) o **Nueva partida** (empieza en el prólogo sin botín, conservando los niveles y vehículos desbloqueados). Desde **Seleccionar nivel** puedes empezar en cualquier nivel, y la campaña sigue desde ahí (el prólogo es una partida nueva); cada nivel calibra tu habilidad por su cuenta.
 
 ## Garaje
 

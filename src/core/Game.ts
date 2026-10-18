@@ -301,7 +301,7 @@ export class Game {
     this.audio.duckMusic(false);
     this.audio.playMusic('calm');
     this.screens.menu(this.storage.data, {
-      play: () => this.continueCampaign(),
+      play: () => this.play(),
       select: () => this.screens.levelSelect(this.storage.data, (l) => this.startFrom(l), () => this.showMenu()),
       online: () => this.showOnline(),
       garage: () => this.showGarage(() => this.showMenu()),
@@ -440,10 +440,20 @@ export class Game {
     return this.net?.role === 'host' && this.net.peer && this.net.link.connected ? 2 : 1;
   }
 
-  /** JUGAR: sigue la campaña guardada en el nivel en que quedó; si no hay, empieza en el prólogo. */
-  private continueCampaign(): void {
+  /** JUGAR: con una campaña guardada se elige entre continuarla o empezar de nuevo. */
+  private play(): void {
     const saved = this.storage.data.campaign;
     if (!saved || saved.level <= 0) {
+      this.newCampaign();
+      return;
+    }
+    this.screens.playChoice(saved, { resume: () => this.continueCampaign(), fresh: () => this.newCampaign(), back: () => this.showMenu() });
+  }
+
+  /** Sigue la campaña guardada en el nivel en que quedó, con su botín y puntaje. */
+  private continueCampaign(): void {
+    const saved = this.storage.data.campaign;
+    if (!saved) {
       this.newCampaign();
       return;
     }

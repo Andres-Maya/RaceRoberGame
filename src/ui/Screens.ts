@@ -13,6 +13,9 @@ import { vehicleThumbnails } from './Thumbnails';
 
 type Action = () => void;
 
+/** "nivel 2" o "nivel infinito" para los textos de la campaña guardada. */
+const campaignLabel = (level: number): string => (level === 4 ? 'nivel infinito' : `nivel ${level}`);
+
 
 /** Pantallas superpuestas en HTML: menú, historia, resultados, pausa... */
 export class Screens {
@@ -151,11 +154,7 @@ export class Screens {
       </div>
       <p class="tagline">Un golpe al Banco Central. Tres niveles de persecución. Una IA que estudia cómo manejas.</p>
       <div class="menu-buttons">
-        ${
-          save.campaign && save.campaign.level > 0
-            ? `<button data-action="play" class="primary">CONTINUAR <kbd>1</kbd> <small>${save.campaign.level === 4 ? 'Nivel ∞' : `Nivel ${save.campaign.level}`} · ${esc(LEVEL_NAMES[save.campaign.level] ?? '')} · ${formatMoney(save.campaign.cash)}</small></button>`
-            : '<button data-action="play" class="primary">JUGAR <kbd>1</kbd></button>'
-        }
+        <button data-action="play" class="primary">JUGAR <kbd>1</kbd>${save.campaign && save.campaign.level > 0 ? ` <small>vas en el ${campaignLabel(save.campaign.level)}</small>` : ''}</button>
         <button data-action="select">SELECCIONAR NIVEL <kbd>2</kbd></button>
         <button data-action="online">EN LÍNEA · 2 JUGADORES <kbd>5</kbd> <small>código, hotspot o IP</small></button>
         <button data-action="garage">GARAJE <kbd>3</kbd> <small>${esc(vehicleById(save.vehicles[0]).name)}</small></button>
@@ -176,6 +175,31 @@ export class Screens {
         [['KeyN'], 'music'],
       ],
       'menu',
+    );
+  }
+
+  /** JUGAR con una campaña guardada: seguir donde se dejó o empezar de nuevo. */
+  playChoice(campaign: { level: number; cash: number; score: number }, a: { resume: Action; fresh: Action; back: Action }): void {
+    this.show(
+      `<h2>Jugar</h2>
+      <div class="play-choice">
+        <button data-action="resume" class="primary">
+          CONTINUAR <kbd>1</kbd>
+          <small>${campaignLabel(campaign.level)} · ${esc(LEVEL_NAMES[campaign.level] ?? '')}</small>
+          <small>Botín ${formatMoney(campaign.cash)} · ${Math.round(campaign.score).toLocaleString('es-CO')} pts</small>
+        </button>
+        <button data-action="fresh">
+          NUEVA PARTIDA <kbd>2</kbd>
+          <small>Empieza en el prólogo, sin botín. Conservas los niveles y vehículos desbloqueados.</small>
+        </button>
+      </div>
+      <div class="menu-buttons"><button data-action="back" class="ghost">Volver <kbd>Esc</kbd></button></div>`,
+      a,
+      [
+        [['Digit1', 'Numpad1', 'Enter', 'NumpadEnter'], 'resume'],
+        [['Digit2', 'Numpad2'], 'fresh'],
+        [['Escape', 'Backspace'], 'back'],
+      ],
     );
   }
 

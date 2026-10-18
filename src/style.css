@@ -1537,3 +1537,25 @@ body.touch #hud-toasts {
     box-shadow: 0 0 22px rgba(244, 208, 63, 0.45);
   }
 }
+
+/* ------------------------------------------------------------ continuar o nueva partida */
+
+.play-choice {
+  display: grid;
+  gap: 12px;
+}
+
+.play-choice button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px 18px;
+  text-align: left;
+  font-size: 1.3rem;
+}
+
+.play-choice button small {
+  font-size: 0.9rem;
+  letter-spacing: 0;
+}

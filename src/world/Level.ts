@@ -401,10 +401,8 @@ export class Level {
     if (!this.calibrating) {
       this.config.pursuers = this.endlessPursuers(zone);
       this.config.helicopter = zone.faction === 'police' && zone.index >= 2;
-      if (!this.config.helicopter && this.heli) {
-        this.heli.dispose();
-        this.heli = null;
-      }
+      // Fuera del territorio policial, el helicóptero se retira (y no vuelve hasta otra zona de policía).
+      if (!this.config.helicopter && this.heli?.chasing) this.heliLeaves('El helicóptero se queda atrás');
       this.spawnTimer = Math.min(this.spawnTimer, 1.5);
     }
     this.hooks.message(`ZONA ${zone.index + 1}: ${ZONE_NAMES[zone.biome]} · te persigue ${FACTION_LABEL[zone.faction]}`, '#f4d03f', 3);
@@ -467,7 +465,7 @@ export class Level {
     }
     if (this.calibrating) return 0.35;
     const max = this.config.pursuers?.maxActive ?? 1;
-    return clamp01(0.25 + (0.6 * this.activePursuers) / max + (this.heli ? 0.15 : 0) + (this.progress > 0.85 ? 0.2 : 0));
+    return clamp01(0.25 + (0.6 * this.activePursuers) / max + (this.heli?.chasing ? 0.15 : 0) + (this.progress > 0.85 ? 0.2 : 0));
   }
 
   update(dt: number, inputs: DriveInput[]): void {
@@ -500,6 +498,10 @@ export class Level {
     this.updateAcidPools(dt);
     const probe = (x: number, d: number, dir: number) => this.chunks.obstacleAhead(x, d, dir);
     for (const c of this.civilians) c.update(dt, this.track, this.physics, probe);
+    if (this.heli?.gone) {
+      this.heli.dispose();
+      this.heli = null;
+    }
     if (this.heli && this.config.pursuers) {
       const shot = this.heli.update(dt, this.players, this.config.pursuers, this.rng);
       if (shot) this.fire(shot, true);
@@ -1683,8 +1685,18 @@ export class Level {
     }
   }
 
+  /** El helicóptero abandona la persecución con una animación (no desaparece de golpe). */
+  private heliLeaves(text: string): void {
+    if (!this.heli?.chasing) return;
+    const ref = this.alivePlayers.length ? this.alivePlayers : this.players;
+    const x = ref.reduce((s, p) => s + p.vehicle.px, 0) / ref.length;
+    this.heli.leave(x, this.track.angle(this.maxD));
+    this.hooks.message(text, '#7dd3fc', 2);
+  }
+
   private reachFinish(kind: FinishScene): void {
     const zone = this.chunks.finishZone!;
+    this.heliLeaves('¡El helicóptero se retira!');
     if (this.config.index === 0) {
       this.aiProgress = 1;
       this.calibratedProfile = buildProfile(this.classifier, this.tracker.m);

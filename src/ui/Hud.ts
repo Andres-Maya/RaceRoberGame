@@ -75,7 +75,7 @@ export function hudState(level: Level): HudState {
     state: level.state,
     cashLost: level.cashLost,
     activePursuers: level.activePursuers,
-    heli: !!level.heli,
+    heli: !!level.heli?.chasing,
     score: level.score,
     countdown: level.countdown,
     elapsed: level.elapsed,
