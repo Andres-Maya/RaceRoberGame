@@ -1294,3 +1294,82 @@ body.touch #hud-toasts {
     height: 84px;
   }
 }
+
+/* ------------------------------------------------------------ compañero fuera de pantalla */
+
+#offscreen {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.offscreen-mark {
+  position: absolute;
+  left: -32px;
+  top: -32px;
+  width: 64px;
+  height: 64px;
+  will-change: transform;
+}
+
+.offscreen-circle {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid var(--pc);
+  background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.18), rgba(10, 12, 18, 0.85));
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--pc) 60%, transparent),
+    0 4px 10px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  animation: offscreen-pulse 1.2s ease-in-out infinite;
+}
+
+.offscreen-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.25);
+}
+
+/* La flecha gira alrededor del círculo y apunta hacia el compañero. */
+.offscreen-arrow {
+  position: absolute;
+  inset: 0;
+}
+
+.offscreen-arrow i {
+  position: absolute;
+  top: 50%;
+  right: -13px;
+  margin-top: -9px;
+  border-left: 13px solid var(--pc);
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+
+.offscreen-dist {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--pc);
+  font: 0.8rem var(--display);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+@keyframes offscreen-pulse {
+  50% {
+    box-shadow:
+      0 0 26px color-mix(in srgb, var(--pc) 85%, transparent),
+      0 4px 10px rgba(0, 0, 0, 0.6);
+  }
+}

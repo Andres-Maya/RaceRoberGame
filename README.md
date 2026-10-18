@@ -40,6 +40,8 @@ En el menú, **En línea** (tecla `5`). Un jugador crea la partida y el otro se 
 | **Con código** | El anfitrión elige *Crear con código* y dicta el código de 5 letras; el otro elige *Unirse con código*. | Internet en ambos dispositivos solo para encontrarse (los datos del hotspot sirven). Después la partida va directo entre los dos (WebRTC); en un hotspot, por la red local. Funciona desde Vercel. |
 | **Por IP** | Un PC ejecuta `npm run lan` y muestra su dirección (por ejemplo `http://192.168.43.20:8080`). El anfitrión abre esa dirección y elige *Crear partida por IP*; el otro dispositivo, conectado al mismo Wi-Fi o hotspot, abre la misma dirección y elige *Unirse por IP*. | Misma red local, sin internet. Si alguien escribe la IP desde la versión de Vercel, el juego lo lleva a la dirección del anfitrión. |
 
+Cada jugador tiene su propia cámara, que sigue a su vehículo y no se aleja aunque el compañero se separe (si tu vehículo cae, la cámara sigue al compañero hasta que reaparezcas). Cuando el compañero queda fuera de la pantalla, en el borde aparece un círculo con la foto de su vehículo, una flecha que apunta hacia él y la distancia.
+
 Si el invitado se desconecta a mitad de nivel, su vehículo sale de la carrera y el anfitrión sigue jugando; si se vuelve a conectar, entra en el siguiente nivel.
 
 ## Celular

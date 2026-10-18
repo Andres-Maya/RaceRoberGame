@@ -19,7 +19,7 @@ import { FLAME_ANGLE, FLAME_RANGE, Pursuer, PURSUER_STATS, type FireRequest } fr
 import { Sandstorm } from '../entities/Sandstorm';
 import { mat } from '../fx/Meshes';
 import { Effects } from '../fx/Particles';
-import { CameraRig } from './CameraRig';
+import { CameraRig, cameraFocus } from './CameraRig';
 import { ChunkManager, type CivilianSpawn, type ObstacleRecord } from './ChunkManager';
 import { Physics, type Tag } from './Physics';
 import { CHUNK, ROUGH_BIOMES, Track } from './Track';
@@ -1760,12 +1760,17 @@ export class Level {
 
   // ------------------------------------------------------------ cámara
 
-  updateCamera(camera: THREE.PerspectiveCamera, dt: number): void {
-    const alive = this.alivePlayers;
-    const ref = alive.length ? alive : this.players;
-    this.cam.update(camera, dt, ref.map((p) => p.vehicle), this.shake, this.cameraZoom);
+  /** Cámara del jugador `me` (la del anfitrión sigue a su propio vehículo). */
+  updateCamera(camera: THREE.PerspectiveCamera, dt: number, me = 0): void {
+    const focus = cameraFocus(this.camPlayers, me);
+    this.cam.update(camera, dt, focus, this.shake, this.cameraZoom);
     this.sun.position.set(this.cam.x + 35, 110, this.cam.z + 25);
     this.sun.target.position.set(this.cam.x, 0, this.cam.z);
+  }
+
+  /** Vehículos de todos los jugadores, en orden, para las cámaras. */
+  get camPlayers(): { px: number; pz: number; vx: number; vz: number; alive: boolean }[] {
+    return this.players.map((p) => ({ px: p.vehicle.px, pz: p.vehicle.pz, vx: p.vehicle.vx, vz: p.vehicle.vz, alive: p.alive && !p.dropped }));
   }
 
   /** Durante la explosión de la planta la cámara se aleja para verla completa. */

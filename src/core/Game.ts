@@ -10,6 +10,7 @@ import { lanAddress, lanInfo, PeerLink, WsLink, type LanInfo, type Link } from '
 import { PROTOCOL, type NetMessage, type PackedInput } from '../net/protocol';
 import { Hud, hudState } from '../ui/Hud';
 import type { Loader } from '../ui/Loader';
+import { OffscreenMarkers, type Mate } from '../ui/Offscreen';
 import { Screens } from '../ui/Screens';
 import { enterFullscreen, IS_TOUCH, TouchControls } from '../ui/Touch';
 import { Level, type LevelHooks } from '../world/Level';
@@ -82,6 +83,7 @@ export class Game {
   private hud = new Hud();
   private screens = new Screens();
   private touch = new TouchControls();
+  private offscreen = new OffscreenMarkers();
   private classifier = new RuleBasedClassifier();
   private difficulty = new AdaptiveDifficulty();
   private level: Level | null = null;
@@ -213,12 +215,33 @@ export class Game {
       this.level.updateCamera(this.camera, this.state === 'playing' ? dt : 0);
       if (render) this.renderer.render(this.level.scene, this.camera);
     } else if (view) {
-      view.update(dt, this.camera);
+      view.update(dt, this.camera, 1);
       if (render) this.renderer.render(view.scene, this.camera);
     } else if (render) {
       this.renderer.clear();
     }
+    this.updateMates(playing, guest);
     this.input.endFrame();
+  }
+
+  /** Indicadores en el borde de la pantalla para el compañero que quedó fuera de cámara. */
+  private updateMates(playing: boolean, guest: boolean): void {
+    const me = playing ? 0 : 1;
+    let mates: Mate[] = [];
+    let mine: { x: number; z: number } | null = null;
+    if (playing && this.level && this.level.players.length > 1) {
+      mates = this.level.players.map((p) => ({ index: p.index, x: p.vehicle.px, z: p.vehicle.pz, vehicle: p.def.id, alive: p.alive && !p.dropped }));
+      const own = this.level.players[me];
+      mine = { x: own.vehicle.px, z: own.vehicle.pz };
+    } else if (guest && this.net?.view) {
+      const view = this.net.view;
+      mates = view.players.map((p, i) => ({ index: i, x: p.px, z: p.pz, vehicle: view.hud.players[i]?.vehicle ?? 'moto', alive: p.alive }));
+      const own = view.players[me];
+      mine = own ? { x: own.px, z: own.pz } : null;
+    }
+    mates = mates.filter((m) => m.index !== me);
+    if (mates.length) this.offscreen.update(this.camera, mates, mine);
+    else this.offscreen.hide();
   }
 
   // ------------------------------------------------------------ pantallas

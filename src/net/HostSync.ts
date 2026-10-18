@@ -100,14 +100,12 @@ export class HostSync {
     this.acc += dt;
     if (this.acc < 1 / SEND_RATE) return;
     this.acc = 0;
-    const alive = level.alivePlayers;
-    const ref = alive.length ? alive : level.players;
     this.link.send({
       t: 'frame',
       scene: this.encoder.encode(level.scene),
       hud: hudState(level),
       cam: {
-        targets: ref.map((p) => ({ px: p.vehicle.px, pz: p.vehicle.pz, vx: p.vehicle.vx, vz: p.vehicle.vz })),
+        players: level.camPlayers.map((p) => ({ ...p, px: Math.round(p.px * 100) / 100, pz: Math.round(p.pz * 100) / 100, vx: Math.round(p.vx * 10) / 10, vz: Math.round(p.vz * 10) / 10 })),
         shake: level.shake,
         zoom: level.cameraZoom,
       },

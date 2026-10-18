@@ -1,11 +1,11 @@
 import type { VehicleId } from '../config/vehicles';
 import type { MusicMode } from '../core/Music';
 import type { HudState } from '../ui/Hud';
-import type { CamTarget } from '../world/CameraRig';
+import type { CamPlayer } from '../world/CameraRig';
 import type { SceneDelta } from './SceneSync';
 
 /** Cambia si el formato de los mensajes deja de ser compatible. */
-export const PROTOCOL = 2;
+export const PROTOCOL = 3;
 
 /** Sonidos puntuales que el invitado repite. */
 export const SFX_CALLS = new Set(['blip', 'crash', 'explosion', 'shot', 'playerShot', 'emptyClick', 'stopLoops']);
@@ -23,7 +23,8 @@ export interface FrameMessage {
   t: 'frame';
   scene: SceneDelta;
   hud: HudState;
-  cam: { targets: CamTarget[]; shake: number; zoom: number };
+  /** Vehículos de todos los jugadores en orden: cada uno sigue al suyo con su cámara. */
+  cam: { players: CamPlayer[]; shake: number; zoom: number };
   fx: NetCall[];
   sfx: NetCall[];
   /** Avisos [texto, color, segundos] y destellos de pantalla. */

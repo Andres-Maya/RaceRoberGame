@@ -7,6 +7,8 @@ import type { Level } from '../world/Level';
 export interface HudPlayer {
   index: number;
   name: string;
+  /** Identificador del vehículo (para su foto en el indicador fuera de pantalla). */
+  vehicle: string;
   hp: number;
   maxHp: number;
   turbo: number;
@@ -75,6 +77,7 @@ export function hudState(level: Level): HudState {
     players: level.players.map((p) => ({
       index: p.index,
       name: p.def.name,
+      vehicle: p.def.id,
       hp: p.hp,
       maxHp: p.maxHp,
       turbo: p.turbo,

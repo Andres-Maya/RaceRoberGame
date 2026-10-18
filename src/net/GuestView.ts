@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Audio } from '../core/Audio';
 import { Effects } from '../fx/Particles';
 import type { HudState } from '../ui/Hud';
-import { CameraRig, type CamTarget } from '../world/CameraRig';
+import { CameraRig, cameraFocus, type CamPlayer } from '../world/CameraRig';
 import { FX_CALLS, SFX_CALLS, type FrameMessage, type NetCall } from './protocol';
 import { SceneDecoder, type SceneDelta } from './SceneSync';
 
@@ -18,7 +18,9 @@ export class GuestView {
   private decoder: SceneDecoder;
   private fx: Effects;
   private rig = new CameraRig();
-  private targets: CamTarget[] = [];
+  /** Vehículos de todos los jugadores según el último cuadro. */
+  players: CamPlayer[] = [];
+  private sun: THREE.DirectionalLight | null = null;
   private shake = 0;
   private zoom = 0;
   private placed = false;
@@ -42,7 +44,7 @@ export class GuestView {
   apply(f: FrameMessage): void {
     this.decoder.apply(f.scene, true);
     this.hud = f.hud;
-    this.targets = f.cam.targets;
+    this.players = Array.isArray(f.cam.players) ? f.cam.players : [];
     this.shake = f.cam.shake;
     this.zoom = f.cam.zoom;
     this.engine = f.engine;
@@ -61,14 +63,27 @@ export class GuestView {
     }
   }
 
-  update(dt: number, camera: THREE.PerspectiveCamera): void {
+  /** `me`: índice del jugador de este dispositivo (su cámara lo sigue a él). */
+  update(dt: number, camera: THREE.PerspectiveCamera, me: number): void {
     this.decoder.update(dt);
     this.fx.update(dt);
-    if (!this.placed && this.targets.length) {
+    const focus = cameraFocus(this.players, me);
+    if (!this.placed && focus) {
       this.placed = true;
-      this.rig.place(this.targets[0].px, this.targets[0].pz - 8);
+      this.rig.place(focus.px, focus.pz - 8);
     }
-    this.rig.update(camera, dt, this.targets, this.shake, this.zoom);
+    this.rig.update(camera, dt, focus, this.shake, this.zoom);
+    // El sol del anfitrión sigue a su cámara; aquí se mueve con la del invitado para que haya sombras donde se mira.
+    if (!this.sun?.parent) {
+      this.sun = null;
+      this.scene.traverse((o) => {
+        if ((o as THREE.DirectionalLight).isDirectionalLight) this.sun = o as THREE.DirectionalLight;
+      });
+    }
+    if (this.sun) {
+      this.sun.position.set(this.rig.x + 35, 110, this.rig.z + 25);
+      this.sun.target.position.set(this.rig.x, 0, this.rig.z);
+    }
   }
 
   dispose(): void {
