@@ -8,9 +8,11 @@ import { GuestView } from '../net/GuestView';
 import { HostSync, packInput, unpackInput } from '../net/HostSync';
 import { lanAddress, lanInfo, PeerLink, WsLink, type LanInfo, type Link } from '../net/Link';
 import { PROTOCOL, type NetMessage, type PackedInput } from '../net/protocol';
+import { QrLink, qrImage, qrKind } from '../net/QrLink';
 import { Hud, hudState } from '../ui/Hud';
 import type { Loader } from '../ui/Loader';
 import { OffscreenMarkers, type Mate } from '../ui/Offscreen';
+import { QrScanner } from '../ui/QrScanner';
 import { Screens } from '../ui/Screens';
 import { enterFullscreen, IS_TOUCH, TouchControls } from '../ui/Touch';
 import { Level, type LevelHooks } from '../world/Level';
@@ -94,6 +96,10 @@ export class Game {
   private loadToken = 0;
   private lan: LanInfo | null = null;
   private net: Net | null = null;
+  /** Aviso del navegador para instalar el juego como app (Chrome/Android). */
+  private installPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
+  /** Cámara abierta para escanear un código QR de conexión. */
+  private scanner: QrScanner | null = null;
 
   constructor(
     container: HTMLElement,
@@ -132,6 +138,17 @@ export class Game {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.state === 'playing') this.pause();
       if (!document.hidden) this.audio.resyncMusic();
+    });
+
+    // Instalar como app: el juego queda guardado y abre sin internet.
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this.installPrompt = e as Event & { prompt: () => Promise<void> };
+      if (this.state === 'menu' && !this.net) this.showMenu();
+    });
+    window.addEventListener('appinstalled', () => {
+      this.installPrompt = null;
+      if (this.state === 'menu' && !this.net) this.showMenu();
     });
 
     this.showMenu();
@@ -281,6 +298,13 @@ export class Game {
         this.toggleMusic();
         this.showMenu();
       },
+      install: this.installPrompt
+        ? () => {
+            const prompt = this.installPrompt;
+            this.installPrompt = null;
+            void prompt?.prompt().finally(() => this.showMenu());
+          }
+        : undefined,
     });
   }
 
@@ -596,12 +620,14 @@ export class Game {
   private showOnline(): void {
     this.state = 'online';
     this.screens.online(
-      { lan: this.lan, secure: location.protocol === 'https:' },
+      { lan: this.lan, secure: location.protocol === 'https:', camera: QrScanner.available },
       {
         hostCode: () => void this.hostGame('code'),
         hostIp: () => void this.hostGame('ip'),
+        hostQr: () => void this.hostQr(),
         joinCode: (code) => void this.joinGame('code', code),
         joinIp: (address) => void this.joinGame('ip', address),
+        joinQr: () => this.joinQr(),
         back: () => this.showMenu(),
       },
     );
@@ -609,6 +635,7 @@ export class Game {
 
   /** Sale de la partida en línea y vuelve al menú principal. */
   private leaveOnline(): void {
+    this.stopScanner();
     const net = this.net;
     this.net = null;
     if (net) {
@@ -620,6 +647,149 @@ export class Game {
     this.loader.hide();
     this.audio.stopLoops();
     this.showMenu();
+  }
+
+  // ------------------------------------------------------------ hotspot sin internet (QR)
+
+  private stopScanner(): void {
+    this.scanner?.stop();
+    this.scanner = null;
+  }
+
+  /** Abre la cámara en la pantalla actual y entrega el primer código del tipo pedido. */
+  private scanQr(kind: 'O' | 'A', onText: (text: string) => void, stream?: MediaStream | null): void {
+    const video = this.screens.qrVideo();
+    if (!video || !QrScanner.available) return;
+    this.stopScanner();
+    const scanner = new QrScanner();
+    this.scanner = scanner;
+    scanner.start(video, (t) => qrKind(t) === kind, onText, stream).catch(() => {
+      // Sin permiso o sin cámara: queda la opción de pegar el código como texto.
+      if (this.scanner === scanner) this.screens.openQrManual();
+    });
+  }
+
+  /**
+   * Anfitrión por hotspot: muestra su QR, escanea el del invitado y queda
+   * conectado directo por la red local, sin internet ni servidores.
+   */
+  private async hostQr(): Promise<void> {
+    enterFullscreen();
+    this.audio.unlock();
+    const link = new QrLink();
+    const net = this.newNet('host', link);
+    this.net = net;
+    this.state = 'online';
+    link.onMessage = (m) => this.hostMessage(m);
+    link.onPeerLeft = () => this.guestLeft();
+    const title = 'Hotspot · crear partida';
+    const first = 'Activa el hotspot de este teléfono (no hace falta tener datos) y conecta el otro teléfono a él. También sirve un mismo Wi-Fi.';
+    this.screens.qrStep({ title, steps: [first], status: 'Preparando el código… (permite el uso de la cámara)' }, { paste: () => {}, leave: () => this.leaveOnline() });
+    let offer: string;
+    let image: string;
+    // Con permiso de cámara el navegador usa las direcciones reales de la red local.
+    const warm = await QrScanner.warmup();
+    try {
+      offer = await link.offer();
+      image = await qrImage(offer);
+    } catch (e) {
+      warm?.getTracks().forEach((t) => t.stop());
+      if (this.net !== net) return;
+      this.net = null;
+      link.close();
+      this.screens.netError(errorText(e), () => this.showOnline());
+      return;
+    }
+    warm?.getTracks().forEach((t) => t.stop());
+    if (this.net !== net) return;
+
+    const accept = async (answer: string) => {
+      if (this.net !== net) return;
+      this.stopScanner();
+      this.screens.netStatus(title, 'Conectando con el otro teléfono…', { leave: () => this.leaveOnline() });
+      try {
+        await link.accept(answer);
+      } catch (e) {
+        if (this.net !== net) return;
+        this.net = null;
+        link.close();
+        this.screens.netError(errorText(e), () => this.showOnline());
+        return;
+      }
+      if (this.net === net) this.showRoom();
+    };
+    const showCode = () =>
+      this.screens.qrStep(
+        { title, steps: [first, 'En el otro teléfono: EN LÍNEA › UNIRSE CON QR y escanea este código.', 'Después toca ESCANEAR LA RESPUESTA y escanea el código que aparece en su pantalla.'], qr: image, text: offer },
+        { scan: () => showScanner(), paste: (t) => void accept(t), leave: () => this.leaveOnline() },
+      );
+    const showScanner = () => {
+      this.screens.qrStep(
+        { title, steps: ['Apunta la cámara al código QR que muestra el otro teléfono.'], video: true, text: offer },
+        { paste: (t) => void accept(t), leave: () => this.leaveOnline() },
+      );
+      this.scanQr('A', (t) => void accept(t));
+    };
+    showCode();
+  }
+
+  /** Invitado por hotspot: escanea el QR del anfitrión y le muestra el suyo. */
+  private joinQr(): void {
+    enterFullscreen();
+    this.audio.unlock();
+    const link = new QrLink();
+    const net = this.newNet('guest', link);
+    this.net = net;
+    this.state = 'guest';
+    link.onMessage = (m) => this.guestMessage(m);
+    const title = 'Hotspot · unirse';
+    let busy = false;
+    const useOffer = async (offer: string) => {
+      if (this.net !== net || busy) return;
+      busy = true;
+      this.stopScanner();
+      this.screens.netStatus(title, 'Preparando tu código…', { leave: () => this.leaveOnline() });
+      let answer: string;
+      let image: string;
+      // La cámara se mantiene un momento abierta para que la conexión use las direcciones reales de la red.
+      const warm = await QrScanner.warmup();
+      try {
+        answer = await link.answer(offer);
+        image = await qrImage(answer);
+      } catch (e) {
+        warm?.getTracks().forEach((t) => t.stop());
+        if (this.net !== net) return;
+        this.net = null;
+        link.close();
+        this.screens.netError(errorText(e), () => this.showOnline());
+        return;
+      }
+      warm?.getTracks().forEach((t) => t.stop());
+      if (this.net !== net) return;
+      this.screens.qrStep(
+        { title, steps: ['Muéstrale este código al anfitrión: debe tocar ESCANEAR LA RESPUESTA y apuntar su cámara aquí.'], qr: image, text: answer, status: 'Esperando la conexión…' },
+        { paste: () => {}, leave: () => this.leaveOnline() },
+      );
+      try {
+        await link.waitOpen();
+      } catch (e) {
+        if (this.net !== net) return;
+        this.net = null;
+        link.close();
+        this.screens.netError(errorText(e), () => this.showOnline());
+        return;
+      }
+      if (this.net !== net) return;
+      link.onPeerLeft = (reason) => this.hostLost(reason);
+      link.onError = (text) => this.hostLost(text);
+      link.send({ t: 'hello', v: PROTOCOL, vehicle: this.chosenVehicles()[0].id });
+      this.guestWait('Conectado por hotspot. Esperando a que el anfitrión elija el nivel…');
+    };
+    this.screens.qrStep(
+      { title, steps: ['Conecta este teléfono al hotspot (o al Wi-Fi) del anfitrión.', 'En el teléfono del anfitrión: EN LÍNEA › CREAR CON QR.', 'Apunta la cámara a su código QR.'], video: QrScanner.available },
+      { paste: (t) => void useOffer(t), leave: () => this.leaveOnline() },
+    );
+    this.scanQr('O', (t) => void useOffer(t));
   }
 
   /** Crea una partida: por código (WebRTC) o por IP (servidor de red local). */
@@ -696,7 +866,7 @@ export class Game {
         }
         net.peer = vehicleById(String(m.vehicle)).id;
         net.link.send({ t: 'welcome', v: PROTOCOL });
-        if (net.inRoom) {
+        if (net.inRoom || this.state === 'online') {
           this.screens.roomGuest(vehicleById(net.peer).name);
           net.link.send({ t: 'lobby', text: 'El anfitrión está eligiendo el nivel…' });
         } else {
@@ -816,6 +986,7 @@ export class Game {
   private hostLost(text: string): void {
     const net = this.net;
     if (!net || net.role !== 'guest') return;
+    this.stopScanner();
     this.net = null;
     net.link.close();
     net.view?.dispose();

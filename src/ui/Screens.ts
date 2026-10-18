@@ -106,7 +106,18 @@ export class Screens {
 
   /** Valor de un campo de texto de la pantalla actual. */
   private field(name: string): string {
-    return this.el.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value ?? '';
+    return this.el.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)?.value ?? '';
+  }
+
+  /** Despliega la opción de copiar o pegar el código como texto (por ejemplo, si la cámara falla). */
+  openQrManual(): void {
+    const d = this.el.querySelector<HTMLDetailsElement>('.qr-manual');
+    if (d) d.open = true;
+  }
+
+  /** Video de la cámara de la pantalla de escaneo, si está visible. */
+  qrVideo(): HTMLVideoElement | null {
+    return this.el.querySelector<HTMLVideoElement>('video[data-qr-video]');
   }
 
   hide(): void {
@@ -129,7 +140,7 @@ export class Screens {
 
   // ------------------------------------------------------------ menú
 
-  menu(save: SaveData, a: { play: Action; select: Action; online: Action; garage: Action; controls: Action; stats: Action; sound: Action; mute: Action; music: Action }): void {
+  menu(save: SaveData, a: { play: Action; select: Action; online: Action; garage: Action; controls: Action; stats: Action; sound: Action; mute: Action; music: Action; install?: Action }): void {
     this.show(
       `
       <div class="logo">
@@ -145,6 +156,7 @@ export class Screens {
         <button data-action="garage">GARAJE <kbd>3</kbd> <small>${esc(vehicleById(save.vehicles[0]).name)}</small></button>
         <button data-action="controls">CONTROLES</button>
         <button data-action="stats">PERFIL DE LA IA Y ESTADÍSTICAS</button>
+        ${a.install ? '<button data-action="install">INSTALAR EN ESTE DISPOSITIVO <small>para jugar sin internet</small></button>' : ''}
         <button data-action="sound">SONIDO <kbd>4</kbd> <small>${save.muted ? '(silenciado)' : `general ${Math.round(save.volumes.master * 100)}% · música ${save.musicOn ? `${Math.round(save.volumes.music * 100)}%` : 'apagada'}`}</small></button>
       </div>
       <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)} · Récord infinito: ${(save.bestEndless / 1000).toFixed(2)} km</div>`,
@@ -187,8 +199,8 @@ export class Screens {
    * `lan`: direcciones del servidor de red local si el juego se abrió desde él.
    */
   online(
-    opts: { lan: { ips: string[]; port: number } | null; secure: boolean },
-    a: { hostCode: Action; hostIp: Action; joinCode: (code: string) => void; joinIp: (address: string) => void; back: Action },
+    opts: { lan: { ips: string[]; port: number } | null; secure: boolean; camera: boolean },
+    a: { hostCode: Action; hostIp: Action; hostQr: Action; joinCode: (code: string) => void; joinIp: (address: string) => void; joinQr: Action; back: Action },
   ): void {
     const ipHost = opts.lan
       ? `<button data-action="hostIp">CREAR PARTIDA POR IP <small>red local, sin internet</small></button>`
@@ -210,13 +222,26 @@ export class Screens {
           <button data-action="joinIp">UNIRSE POR IP</button>
           ${opts.secure ? '<p class="muted small">Al unirte por IP se abrirá el juego desde el equipo del anfitrión (misma red Wi-Fi o hotspot).</p>' : ''}
         </section>
+        <section class="net-card">
+          <h3>Hotspot sin internet</h3>
+          <p class="muted small">Dos teléfonos, sin datos ni PC: uno activa su hotspot y el otro se conecta a él. Se escanean un código QR cada uno.</p>
+          <button data-action="hostQr" class="primary">CREAR CON QR</button>
+          <button data-action="joinQr">UNIRSE CON QR</button>
+          <p class="muted small">${
+            opts.camera
+              ? 'Para jugar sin internet, abre el juego una vez con conexión y añádelo a la pantalla de inicio (quedará guardado).'
+              : 'Aquí no hay cámara disponible (necesita https): podrás copiar y pegar los códigos como texto.'
+          }</p>
+        </section>
       </div>
       <div class="menu-buttons"><button data-action="back" class="ghost">Volver <kbd>Esc</kbd></button></div>`,
       {
         hostCode: a.hostCode,
         hostIp: a.hostIp,
+        hostQr: a.hostQr,
         joinCode: () => a.joinCode(this.field('code')),
         joinIp: () => a.joinIp(this.field('ip')),
+        joinQr: a.joinQr,
         back: a.back,
       },
       [[['Escape'], 'back']],
@@ -225,11 +250,13 @@ export class Screens {
 
   /** Sala del anfitrión: código o direcciones para compartir y estado del invitado. */
   room(
-    info: { kind: 'code' | 'ip'; code: string; addresses: string[]; guest: string | null; vehicle: string },
+    info: { kind: 'code' | 'ip' | 'qr'; code: string; addresses: string[]; guest: string | null; vehicle: string },
     a: { play: Action; garage: Action; leave: Action },
   ): void {
     const share =
-      info.kind === 'code'
+      info.kind === 'qr'
+        ? `<p class="muted small">Conectados por hotspot, sin internet. Si el otro jugador se desconecta, cierra la partida y vuelvan a escanear los códigos.</p>`
+        : info.kind === 'code'
         ? `<div class="net-code">${esc(info.code)}</div><p class="muted small">El otro jugador elige <b>EN LÍNEA › Unirse con código</b>. Ambos necesitan internet (los datos del hotspot sirven); la partida va directo entre los dos dispositivos.</p>`
         : `<div class="net-addresses">${info.addresses.map((ip) => `<div class="net-code small">${esc(ip)}</div>`).join('')}</div><p class="muted small">Conecta el otro dispositivo a la misma red Wi-Fi o al hotspot, abre esa dirección en su navegador y elige <b>EN LÍNEA › Unirse por IP</b>.</p>`;
     const guest = `<p class="net-status" data-room-guest></p>`;
@@ -264,6 +291,48 @@ export class Screens {
     line.classList.toggle('wait', !guest);
     const play = this.el.querySelector<HTMLButtonElement>('[data-action="play"]');
     if (play) play.disabled = !guest;
+  }
+
+  /**
+   * Paso del intercambio por QR: instrucciones, el código propio (imagen y
+   * texto para copiar), la cámara para escanear el del otro o un campo para pegarlo.
+   */
+  qrStep(
+    o: { title: string; steps: string[]; qr?: string; text?: string; video?: boolean; status?: string },
+    a: { scan?: Action; paste: (text: string) => void; leave: Action },
+  ): void {
+    const copy = o.text
+      ? `<label class="net-field"><span>Tu código en texto</span><textarea readonly rows="3" class="qr-text">${esc(o.text)}</textarea></label><button data-action="copy">Copiar código</button>`
+      : '';
+    this.show(
+      `<h2>${esc(o.title)}</h2>
+      <ol class="qr-steps">${o.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+      ${o.qr ? `<div class="qr-box"><img src="${o.qr}" alt="Código QR de conexión" draggable="false" /></div>` : ''}
+      ${o.video ? '<div class="qr-video"><video data-qr-video playsinline muted></video><div class="qr-frame"></div></div>' : ''}
+      ${o.status ? `<p class="net-status wait">${esc(o.status)}</p>` : ''}
+      <details class="qr-manual">
+        <summary>Sin cámara: copiar o pegar el código como texto</summary>
+        ${copy}
+        <label class="net-field"><span>Código del otro teléfono</span><textarea name="qrpaste" rows="3" autocomplete="off" spellcheck="false" placeholder="Pega aquí el texto que empieza por RR1"></textarea></label>
+        <button data-action="paste">Usar código pegado</button>
+      </details>
+      <div class="menu-buttons">
+        ${a.scan ? '<button data-action="scan" class="primary">ESCANEAR LA RESPUESTA</button>' : ''}
+        <button data-action="leave" class="ghost danger">Cancelar <kbd>Esc</kbd></button>
+      </div>`,
+      {
+        ...(a.scan ? { scan: a.scan } : {}),
+        paste: () => a.paste(this.field('qrpaste')),
+        copy: () => {
+          const area = this.el.querySelector<HTMLTextAreaElement>('.qr-text');
+          if (!area) return;
+          area.select();
+          void navigator.clipboard?.writeText(area.value).catch(() => document.execCommand('copy'));
+        },
+        leave: a.leave,
+      },
+      [[['Escape'], 'leave']],
+    );
   }
 
   /** Estado de la conexión (conectando, esperando al anfitrión...). */

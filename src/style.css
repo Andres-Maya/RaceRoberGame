@@ -1428,3 +1428,77 @@ body.touch #hud-toasts {
   letter-spacing: 0.05em;
   color: #e6e6e6;
 }
+
+/* ------------------------------------------------------------ conexión por QR */
+
+.qr-steps {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  line-height: 1.5;
+}
+
+.qr-box {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.qr-box img {
+  width: min(78vw, 340px, 60vh);
+  height: auto;
+  padding: 10px;
+  border-radius: 12px;
+  background: #fff;
+  image-rendering: pixelated;
+}
+
+.qr-video {
+  position: relative;
+  width: min(86vw, 380px);
+  aspect-ratio: 1;
+  margin: 10px auto;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+}
+
+.qr-video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qr-frame {
+  position: absolute;
+  inset: 12%;
+  border: 3px solid var(--gold);
+  border-radius: 12px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
+}
+
+.qr-manual {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.qr-manual summary {
+  cursor: pointer;
+}
+
+.qr-manual .net-field,
+.qr-manual button {
+  margin-top: 8px;
+}
+
+.qr-manual textarea {
+  width: 100%;
+  font: 0.75rem ui-monospace, monospace;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  user-select: text;
+  resize: vertical;
+}

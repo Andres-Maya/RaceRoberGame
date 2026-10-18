@@ -24,7 +24,7 @@ export abstract class Link {
   private partId = 0;
   private parts = new Map<string, string[]>();
 
-  abstract readonly kind: 'code' | 'ip';
+  abstract readonly kind: 'code' | 'ip' | 'qr';
   protected abstract sendRaw(text: string): void;
   abstract get connected(): boolean;
   abstract close(): void;

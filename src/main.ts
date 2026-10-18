@@ -18,4 +18,11 @@ async function boot(): Promise<void> {
   }
 }
 
+// Guarda el juego en el dispositivo para que abra sin internet (solo en producción y con https o localhost).
+if (import.meta.env.PROD && 'serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 void boot();

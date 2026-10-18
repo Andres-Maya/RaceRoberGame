@@ -38,6 +38,7 @@ En el menú, **En línea** (tecla `5`). Un jugador crea la partida y el otro se 
 | Modo | Cómo se conecta | Qué necesita |
 |---|---|---|
 | **Con código** | El anfitrión elige *Crear con código* y dicta el código de 5 letras; el otro elige *Unirse con código*. | Internet en ambos dispositivos solo para encontrarse (los datos del hotspot sirven). Después la partida va directo entre los dos (WebRTC); en un hotspot, por la red local. Funciona desde Vercel. |
+| **Hotspot sin internet (QR)** | Un teléfono activa su hotspot (sin datos) y el otro se conecta a él. El anfitrión elige *Crear con QR* y muestra un código; el otro elige *Unirse con QR*, lo escanea y muestra el suyo, que el anfitrión escanea con *Escanear la respuesta*. Si no hay cámara, los códigos se pueden copiar y pegar como texto. | Solo los dos teléfonos en la misma red (hotspot o Wi-Fi). El juego debe estar guardado en ambos: ábrelo una vez con internet y toca **Instalar en este dispositivo** (o *Añadir a pantalla de inicio*). La cámara funciona en la versión https (Vercel). |
 | **Por IP** | Un PC ejecuta `npm run lan` y muestra su dirección (por ejemplo `http://192.168.43.20:8080`). El anfitrión abre esa dirección y elige *Crear partida por IP*; el otro dispositivo, conectado al mismo Wi-Fi o hotspot, abre la misma dirección y elige *Unirse por IP*. | Misma red local, sin internet. Si alguien escribe la IP desde la versión de Vercel, el juego lo lleva a la dirección del anfitrión. |
 
 Cada jugador tiene su propia cámara, que sigue a su vehículo y no se aleja aunque el compañero se separe. Si un jugador se queda más de 60 m atrás, lo **capturan**; si su vehículo es destruido, cae. En ambos casos su pantalla sigue al compañero, desaparecen los botones y las barras, y solo quedan la distancia recorrida y una cuenta regresiva de 10 s; luego reaparece junto al compañero (cuesta $20.000). Cuando el compañero queda fuera de la pantalla, en el borde aparece un círculo con la foto de su vehículo, una flecha que apunta hacia él y la distancia.
@@ -45,6 +46,8 @@ Cada jugador tiene su propia cámara, que sigue a su vehículo y no se aleja aun
 Si el invitado se desconecta a mitad de nivel, su vehículo sale de la carrera y el anfitrión sigue jugando; si se vuelve a conectar, entra en el siguiente nivel.
 
 ## Celular
+
+**Instalar como app:** en el menú aparece **Instalar en este dispositivo** cuando el navegador lo permite (en iPhone: Compartir › *Añadir a pantalla de inicio*). Un *service worker* guarda el juego completo en el teléfono, así que después abre sin internet; con conexión, se actualiza solo a la última versión publicada.
 
 El juego detecta la pantalla táctil y muestra controles en pantalla. El vehículo **va hacia donde apunta la bolita del joystick** (arriba = hacia arriba de la pantalla, derecha = hacia la derecha; si apunta hacia atrás, retrocede en esa dirección); al soltar el joystick deja de acelerar y se detiene. A la derecha están los botones de **TURBO** y **DISPARO** (apuntado automático); la pausa está abajo al centro. Al empezar a jugar pasa a pantalla completa en horizontal cuando el navegador lo permite. En celulares se dibuja a menor resolución y con sombras más livianas para mantener la fluidez.
 
@@ -172,7 +175,8 @@ class TfClassifier implements SkillClassifier {
 ```
 src/
   main.ts                 Arranque: inicializa Rapier (WASM) y el juego
-  net/                    En línea: Link (código con PeerJS/WebRTC e IP con WebSocket),
+  net/                    En línea: Link (código con PeerJS/WebRTC e IP con WebSocket), QrLink (hotspot sin
+                          internet: WebRTC con la oferta y la respuesta comprimidas en códigos QR),
                           SceneSync (réplica de la escena), HostSync y GuestView, protocolo
   core/                   Game (bucle y estados), Input, Audio y Music (WebAudio), Storage, Rng, math
   config/                 Tipos y configuración base de los niveles e historia; vehicles.ts (garaje)
@@ -189,6 +193,8 @@ src/
   ui/                     HUD, pantallas HTML/CSS, fotos del garaje (Thumbnails), pantalla de carga
                           (Loader) y controles táctiles (Touch)
 server/lan.mjs            Servidor de red local: sirve dist/ y une anfitrión e invitado por WebSocket
+pwa/sw.js                 Service worker (el build le agrega la lista de archivos) para jugar sin internet
+public/                   Manifiesto de la app instalable e íconos
 ```
 
 Notas técnicas:
