@@ -1,6 +1,6 @@
 # Race Robber — Fuga en Moto
 
-Videojuego 2D con vista cenital al estilo GTA 1. Una banda de ladrones en moto asalta el Banco Central de Ciudad Cobalto y huye de la policía, de una banda rival y de los mutantes de una tierra baldía. Al comienzo de cada nivel, una IA ("El Analista") estudia cómo manejas y ajusta ese mismo nivel: cuántos tipos de vehículos te persiguen, cuántos a la vez, cuántos obstáculos hay y cuánto falta para la meta.
+Videojuego 2D con vista cenital al estilo GTA 1, para 1 jugador o 2 en línea, en PC o celular. Una banda de ladrones en moto asalta el Banco Central de Ciudad Cobalto y huye de la policía, de una banda rival y de los mutantes de una tierra baldía. Al comienzo de cada nivel, una IA ("El Analista") estudia cómo manejas y ajusta ese mismo nivel: cuántos tipos de vehículos te persiguen, cuántos a la vez, cuántos obstáculos hay y cuánto falta para la meta.
 
 ## Cómo ejecutarlo
 
@@ -11,6 +11,8 @@ npm install
 npm run dev        # servidor de desarrollo en http://localhost:5173
 npm run build      # verificación de tipos + build de producción en dist/
 npm run preview    # sirve el build de producción
+npm run lan        # compila y sirve el juego en la red local para jugar por IP (puerto 8080)
+npm run dev:lan    # servidor de desarrollo visible en la red local (también admite la conexión por IP)
 ```
 
 ### Desplegar en Vercel
@@ -27,7 +29,22 @@ El repositorio incluye `vercel.json`, así que al importarlo en Vercel la config
 | Node.js Version | 22.x (tomada de `engines` en `package.json`) |
 | Variables de entorno | Ninguna |
 
-El juego es 100 % estático (HTML, CSS y JS; el WASM de Rapier va incrustado en el JS), así que no necesita funciones de servidor. Los archivos de `/assets` llevan caché de un año porque su nombre cambia en cada build.
+El juego es 100 % estático (HTML, CSS y JS; el WASM de Rapier va incrustado en el JS), así que no necesita funciones de servidor. Los archivos de `/assets` llevan caché de un año porque su nombre cambia en cada build. Desde Vercel funciona el modo en línea **por código**; el modo **por IP** necesita el servidor de red local (ver abajo).
+
+## En línea · 2 jugadores
+
+En el menú, **En línea** (tecla `5`). Un jugador crea la partida y el otro se une; cada uno juega con el vehículo de su propio garaje. El anfitrión elige el nivel y simula la partida completa; el invitado envía sus controles y recibe la escena, los efectos, los sonidos y el HUD unas 30 veces por segundo (~60–100 KB/s), así que los dos ven exactamente lo mismo. Las pantallas de historia, pausa y resultados del anfitrión aparecen también en el invitado.
+
+| Modo | Cómo se conecta | Qué necesita |
+|---|---|---|
+| **Con código** | El anfitrión elige *Crear con código* y dicta el código de 5 letras; el otro elige *Unirse con código*. | Internet en ambos dispositivos solo para encontrarse (los datos del hotspot sirven). Después la partida va directo entre los dos (WebRTC); en un hotspot, por la red local. Funciona desde Vercel. |
+| **Por IP** | Un PC ejecuta `npm run lan` y muestra su dirección (por ejemplo `http://192.168.43.20:8080`). El anfitrión abre esa dirección y elige *Crear partida por IP*; el otro dispositivo, conectado al mismo Wi-Fi o hotspot, abre la misma dirección y elige *Unirse por IP*. | Misma red local, sin internet. Si alguien escribe la IP desde la versión de Vercel, el juego lo lleva a la dirección del anfitrión. |
+
+Si el invitado se desconecta a mitad de nivel, su vehículo sale de la carrera y el anfitrión sigue jugando; si se vuelve a conectar, entra en el siguiente nivel.
+
+## Celular
+
+El juego detecta la pantalla táctil y muestra controles en pantalla: el vehículo acelera solo, el joystick de la izquierda gira (hacia abajo frena o da reversa) y a la derecha están los botones de **TURBO** y **DISPARO** (apuntado automático); la pausa está abajo al centro. Al empezar a jugar pasa a pantalla completa en horizontal cuando el navegador lo permite. En celulares se dibuja a menor resolución y con sombras más livianas para mantener la fluidez.
 
 ## Historia y niveles
 
@@ -70,6 +87,7 @@ Al empezar cada nivel aparece una pantalla de carga con una llanta rodando mient
 | Turbo | `Espacio`, `Shift` o `Enter` |
 | Disparar al objetivo más cercano | `F` o `Ctrl der.` |
 | Disparar hacia la mira | Clic izquierdo del ratón |
+| Celular | Joystick (girar y frenar), botones TURBO y DISPARO, pausa abajo al centro |
 
 `Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen.
 
@@ -153,6 +171,8 @@ class TfClassifier implements SkillClassifier {
 ```
 src/
   main.ts                 Arranque: inicializa Rapier (WASM) y el juego
+  net/                    En línea: Link (código con PeerJS/WebRTC e IP con WebSocket),
+                          SceneSync (réplica de la escena), HostSync y GuestView, protocolo
   core/                   Game (bucle y estados), Input, Audio y Music (WebAudio), Storage, Rng, math
   config/                 Tipos y configuración base de los niveles e historia; vehicles.ts (garaje)
   ai/                     Métricas, clasificador de habilidad y dificultad adaptativa
@@ -165,7 +185,9 @@ src/
                           banda y mutantes), Flyer (harpías), Civilian, Helicopter,
                           Projectiles, Sandstorm
   fx/                     Modelos low-poly y partículas instanciadas
-  ui/                     HUD, pantallas HTML/CSS, fotos del garaje (Thumbnails) y pantalla de carga (Loader)
+  ui/                     HUD, pantallas HTML/CSS, fotos del garaje (Thumbnails), pantalla de carga
+                          (Loader) y controles táctiles (Touch)
+server/lan.mjs            Servidor de red local: sirve dist/ y une anfitrión e invitado por WebSocket
 ```
 
 Notas técnicas:
@@ -177,11 +199,12 @@ Notas técnicas:
 - **Contenido diferido:** el paisaje se crea con anticipación, pero los obstáculos, el tráfico, los zombis y los retenes aparecen cuando la moto está a ~85 m. Así nada los choca antes de que llegues, y los autos de los cruces se programan para atravesarse justo delante de ti.
 - **Formaciones de obstáculos:** además del reparto suelto hay slaloms, muros con un hueco reservado, chicanes, derrames de carga, filas de autos estacionados, hordas de zombis y tramos de respiro. Los huecos siempre dejan paso.
 - **Río:** bajo los puentes hay agua de verdad: los enemigos terrestres que caen en ella se hunden (y cuentan como derribados), y los mutantes nunca aparecen sobre el río. Los extremos del puente están cerrados para que nadie rodee la baranda; si aun así la moto toca el agua, cae al río (−30) y vuelve al puente.
+- **Réplica en línea:** el anfitrión recorre su escena y envía solo lo que cambió: objetos nuevos (con su geometría y material la primera vez), posiciones, visibilidad, materiales y luces. Las partículas no viajan: el invitado repite las llamadas a los efectos con su propio sistema. Los mensajes grandes se parten en fragmentos de 16 KB, y el HTML de las pantallas que llega al invitado se limpia antes de mostrarse.
 - **Ciudad variable:** cruces a intervalos irregulares y parques o estacionamientos entre los edificios. En el desierto aparecen mesetas y oasis.
 
 ## Próximos pasos sugeridos
 
-- Multijugador en red con Socket.IO y un servidor Node.js (hoy el modo para 2 jugadores es local).
+- Servidor TURN propio para conectar por código entre redes muy restrictivas.
 - Entrenar el modelo de TF.js con el historial guardado.
-- Soporte para gamepad (Gamepad API) y controles táctiles.
+- Soporte para gamepad (Gamepad API).
 - Voces guturales y efectos de sonido grabados.
