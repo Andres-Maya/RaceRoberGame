@@ -121,7 +121,7 @@ export class Screens {
 
   // ------------------------------------------------------------ menú
 
-  menu(save: SaveData, a: { one: Action; two: Action; select: Action; garage: Action; controls: Action; stats: Action; sound: Action; mute: Action; music: Action }): void {
+  menu(save: SaveData, a: { play: Action; select: Action; garage: Action; controls: Action; stats: Action; sound: Action; mute: Action; music: Action }): void {
     this.show(
       `
       <div class="logo">
@@ -131,10 +131,9 @@ export class Screens {
       </div>
       <p class="tagline">Un golpe al Banco Central. Tres niveles de persecución. Una IA que estudia cómo manejas.</p>
       <div class="menu-buttons">
-        <button data-action="one" class="primary">1 JUGADOR <kbd>1</kbd></button>
-        <button data-action="two">2 JUGADORES · mismo teclado <kbd>2</kbd></button>
-        <button data-action="select">SELECCIONAR NIVEL <kbd>3</kbd></button>
-        <button data-action="garage">GARAJE <kbd>5</kbd> <small>J1: ${esc(vehicleById(save.vehicles[0]).name)} · J2: ${esc(vehicleById(save.vehicles[1]).name)}</small></button>
+        <button data-action="play" class="primary">JUGAR <kbd>1</kbd></button>
+        <button data-action="select">SELECCIONAR NIVEL <kbd>2</kbd></button>
+        <button data-action="garage">GARAJE <kbd>3</kbd> <small>${esc(vehicleById(save.vehicles[0]).name)}</small></button>
         <button data-action="controls">CONTROLES</button>
         <button data-action="stats">PERFIL DE LA IA Y ESTADÍSTICAS</button>
         <button data-action="sound">SONIDO <kbd>4</kbd> <small>${save.muted ? '(silenciado)' : `general ${Math.round(save.volumes.master * 100)}% · música ${save.musicOn ? `${Math.round(save.volumes.music * 100)}%` : 'apagada'}`}</small></button>
@@ -142,11 +141,10 @@ export class Screens {
       <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)} · Récord infinito: ${(save.bestEndless / 1000).toFixed(2)} km</div>`,
       a,
       [
-        [['Digit1', 'Numpad1', 'Enter'], 'one'],
-        [['Digit2', 'Numpad2'], 'two'],
-        [['Digit3', 'Numpad3'], 'select'],
+        [['Digit1', 'Numpad1', 'Enter'], 'play'],
+        [['Digit2', 'Numpad2'], 'select'],
+        [['Digit3', 'Numpad3'], 'garage'],
         [['Digit4', 'Numpad4'], 'sound'],
-        [['Digit5', 'Numpad5'], 'garage'],
         [['KeyM'], 'mute'],
         [['KeyN'], 'music'],
       ],
@@ -154,21 +152,18 @@ export class Screens {
     );
   }
 
-  levelSelect(save: SaveData, start: (level: number, players: number) => void, back: Action): void {
+  levelSelect(save: SaveData, start: (level: number) => void, back: Action): void {
     const names = ['La Ruta del Polvo', 'El Golpe', 'Territorio Enemigo', 'Tierra Baldía', 'Carretera Sin Fin'];
     const rows = names
       .map(
         (n, i) => `<div class="level-row">
           <div><b>Nivel ${i === 4 ? '∞' : i}</b> — ${n}${i === 4 ? ` <small class="muted">(récord ${(save.bestEndless / 1000).toFixed(2)} km)</small>` : ''}</div>
-          <div><button data-action="l${i}p1">1 jugador</button><button data-action="l${i}p2">2 jugadores</button></div>
+          <div><button data-action="l${i}">Jugar</button></div>
         </div>`,
       )
       .join('');
     const actions: Record<string, Action> = { back };
-    for (let i = 0; i < 5; i++) {
-      actions[`l${i}p1`] = () => start(i, 1);
-      actions[`l${i}p2`] = () => start(i, 2);
-    }
+    for (let i = 0; i < 5; i++) actions[`l${i}`] = () => start(i);
     const prof =
       'Cada nivel empieza con una fase de calibración: El Analista mide tu habilidad en los primeros metros y ajusta ese mismo nivel.' +
       (save.profile ? ` Último perfil: <b>${save.profile.tier}</b> (${Math.round(save.profile.skill * 100)}%).` : '');
@@ -177,9 +172,9 @@ export class Screens {
 
   /**
    * Garaje: una tarjeta por vehículo con su foto, atributos y habilidades.
-   * Cada jugador elige el suyo; los bloqueados muestran cómo conseguirlos.
+   * Los bloqueados muestran cómo conseguirlos.
    */
-  garage(save: SaveData, pick: (player: number, id: VehicleId) => void, back: Action): void {
+  garage(save: SaveData, pick: (id: VehicleId) => void, back: Action): void {
     const photos = vehicleThumbnails(VEHICLES.map((v) => v.id));
     const cards = VEHICLES.map((v, i) => {
       const locked = !isUnlocked(v, save);
@@ -196,7 +191,7 @@ export class Screens {
       return `<article class="vcard${locked ? ' locked' : ''}" data-vehicle="${v.id}">
         <div class="vphoto">
           ${photos[v.id] ? `<img src="${photos[v.id]}" alt="${esc(v.name)}" draggable="false" />` : ''}
-          <div class="vbadges"><span class="vbadge" data-badge="0" style="--pc:${PLAYER_COLORS[0].css}">J1</span><span class="vbadge" data-badge="1" style="--pc:${PLAYER_COLORS[1].css}">J2</span></div>
+          <div class="vbadges"><span class="vbadge" style="--pc:${PLAYER_COLORS[0].css}">ELEGIDO</span></div>
           ${locked ? `<div class="vlock"><b>BLOQUEADO</b><span>${esc(v.unlock!.text)}</span></div>` : ''}
         </div>
         <div class="vhead"><h3>${esc(v.name)}</h3><span class="vrole">${esc(v.role)}</span><kbd>${i + 1}</kbd></div>
@@ -205,41 +200,38 @@ export class Screens {
         <div class="vstats">${bars}</div>
         <ul class="vperks">${v.perks.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
         <div class="vbuttons">
-          <button data-action="p0-${v.id}" style="--pc:${PLAYER_COLORS[0].css}"${locked ? ' disabled' : ''}>Elegir J1</button>
-          <button data-action="p1-${v.id}" style="--pc:${PLAYER_COLORS[1].css}"${locked ? ' disabled' : ''}>Elegir J2</button>
+          <button data-action="pick-${v.id}" style="--pc:${PLAYER_COLORS[0].css}"${locked ? ' disabled' : ''}>${locked ? 'Bloqueado' : 'Elegir'}</button>
         </div>
       </article>`;
     }).join('');
 
-    const selected = [...save.vehicles];
+    let selected = save.vehicles[0];
     const mark = () => {
       this.el.querySelectorAll<HTMLElement>('.vcard').forEach((card) => {
-        const id = card.dataset.vehicle;
-        [0, 1].forEach((pl) => {
-          const on = selected[pl] === id;
-          card.querySelector(`[data-badge="${pl}"]`)?.classList.toggle('on', on);
-          card.querySelector(`[data-action="p${pl}-${id}"]`)?.classList.toggle('chosen', on);
-        });
-        card.classList.toggle('sel0', selected[0] === id);
-        card.classList.toggle('sel1', selected[1] === id);
+        const on = card.dataset.vehicle === selected;
+        card.classList.toggle('chosen', on);
+        card.querySelector('.vbadge')?.classList.toggle('on', on);
+        const btn = card.querySelector<HTMLButtonElement>('[data-action^="pick-"]');
+        if (btn) {
+          btn.classList.toggle('chosen', on);
+          if (!btn.disabled) btn.textContent = on ? 'Elegido' : 'Elegir';
+        }
       });
     };
     const actions: Record<string, Action> = { back };
     const keys: [string[], string][] = [[['Escape', 'Backspace', 'Enter'], 'back']];
     VEHICLES.forEach((v, i) => {
-      for (const pl of [0, 1]) {
-        actions[`p${pl}-${v.id}`] = () => {
-          if (!isUnlocked(v, save)) return;
-          selected[pl] = v.id;
-          pick(pl, v.id);
-          mark();
-        };
-      }
-      keys.push([[`Digit${i + 1}`, `Numpad${i + 1}`], `p0-${v.id}`]);
+      actions[`pick-${v.id}`] = () => {
+        if (!isUnlocked(v, save)) return;
+        selected = v.id;
+        pick(v.id);
+        mark();
+      };
+      keys.push([[`Digit${i + 1}`, `Numpad${i + 1}`], `pick-${v.id}`]);
     });
     this.show(
       `<h2>Garaje</h2>
-      <p class="muted">Cada vehículo tiene su propia vida, velocidad, munición y habilidades. Teclas <kbd>1</kbd>–<kbd>6</kbd>: vehículo del jugador 1.</p>
+      <p class="muted">Cada vehículo tiene su propia vida, velocidad, munición y habilidades. Teclas <kbd>1</kbd>–<kbd>6</kbd> para elegir rápido.</p>
       <div class="garage-grid">${cards}</div>
       <div class="menu-buttons"><button data-action="back" class="primary">Listo <kbd>Esc</kbd></button></div>`,
       actions,
@@ -252,23 +244,13 @@ export class Screens {
   controls(back: Action): void {
     this.show(
       `<h2>Controles</h2>
-      <div class="controls-grid">
-        <div class="ctrl-card" style="--pc:#ff4d4d">
-          <h3>Jugador 1</h3>
-          <p><kbd>W</kbd> acelerar · <kbd>S</kbd> frenar / reversa</p>
-          <p><kbd>A</kbd> <kbd>D</kbd> girar</p>
-          <p><kbd>Espacio</kbd> / <kbd>Shift izq.</kbd> turbo</p>
-          <p><kbd>F</kbd> disparar al más cercano · <b>clic izquierdo</b> disparar donde apunta la mira</p>
-        </div>
-        <div class="ctrl-card" style="--pc:#4d9dff">
-          <h3>Jugador 2</h3>
-          <p><kbd>↑</kbd> acelerar · <kbd>↓</kbd> frenar / reversa</p>
-          <p><kbd>←</kbd> <kbd>→</kbd> girar</p>
-          <p><kbd>Shift der.</kbd> / <kbd>Enter</kbd> turbo</p>
-          <p><kbd>Ctrl der.</kbd> / <kbd>.</kbd> disparar al más cercano</p>
-        </div>
+      <div class="ctrl-card" style="--pc:#ff4d4d">
+        <p><kbd>W</kbd> / <kbd>↑</kbd> acelerar · <kbd>S</kbd> / <kbd>↓</kbd> frenar / reversa</p>
+        <p><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> girar</p>
+        <p><kbd>Espacio</kbd> / <kbd>Shift</kbd> / <kbd>Enter</kbd> turbo</p>
+        <p><kbd>F</kbd> / <kbd>Ctrl der.</kbd> disparar al más cercano · <b>clic izquierdo</b> disparar donde apunta la mira</p>
       </div>
-      <p class="muted">Con un solo jugador puedes usar cualquiera de los dos esquemas. <kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio · <kbd>N</kbd> música · <kbd>-</kbd> <kbd>+</kbd> volumen de la música.</p>
+      <p class="muted"><kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio · <kbd>N</kbd> música · <kbd>-</kbd> <kbd>+</kbd> volumen de la música.</p>
       <ul class="tips">
         <li>Fuera del asfalto en el desierto se pierde velocidad (el buggy Escorpión no se frena ni en la arena).</li>
         <li>En el garaje eliges vehículo: la moto es ágil, el deportivo vuela pero es frágil, la camioneta y el blindado aguantan y destrozan al embestir.</li>
@@ -323,7 +305,7 @@ export class Screens {
 
   // ------------------------------------------------------------ juego
 
-  intro(cfg: LevelConfig, players: number, vehicles: string[], start: Action, back: Action): void {
+  intro(cfg: LevelConfig, vehicle: string, start: Action, back: Action): void {
     const story = cfg.intro.map((t) => `<p>${esc(t)}</p>`).join('');
     const notes = cfg.adaptiveNotes.length
       ? `<div class="ai-notes"><h3>El Analista ajustó este nivel</h3><ul>${cfg.adaptiveNotes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`
@@ -340,11 +322,8 @@ export class Screens {
       `<div class="level-tag">${cfg.index === 0 ? 'PRÓLOGO' : cfg.index === 4 ? 'NIVEL INFINITO' : `NIVEL ${cfg.index} DE 3`}</div>
       <h1>${esc(cfg.name.split('—')[1]?.trim() ?? cfg.name)}</h1>
       <div class="story">${story}</div>
-      <p class="goal">${goal} ${players > 1 ? '<br><span class="muted">Cooperativo: si un compañero cae, vuelve a los 6 s mientras el otro siga vivo.</span>' : ''}</p>
-      <p class="muted small">Vehículo: ${vehicles
-        .slice(0, players)
-        .map((id, i) => `<b style="color:${PLAYER_COLORS[i].css}">${esc(vehicleById(id).name)}</b>${players > 1 ? ` (J${i + 1})` : ''}`)
-        .join(' · ')} — cámbialo en el garaje del menú.</p>
+      <p class="goal">${goal}</p>
+      <p class="muted small">Vehículo: <b style="color:${PLAYER_COLORS[0].css}">${esc(vehicleById(vehicle).name)}</b> — cámbialo en el garaje del menú.</p>
       ${notes}
       <div class="menu-buttons"><button data-action="start" class="primary">¡VAMOS! <kbd>Enter</kbd></button><button data-action="back" class="ghost">Menú <kbd>Esc</kbd></button></div>`,
       { start, back },

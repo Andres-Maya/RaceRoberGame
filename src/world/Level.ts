@@ -696,19 +696,19 @@ export class Level {
         if (!p.def.sandProof) speedMul *= 0.5;
         if (this.rng.chance(0.6)) this.fx.dust(v.px, v.pz, 0xe2c48e, 1, 1.6);
       } else if (h.kind === 'oil') {
-        if (p.oilTimer <= 0) this.hooks.message(`J${p.index + 1}: ¡Aceite!`, '#cccccc', 0.8);
+        if (p.oilTimer <= 0) this.hooks.message(`${this.who(p)}¡Aceite!`, '#cccccc', 0.8);
         p.oilTimer = 1.1;
       } else if (h.kind === 'acid') {
         // El ácido corroe la moto mientras se está encima.
         this.damagePlayer(p, dt * 16, true);
         speedMul *= 0.8;
         if (this.rng.chance(0.4)) this.fx.splatter(v.px, v.pz, 2);
-        if (this.rng.chance(dt * 2)) this.hooks.message(`J${p.index + 1}: ¡Ácido!`, '#9dff6a', 0.8);
+        if (this.rng.chance(dt * 2)) this.hooks.message(`${this.who(p)}¡Ácido!`, '#9dff6a', 0.8);
       } else if (h.kind === 'spikes' && p.spikeTimer <= 0) {
         p.spikeTimer = 3;
         this.fx.sparks(v.px, v.pz, 12);
         this.damagePlayer(p, 10);
-        this.hooks.message(`J${p.index + 1}: ¡Llanta ponchada!`, '#ff9f43', 1.2);
+        this.hooks.message(`${this.who(p)}¡Llanta ponchada!`, '#ff9f43', 1.2);
       }
     }
     if (p.oilTimer > 0) gripMul *= 0.15;
@@ -723,14 +723,14 @@ export class Level {
         // La llave repara un 30 % de la vida máxima.
         const repair = Math.round(p.maxHp * 0.3);
         p.hp = Math.min(p.maxHp, p.hp + repair);
-        this.hooks.message(`J${p.index + 1}: ¡Reparación! +${repair}`, '#4cd37b', 1);
+        this.hooks.message(`${this.who(p)}¡Reparación! +${repair}`, '#4cd37b', 1);
       } else if (pk.kind === 'ammo') {
         const before = p.ammo;
         p.ammo = Math.min(p.maxAmmo, p.ammo + 20);
-        this.hooks.message(`J${p.index + 1}: ¡Munición! +${p.ammo - before}`, '#f4d03f', 1);
+        this.hooks.message(`${this.who(p)}¡Munición! +${p.ammo - before}`, '#f4d03f', 1);
       } else {
         p.turbo = 1;
-        this.hooks.message(`J${p.index + 1}: ¡Nitro lleno!`, '#7dd3fc', 1);
+        this.hooks.message(`${this.who(p)}¡Nitro lleno!`, '#7dd3fc', 1);
       }
     }
     // Nivel 0 (prólogo): la moto se repara lentamente si no recibe golpes.
@@ -770,7 +770,7 @@ export class Level {
         const d = leader.vehicle.d - 6;
         v.teleport(this.track.centerX(d) + (leader.vehicle.px > this.track.centerX(d) ? -2.5 : 2.5), -d, 0);
         this.damagePlayer(p, 10);
-        this.hooks.message(`J${p.index + 1}: ¡Rezagado!`, p.color, 1.2);
+        this.hooks.message(`${this.who(p)}¡Rezagado!`, p.color, 1.2);
       }
     }
   }
@@ -865,7 +865,7 @@ export class Level {
       this.audio.emptyClick();
       if (this.ammoWarn <= 0) {
         this.ammoWarn = 2.5;
-        this.hooks.message(`J${p.index + 1}: ¡Sin munición! Busca cajas amarillas`, '#f4d03f', 1.4);
+        this.hooks.message(`${this.who(p)}¡Sin munición! Busca cajas amarillas`, '#f4d03f', 1.4);
       }
       return;
     }
@@ -967,7 +967,7 @@ export class Level {
       this.shake = Math.max(this.shake, 0.45);
       this.score += 300;
       p.turbo = Math.min(1, p.turbo + 0.15);
-      this.hooks.message(`J${p.index + 1}: ¡Salto! +300`, '#ffd27a', 1);
+      this.hooks.message(`${this.who(p)}¡Salto! +300`, '#ffd27a', 1);
     }
   }
 
@@ -980,7 +980,7 @@ export class Level {
     if (!p.alive) return;
     v.teleport(this.track.centerX(v.d), v.pz, this.track.angle(v.d));
     p.invuln = Math.max(p.invuln, 1.5);
-    this.hooks.message(`J${p.index + 1}: ¡Al río! Vuelves al puente (−30)`, '#7fc8ff', 1.5);
+    this.hooks.message(`${this.who(p)}¡Al río! Vuelves al puente (−30)`, '#7fc8ff', 1.5);
   }
 
   // ------------------------------------------------------------ explosiones
@@ -1085,7 +1085,7 @@ export class Level {
         this.damagePlayer(p, dt * 15, true);
         if (this.flameWarn <= 0) {
           this.flameWarn = 2;
-          this.hooks.message(`J${p.index + 1}: ¡Te queman!`, toxic ? '#9dff6a' : '#ff7a45', 1);
+          this.hooks.message(`${this.who(p)}¡Te queman!`, toxic ? '#9dff6a' : '#ff7a45', 1);
         }
       }
       for (const o of this.chunks.obstacles()) {
@@ -1210,6 +1210,11 @@ export class Level {
   }
 
   /** `weapon`: balas, explosiones, ácido y fuego, que el blindaje del vehículo reduce. */
+  /** Prefijo de los avisos: solo hace falta decir quién cuando hay varios jugadores. */
+  private who(p: Player): string {
+    return this.playerCount > 1 ? `J${p.index + 1}: ` : '';
+  }
+
   private damagePlayer(p: Player, amount: number, weapon = false): void {
     if (weapon) amount *= p.def.armor;
     if (amount <= 0 || !p.alive) return;
@@ -1341,7 +1346,7 @@ export class Level {
           this.audio.crash(0.8);
           this.shake = Math.max(this.shake, 0.9);
           this.damagePlayer(p, 10 + cfg.aggression * 8, true);
-          this.hooks.message(`J${p.index + 1}: ¡Ataque de harpía!`, '#c08aff', 1);
+          this.hooks.message(`${this.who(p)}¡Ataque de harpía!`, '#c08aff', 1);
         }
       }
       if (f.gone || -f.z < minD - 90) {
@@ -1590,7 +1595,7 @@ export class Level {
       const depth = storm.depth(p.vehicle.d);
       if (depth > 0) {
         this.damagePlayer(p, dt * (8 + depth * 0.6));
-        if (this.rng.chance(dt * 1.5)) this.hooks.message(`J${p.index + 1}: ¡La tormenta te alcanza!`, '#e0b070', 1);
+        if (this.rng.chance(dt * 1.5)) this.hooks.message(`${this.who(p)}¡La tormenta te alcanza!`, '#e0b070', 1);
       }
     }
   }

@@ -40,7 +40,7 @@ export class Hud {
       .map(
         (p) => `
       <div class="pcard" style="--pc:${PLAYER_COLORS[p.index].css}">
-        <div class="pcard-title">J${p.index + 1} · ${p.def.name} ${PLAYER_COLORS[p.index].name}</div>
+        <div class="pcard-title">${level.players.length > 1 ? `J${p.index + 1} · ` : ''}${p.def.name}</div>
         <div class="bar"><div class="fill hp" data-hp="${p.index}"></div></div>
         <div class="bar small"><div class="fill turbo" data-turbo="${p.index}"></div></div>
         <div class="pcard-speed"><span data-speed="${p.index}">0</span> km/h <span class="pcard-ammo" data-ammo-box="${p.index}">BALAS <b data-ammo="${p.index}">0</b></span></div>

@@ -169,9 +169,8 @@ export class Game {
     this.audio.duckMusic(false);
     this.audio.playMusic('calm');
     this.screens.menu(this.storage.data, {
-      one: () => this.newCampaign(1),
-      two: () => this.newCampaign(2),
-      select: () => this.screens.levelSelect(this.storage.data, (l, p) => this.startFrom(l, p), () => this.showMenu()),
+      play: () => this.newCampaign(),
+      select: () => this.screens.levelSelect(this.storage.data, (l) => this.startFrom(l), () => this.showMenu()),
       garage: () => this.showGarage(),
       controls: () => this.screens.controls(() => this.showMenu()),
       stats: () => this.showStats(),
@@ -191,11 +190,11 @@ export class Game {
   private showGarage(): void {
     this.screens.garage(
       this.storage.data,
-      (player, id) => {
-        this.storage.data.vehicles[player] = id;
+      (id) => {
+        this.storage.data.vehicles[0] = id;
         this.storage.save();
         this.audio.unlock();
-        this.audio.blip(player === 0 ? 660 : 880);
+        this.audio.blip(760);
       },
       () => this.showMenu(),
     );
@@ -264,13 +263,13 @@ export class Game {
     this.audio.setMusicOn(this.storage.data.musicOn);
   }
 
-  private newCampaign(players: number): void {
-    this.campaign = { players, level: 0, profile: null, cash: 0, score: 0, config: null };
+  private newCampaign(): void {
+    this.campaign = { players: 1, level: 0, profile: null, cash: 0, score: 0, config: null };
     this.showIntro();
   }
 
-  private startFrom(level: number, players: number): void {
-    this.campaign = { players, level, profile: this.storage.data.profile, cash: level > 0 ? LOOT : 0, score: 0, config: null };
+  private startFrom(level: number): void {
+    this.campaign = { players: 1, level, profile: this.storage.data.profile, cash: level > 0 ? LOOT : 0, score: 0, config: null };
     this.showIntro();
   }
 
@@ -293,8 +292,7 @@ export class Game {
     this.audio.playMusic('epic');
     this.screens.intro(
       cfg,
-      this.campaign.players,
-      this.chosenVehicles().map((v) => v.id),
+      this.chosenVehicles()[0].id,
       () => this.beginLevel(),
       () => this.showMenu(),
     );
