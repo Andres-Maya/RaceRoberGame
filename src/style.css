@@ -994,3 +994,301 @@ body.aiming canvas {
   color: var(--red);
   animation: pulse 0.4s infinite alternate;
 }
+
+/* ------------------------------------------------------------ en línea */
+
+.net-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.net-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.net-card h3 {
+  margin: 0;
+}
+
+.net-field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.net-field input {
+  font: 1.15rem var(--display);
+  letter-spacing: 0.12em;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  user-select: text;
+  text-transform: uppercase;
+}
+
+.net-field input[name='ip'] {
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.net-field input:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.net-code {
+  margin: 8px 0;
+  font: 3.2rem var(--display);
+  letter-spacing: 0.3em;
+  text-align: center;
+  color: var(--gold);
+  text-shadow: 0 0 24px rgba(244, 208, 63, 0.35);
+  user-select: text;
+}
+
+.net-code.small {
+  font-size: 1.5rem;
+  letter-spacing: 0.04em;
+  margin: 4px 0;
+}
+
+.net-status {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border-left: 3px solid var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.net-status.wait::after {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  border-right-color: transparent;
+  animation: tire-spin 0.8s linear infinite;
+}
+
+.net-status.ok {
+  border-left-color: var(--green);
+  color: #b9f5cd;
+}
+
+.net-status.bad {
+  border-left-color: var(--red);
+  color: #ffc4c4;
+}
+
+code {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.9em;
+}
+
+/* ------------------------------------------------------------ controles táctiles */
+
+#touch {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.touch-stick-zone {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 46%;
+  height: 62%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-stick {
+  position: absolute;
+  left: calc(70px + env(safe-area-inset-left));
+  top: calc(100% - 90px - env(safe-area-inset-bottom));
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.25));
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.touch-stick.active {
+  opacity: 1;
+}
+
+.touch-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.touch-buttons {
+  position: absolute;
+  right: calc(18px + env(safe-area-inset-right));
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: end;
+  gap: 14px;
+}
+
+.touch-btn {
+  pointer-events: auto;
+  touch-action: none;
+  width: 84px;
+  height: 84px;
+  padding: 0;
+  border-radius: 50%;
+  font: 0.85rem var(--display);
+  letter-spacing: 0.06em;
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.touch-turbo {
+  background: rgba(45, 110, 255, 0.55);
+  margin-bottom: 40px;
+}
+
+.touch-shoot {
+  width: 96px;
+  height: 96px;
+  background: rgba(214, 40, 40, 0.6);
+}
+
+.touch-btn.on {
+  transform: scale(0.92);
+  filter: brightness(1.4);
+}
+
+.touch-pause {
+  position: absolute;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  width: 46px;
+  height: 46px;
+  margin-left: -23px;
+  padding: 0;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+  font: 1rem var(--display);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* ------------------------------------------------------------ celulares */
+
+body.touch {
+  touch-action: manipulation;
+}
+
+body.touch canvas {
+  touch-action: none;
+}
+
+/* En pantallas táctiles no hay teclado: se ocultan los atajos. */
+body.touch kbd {
+  display: none;
+}
+
+/* Las tarjetas de vida y turbo suben para no tapar los controles táctiles. */
+body.touch #hud-players {
+  top: calc(84px + env(safe-area-inset-top));
+  bottom: auto;
+}
+
+body.touch .pcard {
+  width: min(210px, 40vw);
+  padding: 6px 10px;
+}
+
+body.touch .pcard-speed {
+  font-size: 1rem;
+}
+
+body.touch .hud-ai {
+  display: none;
+}
+
+body.touch #hud-toasts {
+  top: 38%;
+}
+
+@media (max-height: 500px) {
+  .hud-top {
+    top: 6px;
+  }
+  .hud-level #hud-objective,
+  .hud-ai {
+    display: none;
+  }
+  .hud-timer {
+    min-width: 130px;
+    padding: 2px 12px 4px;
+  }
+  #hud-timer {
+    font-size: 1.4rem;
+  }
+  body.touch #hud-players {
+    top: calc(64px + env(safe-area-inset-top));
+  }
+  .toast {
+    font-size: 1.05rem;
+  }
+  .screen {
+    padding: 8px;
+  }
+  .panel {
+    padding: 16px 18px;
+  }
+  .logo-main {
+    font-size: 3.2rem;
+  }
+  .tagline {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .net-code {
+    font-size: 2.4rem;
+  }
+  .touch-btn {
+    width: 74px;
+    height: 74px;
+  }
+  .touch-shoot {
+    width: 84px;
+    height: 84px;
+  }
+}

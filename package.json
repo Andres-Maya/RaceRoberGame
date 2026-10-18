@@ -6,6 +6,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "dev:lan": "vite --host",
+    "lan": "npm run build && node server/lan.mjs",
     "typecheck": "tsc --noEmit"
   },
   "repository": {
@@ -25,11 +27,14 @@
   "homepage": "https://github.com/Andres-Maya/RaceRoberGame#readme",
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",
+    "peerjs": "^1.5.4",
     "three": "^0.186.1"
   },
   "devDependencies": {
     "@types/three": "^0.186.0",
+    "@types/ws": "^8.18.2",
     "typescript": "~5.9",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "ws": "^8.21.3"
   }
 }

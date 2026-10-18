@@ -3,22 +3,32 @@ import { AdaptiveDifficulty } from '../ai/AdaptiveDifficulty';
 import { buildProfile, RuleBasedClassifier, type SkillProfile } from '../ai/SkillClassifier';
 import { ENDLESS_LEVEL, LEVEL_0, VICTORY_TEXT } from '../config/levels';
 import type { LevelConfig } from '../config/types';
-import { isUnlocked, VEHICLES, vehicleById, type VehicleDef } from '../config/vehicles';
-import { Hud } from '../ui/Hud';
+import { isUnlocked, VEHICLES, vehicleById, type VehicleDef, type VehicleId } from '../config/vehicles';
+import { GuestView } from '../net/GuestView';
+import { HostSync, packInput, unpackInput } from '../net/HostSync';
+import { lanAddress, lanInfo, PeerLink, WsLink, type LanInfo, type Link } from '../net/Link';
+import { PROTOCOL, type NetMessage, type PackedInput } from '../net/protocol';
+import { Hud, hudState } from '../ui/Hud';
 import type { Loader } from '../ui/Loader';
 import { Screens } from '../ui/Screens';
-import { Level } from '../world/Level';
+import { enterFullscreen, IS_TOUCH, TouchControls } from '../ui/Touch';
+import { Level, type LevelHooks } from '../world/Level';
 import { Audio, type SoundChannel } from './Audio';
-import { Input } from './Input';
+import { Input, type DriveInput } from './Input';
+import type { MusicMode } from './Music';
 import { Storage } from './Storage';
 
-type State = 'menu' | 'intro' | 'loading' | 'playing' | 'paused' | 'results' | 'gameover' | 'victory';
+type State = 'menu' | 'intro' | 'loading' | 'playing' | 'paused' | 'results' | 'gameover' | 'victory' | 'online' | 'guest';
 
 /** Botín obtenido del Banco Central al terminar el nivel 0. */
 const LOOT = 500_000;
 
 /** Tiempo mínimo de la pantalla de carga entre niveles (que la llanta alcance a rodar). */
 const MIN_LOADING_MS = 700;
+
+/** Pantallas del anfitrión que el invitado ve en espejo. */
+const MIRRORED: State[] = ['intro', 'paused', 'results', 'gameover', 'victory'];
+const MUSIC_MODES = new Set<MusicMode>(['off', 'calm', 'epic', 'level', 'victory', 'death']);
 
 interface Campaign {
   players: number;
@@ -29,9 +39,39 @@ interface Campaign {
   config: LevelConfig | null;
 }
 
+/** Partida en línea en curso (como anfitrión o como invitado). */
+interface Net {
+  role: 'host' | 'guest';
+  link: Link;
+  /** Anfitrión: vehículo del invitado (null mientras no haya nadie conectado). */
+  peer: VehicleId | null;
+  /** Anfitrión: últimos controles recibidos del invitado. */
+  remote: DriveInput;
+  sync: HostSync | null;
+  /** Anfitrión por IP: direcciones para compartir. */
+  addresses: string[];
+  /** Anfitrión: la sala está en pantalla (se redibuja cuando cambia el invitado). */
+  inRoom: boolean;
+  /** Invitado: escena replicada y si está jugando. */
+  view: GuestView | null;
+  playing: boolean;
+  inGarage: boolean;
+  waitText: string;
+  lastInput: string;
+  inputTimer: number;
+}
+
+const idleInput = (): DriveInput => ({ throttle: 0, brake: 0, steer: 0, turbo: false, shoot: false, aim: null });
+
+/** Color de un aviso recibido por red (evita valores que no sean colores simples). */
+const safeColor = (c: unknown): string | undefined => (typeof c === 'string' && /^(#[0-9a-f]{3,8}|[a-z]{3,20})$/i.test(c) ? c : undefined);
+
+const errorText = (e: unknown): string => (e instanceof Error ? e.message : 'No se pudo conectar.');
+
 /**
  * Orquesta el juego: renderizador, bucle principal, máquina de estados de
- * pantallas y la campaña (nivel 0 → IA → niveles 1-3 adaptados).
+ * pantallas, la campaña (nivel 0 → IA → niveles 1-3 adaptados) y las
+ * partidas en línea (el anfitrión simula; el invitado ve una réplica).
  */
 export class Game {
   private renderer: THREE.WebGLRenderer;
@@ -41,6 +81,7 @@ export class Game {
   private storage = new Storage();
   private hud = new Hud();
   private screens = new Screens();
+  private touch = new TouchControls();
   private classifier = new RuleBasedClassifier();
   private difficulty = new AdaptiveDifficulty();
   private level: Level | null = null;
@@ -49,13 +90,20 @@ export class Game {
   private campaign: Campaign = { players: 1, level: 0, profile: null, cash: 0, score: 0, config: null };
   /** Cambia con cada carga para descartar una que quedó obsoleta. */
   private loadToken = 0;
+  private lan: LanInfo | null = null;
+  private net: Net | null = null;
 
   constructor(
     container: HTMLElement,
     private loader: Loader,
   ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // En celulares se dibuja a menor resolución y con sombras más livianas.
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, IS_TOUCH ? 1.5 : 2));
+    if (IS_TOUCH) {
+      Level.shadowSize = 1024;
+      document.body.classList.add('touch');
+    }
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.setClearColor(0x14161c);
@@ -72,6 +120,10 @@ export class Game {
     this.audio.musicOn = this.storage.data.musicOn;
     this.audio.setVolumes(this.storage.data.volumes);
     this.screens.onVolume = (ch, v) => this.setVolume(ch, v, false);
+    this.screens.onShow = (html, variant) => this.mirrorScreen(html, variant);
+    this.audio.onMusic = (mode, level) => {
+      if (this.net?.role === 'host') this.net.link.send({ t: 'music', mode, level });
+    };
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
@@ -81,6 +133,14 @@ export class Game {
     });
 
     this.showMenu();
+    // ¿Se abrió desde el servidor de red local? Entonces se ofrece la conexión por IP.
+    void lanInfo().then((info) => {
+      this.lan = info;
+      if (info && new URLSearchParams(location.search).has('join')) {
+        history.replaceState(null, '', location.pathname);
+        void this.joinGame('ip', location.host);
+      }
+    });
     requestAnimationFrame((t) => this.frame(t));
   }
 
@@ -110,7 +170,7 @@ export class Game {
   private aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1);
   private aimPoint = new THREE.Vector3();
 
-  /** Punto del suelo bajo el cursor (para apuntar con el ratón). */
+  /** Punto del suelo bajo el cursor (para apuntar con el ratón o tocando la pantalla). */
   private mouseWorld(): { x: number; z: number } | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((this.input.mouse.x - rect.left) / rect.width) * 2 - 1, -((this.input.mouse.y - rect.top) / rect.height) * 2 + 1);
@@ -119,40 +179,61 @@ export class Game {
     return hit ? { x: hit.x, z: hit.z } : null;
   }
 
+  /** Controles del jugador de este dispositivo: teclado, táctil y ratón. */
+  private localInput(players: number): DriveInput {
+    const input = this.touch.apply(this.input.drive(0, players));
+    // Clic izquierdo (o un toque en la pantalla): disparar hacia ese punto.
+    if (this.input.mouse.down) {
+      input.shoot = true;
+      input.aim = this.mouseWorld();
+    }
+    return input;
+  }
+
   private tick(dt: number, render = true): void {
-    // Durante la partida el cursor es una mira.
-    document.body.classList.toggle('aiming', this.state === 'playing');
-    if (this.input.wasPressed('KeyM') && this.state !== 'menu') this.toggleMute();
-    if (this.input.wasPressed('KeyN') && this.state !== 'menu') this.toggleMusic();
+    const playing = this.state === 'playing' && !!this.level;
+    const guest = this.state === 'guest' && !!this.net?.view && this.net.playing && !this.screens.visible;
+    // Durante la partida el cursor es una mira; en celular aparecen los controles táctiles.
+    document.body.classList.toggle('aiming', (playing || guest) && !IS_TOUCH);
+    this.touch.show(IS_TOUCH && (playing || guest));
+    const typing = this.state === 'online' || (this.state === 'menu' && this.screens.visible);
+    if (this.input.wasPressed('KeyM') && !typing) this.toggleMute();
+    if (this.input.wasPressed('KeyN') && !typing) this.toggleMusic();
     if (this.input.wasPressed('Minus', 'NumpadSubtract')) this.setVolume('music', this.storage.data.volumes.music - 0.1, true);
     if (this.input.wasPressed('Equal', 'NumpadAdd')) this.setVolume('music', this.storage.data.volumes.music + 0.1, true);
 
-    if (this.state === 'playing' && this.level) {
-      if (this.input.wasPressed('Escape', 'KeyP')) {
+    if (playing && this.level) {
+      if (this.input.wasPressed('Escape', 'KeyP') || this.touch.consumePause()) {
         this.pause();
       } else {
-        const inputs = [0, 1].map((i) => this.input.drive(i, this.campaign.players));
-        // Clic izquierdo: el jugador 1 dispara hacia la mira.
-        if (this.input.mouse.down) {
-          inputs[0].shoot = true;
-          inputs[0].aim = this.mouseWorld();
-        }
+        const online = this.net?.role === 'host';
+        const inputs = online
+          ? [this.localInput(1), this.net!.remote]
+          : [this.localInput(this.campaign.players), this.input.drive(1, this.campaign.players)];
         this.level.update(dt, inputs);
         this.audio.musicIntensity(this.level.musicIntensity);
-        // Cuando caen todas las motos, el metal se corta y entra el réquiem.
+        // Cuando caen todos los vehículos, el metal se corta y entra el réquiem.
         if (this.level.outcome === 'failed') this.audio.playMusic('death');
         // En el nivel infinito la música cambia de estilo con cada zona.
         else this.audio.playMusic('level', this.level.musicStyle);
-        this.hud.update(this.level);
+        this.net?.sync?.tick(dt, this.level, this.level.musicIntensity);
+        this.hud.update(hudState(this.level));
         if (this.level.state === 'done') this.onLevelDone();
       }
+    } else if (guest) {
+      this.updateGuest(dt);
     } else {
+      this.touch.consumePause();
       this.screens.handleKeys(this.input);
     }
 
+    const view = this.net?.view;
     if (this.level) {
       this.level.updateCamera(this.camera, this.state === 'playing' ? dt : 0);
       if (render) this.renderer.render(this.level.scene, this.camera);
+    } else if (view) {
+      view.update(dt, this.camera);
+      if (render) this.renderer.render(view.scene, this.camera);
     } else if (render) {
       this.renderer.clear();
     }
@@ -162,6 +243,12 @@ export class Game {
   // ------------------------------------------------------------ pantallas
 
   private showMenu(): void {
+    // En una partida en línea, "volver al menú" es volver a la sala.
+    if (this.net) {
+      if (this.net.role === 'host') this.showRoom();
+      else this.guestWait(this.net.waitText || 'Esperando al anfitrión…');
+      return;
+    }
     this.state = 'menu';
     this.loadToken++;
     this.disposeLevel();
@@ -171,7 +258,8 @@ export class Game {
     this.screens.menu(this.storage.data, {
       play: () => this.newCampaign(),
       select: () => this.screens.levelSelect(this.storage.data, (l) => this.startFrom(l), () => this.showMenu()),
-      garage: () => this.showGarage(),
+      online: () => this.showOnline(),
+      garage: () => this.showGarage(() => this.showMenu()),
       controls: () => this.screens.controls(() => this.showMenu()),
       stats: () => this.showStats(),
       sound: () => this.showSound(),
@@ -186,8 +274,12 @@ export class Game {
     });
   }
 
-  /** Garaje: cada jugador elige su vehículo y la elección se guarda. */
-  private showGarage(): void {
+  /** Garaje: el vehículo elegido se guarda (y en línea se avisa al anfitrión). */
+  private showGarage(back: () => void): void {
+    if (this.net) {
+      this.net.inRoom = false;
+      this.net.inGarage = true;
+    }
     this.screens.garage(
       this.storage.data,
       (id) => {
@@ -195,8 +287,12 @@ export class Game {
         this.storage.save();
         this.audio.unlock();
         this.audio.blip(760);
+        if (this.net?.role === 'guest') this.net.link.send({ t: 'vehicle', vehicle: id });
       },
-      () => this.showMenu(),
+      () => {
+        if (this.net) this.net.inGarage = false;
+        back();
+      },
     );
   }
 
@@ -236,7 +332,7 @@ export class Game {
     this.audio.setVolume(channel, vol);
     if (fromKeys) {
       this.screens.showVolume(channel, vol);
-      if (this.state === 'playing') this.hud.toast(`Música: ${Math.round(vol * 100)}%`, '#cccccc', 0.8);
+      if (this.state === 'playing' || this.state === 'guest') this.hud.toast(`Música: ${Math.round(vol * 100)}%`, '#cccccc', 0.8);
     } else {
       this.audio.preview(channel);
     }
@@ -263,13 +359,20 @@ export class Game {
     this.audio.setMusicOn(this.storage.data.musicOn);
   }
 
+  /** Jugadores de la próxima partida: 2 si hay un invitado conectado. */
+  private get playerCount(): number {
+    return this.net?.role === 'host' && this.net.peer && this.net.link.connected ? 2 : 1;
+  }
+
   private newCampaign(): void {
-    this.campaign = { players: 1, level: 0, profile: null, cash: 0, score: 0, config: null };
+    enterFullscreen();
+    this.campaign = { players: this.playerCount, level: 0, profile: null, cash: 0, score: 0, config: null };
     this.showIntro();
   }
 
   private startFrom(level: number): void {
-    this.campaign = { players: 1, level, profile: this.storage.data.profile, cash: level > 0 ? LOOT : 0, score: 0, config: null };
+    enterFullscreen();
+    this.campaign = { players: this.playerCount, level, profile: this.storage.data.profile, cash: level > 0 ? LOOT : 0, score: 0, config: null };
     this.showIntro();
   }
 
@@ -284,6 +387,8 @@ export class Game {
   }
 
   private showIntro(): void {
+    this.campaign.players = this.playerCount;
+    if (this.net) this.net.inRoom = false;
     this.state = 'intro';
     this.disposeLevel();
     this.hud.hide();
@@ -301,8 +406,10 @@ export class Game {
   /**
    * Arranca el nivel tras la pantalla de carga: se muestra la llanta, se
    * construye el mundo y se compilan los shaders antes de soltar el control.
+   * En línea, el anfitrión además graba el nivel para enviárselo al invitado.
    */
   private beginLevel(): void {
+    this.campaign.players = this.playerCount;
     const cfg = this.configFor(this.campaign.level);
     this.campaign.config = cfg;
     this.disposeLevel();
@@ -315,20 +422,33 @@ export class Game {
     const started = performance.now();
     const label = cfg.index === 0 ? 'Prólogo' : cfg.index === 4 ? 'Nivel infinito' : `Nivel ${cfg.index}`;
     this.loader.show(`Preparando ${label}`);
+    const net = this.net?.role === 'host' ? this.net : null;
+    const online = this.campaign.players > 1 && !!net;
+    if (net) {
+      net.inRoom = false;
+      net.sync = online ? new HostSync(net.link) : null;
+      if (online) net.link.send({ t: 'begin', label });
+    }
     // Dos cuadros de espera para que la llanta aparezca antes del trabajo pesado.
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         if (token !== this.loadToken) return;
-        const hooks = { message: (t: string, c?: string, s?: number) => this.hud.toast(t, c, s), flash: (c: string) => this.hud.flash(c) };
-        const level = new Level(cfg, this.campaign.players, this.audio, hooks, this.classifier, this.chosenVehicles());
+        const sync = net?.sync ?? null;
+        let hooks: LevelHooks = { message: (t, c, s) => this.hud.toast(t, c, s), flash: (c) => this.hud.flash(c) };
+        if (sync) hooks = sync.wrapHooks(hooks);
+        const vehicles = online ? [this.chosenVehicles()[0], vehicleById(net!.peer ?? 'moto')] : this.chosenVehicles();
+        const level = new Level(cfg, this.campaign.players, sync ? sync.wrapAudio(this.audio) : this.audio, hooks, this.classifier, vehicles);
+        sync?.attach(level);
         this.level = level;
         level.updateCamera(this.camera, 0);
         this.renderer.compile(level.scene, this.camera);
         window.setTimeout(
           () => {
             if (token !== this.loadToken || this.level !== level) return;
+            if (online && !net!.peer) level.dropPlayer(1);
+            sync?.init(level, this.campaign.cash);
             this.loader.hide();
-            this.hud.show(level, this.campaign.cash);
+            this.hud.show(hudState(level), this.campaign.cash);
             this.audio.duckMusic(false);
             this.audio.playMusic('level', level.musicStyle);
             this.state = 'playing';
@@ -363,6 +483,10 @@ export class Game {
     const cfg = level.config;
     const m = level.tracker.m;
     const data = this.storage.data;
+    if (this.net?.role === 'host') {
+      this.net.link.send({ t: 'end' });
+      this.net.sync = null;
+    }
     data.runs++;
     // El perfil del nivel es el medido en su calibración (o el recorrido completo si no llegó a terminarla).
     const measured = level.calibratedProfile ?? buildProfile(this.classifier, m);
@@ -437,5 +561,357 @@ export class Game {
     if (!this.level) return;
     this.level.dispose();
     this.level = null;
+  }
+
+  // ------------------------------------------------------------ en línea
+
+  private newNet(role: 'host' | 'guest', link: Link): Net {
+    return {
+      role,
+      link,
+      peer: null,
+      remote: idleInput(),
+      sync: null,
+      addresses: [],
+      inRoom: false,
+      view: null,
+      playing: false,
+      inGarage: false,
+      waitText: '',
+      lastInput: '',
+      inputTimer: 0,
+    };
+  }
+
+  private showOnline(): void {
+    this.state = 'online';
+    this.screens.online(
+      { lan: this.lan, secure: location.protocol === 'https:' },
+      {
+        hostCode: () => void this.hostGame('code'),
+        hostIp: () => void this.hostGame('ip'),
+        joinCode: (code) => void this.joinGame('code', code),
+        joinIp: (address) => void this.joinGame('ip', address),
+        back: () => this.showMenu(),
+      },
+    );
+  }
+
+  /** Sale de la partida en línea y vuelve al menú principal. */
+  private leaveOnline(): void {
+    const net = this.net;
+    this.net = null;
+    if (net) {
+      if (net.role === 'host') net.link.send({ t: 'bye', text: 'El anfitrión cerró la partida.' });
+      net.link.close();
+      net.view?.dispose();
+    }
+    this.loadToken++;
+    this.loader.hide();
+    this.audio.stopLoops();
+    this.showMenu();
+  }
+
+  /** Crea una partida: por código (WebRTC) o por IP (servidor de red local). */
+  private async hostGame(kind: 'code' | 'ip'): Promise<void> {
+    enterFullscreen();
+    this.audio.unlock();
+    const link = kind === 'code' ? new PeerLink() : new WsLink(location.host, 'host');
+    const net = this.newNet('host', link);
+    this.net = net;
+    this.state = 'online';
+    this.screens.netStatus('Creando la partida', 'Preparando la sala…', { leave: () => this.leaveOnline() });
+    try {
+      if (link instanceof PeerLink) await link.host();
+      else await (link as WsLink).open();
+    } catch (e) {
+      if (this.net !== net) return;
+      this.net = null;
+      link.close();
+      this.screens.netError(errorText(e), () => this.showOnline());
+      return;
+    }
+    if (this.net !== net) {
+      link.close();
+      return;
+    }
+    if (kind === 'ip' && this.lan) net.addresses = this.lan.ips.map((ip) => `http://${ip}:${this.lan!.port}`);
+    link.onMessage = (m) => this.hostMessage(m);
+    link.onPeerLeft = () => this.guestLeft();
+    link.onError = (text) => {
+      if (this.state === 'playing') this.hud.toast(text, '#ff7a45', 3);
+    };
+    this.showRoom();
+  }
+
+  /** Sala del anfitrión. */
+  private showRoom(): void {
+    const net = this.net!;
+    this.state = 'online';
+    this.loadToken++;
+    this.disposeLevel();
+    this.hud.hide();
+    this.audio.duckMusic(false);
+    this.audio.playMusic('calm');
+    net.inRoom = true;
+    net.inGarage = false;
+    this.screens.room(
+      {
+        kind: net.link.kind,
+        code: net.link instanceof PeerLink ? net.link.code : '',
+        addresses: net.addresses,
+        guest: net.peer && net.link.connected ? vehicleById(net.peer).name : null,
+        vehicle: this.chosenVehicles()[0].name,
+      },
+      {
+        play: () => {
+          net.inRoom = false;
+          this.screens.levelSelect(this.storage.data, (l) => this.startFrom(l), () => this.showRoom());
+        },
+        garage: () => this.showGarage(() => this.showRoom()),
+        leave: () => this.leaveOnline(),
+      },
+    );
+    net.link.send({ t: 'lobby', text: 'El anfitrión está eligiendo el nivel…' });
+  }
+
+  private hostMessage(m: NetMessage): void {
+    const net = this.net;
+    if (!net || net.role !== 'host') return;
+    switch (m.t) {
+      case 'hello':
+        if (m.v !== PROTOCOL) {
+          net.link.send({ t: 'bye', text: 'El anfitrión tiene otra versión del juego: actualicen ambos.' });
+          return;
+        }
+        net.peer = vehicleById(String(m.vehicle)).id;
+        net.link.send({ t: 'welcome', v: PROTOCOL });
+        if (net.inRoom) this.showRoom();
+        else {
+          net.link.send({ t: 'lobby', text: 'La partida ya empezó: entrarás en el próximo nivel.' });
+          if (this.state === 'playing') this.hud.toast('El jugador 2 se conectó: entra en el próximo nivel', '#4cd37b', 3);
+        }
+        break;
+      case 'vehicle':
+        net.peer = vehicleById(String(m.vehicle)).id;
+        if (net.inRoom) this.showRoom();
+        break;
+      case 'input':
+        if (Array.isArray(m.i) && m.i.length === 7) net.remote = this.cleanInput(m.i);
+        break;
+      case 'pause':
+        if (this.state === 'playing' && this.level && this.level.players.length > 1) this.pause();
+        break;
+    }
+  }
+
+  /** Controles recibidos del invitado, acotados a valores válidos. */
+  private cleanInput(i: PackedInput): DriveInput {
+    const num = (v: unknown, lo: number, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : 0);
+    const d = unpackInput(i);
+    return {
+      throttle: num(d.throttle, 0, 1),
+      brake: num(d.brake, 0, 1),
+      steer: num(d.steer, -1, 1),
+      turbo: d.turbo === true,
+      shoot: d.shoot === true,
+      aim: d.aim && Number.isFinite(d.aim.x) && Number.isFinite(d.aim.z) ? { x: d.aim.x, z: d.aim.z } : null,
+    };
+  }
+
+  private guestLeft(): void {
+    const net = this.net;
+    if (!net || net.role !== 'host') return;
+    net.peer = null;
+    net.remote = idleInput();
+    if (this.level && this.level.players.length > 1) {
+      this.level.dropPlayer(1);
+      this.hud.toast('El jugador 2 se desconectó', '#ff7a45', 3);
+    }
+    if (net.inRoom) this.showRoom();
+  }
+
+  /** Reenvía al invitado las pantallas de historia, pausa y resultados. */
+  private mirrorScreen(html: string, variant: string): void {
+    const net = this.net;
+    if (net?.role !== 'host' || !net.link.connected || !MIRRORED.includes(this.state)) return;
+    net.link.send({ t: 'screen', html, variant });
+  }
+
+  /** Se une a una partida por código o por IP. */
+  private async joinGame(kind: 'code' | 'ip', value: string): Promise<void> {
+    enterFullscreen();
+    this.audio.unlock();
+    let target = value.trim();
+    if (kind === 'ip') {
+      target = lanAddress(target, this.lan?.port ?? 8080);
+      if (!target) {
+        this.screens.netError('Escribe la IP del anfitrión, por ejemplo 192.168.43.1:8080.', () => this.showOnline());
+        return;
+      }
+      // Desde una página segura (https) el navegador no permite conectar por IP: se abre el juego del anfitrión.
+      if (location.protocol === 'https:') {
+        location.href = `http://${target}/?join=1`;
+        return;
+      }
+    } else if (!target) {
+      this.screens.netError('Escribe el código de la sala.', () => this.showOnline());
+      return;
+    }
+    const link = kind === 'code' ? new PeerLink() : new WsLink(target, 'guest');
+    const net = this.newNet('guest', link);
+    this.net = net;
+    this.state = 'guest';
+    link.onMessage = (m) => this.guestMessage(m);
+    this.screens.netStatus('Uniéndose', kind === 'code' ? `Buscando la sala ${target.toUpperCase()}…` : `Conectando con ${target}…`, { leave: () => this.leaveOnline() });
+    try {
+      if (link instanceof PeerLink) await link.join(target);
+      else await (link as WsLink).open();
+    } catch (e) {
+      if (this.net !== net) return;
+      this.net = null;
+      link.close();
+      this.screens.netError(errorText(e), () => this.showOnline());
+      return;
+    }
+    if (this.net !== net) {
+      link.close();
+      return;
+    }
+    link.onPeerLeft = (reason) => this.hostLost(reason);
+    link.onError = (text) => this.hostLost(text);
+    link.send({ t: 'hello', v: PROTOCOL, vehicle: this.chosenVehicles()[0].id });
+    this.guestWait('Conectado. Esperando a que el anfitrión elija el nivel…');
+  }
+
+  /** Invitado: pantalla de espera entre niveles. */
+  private guestWait(text: string): void {
+    const net = this.net!;
+    net.waitText = text;
+    net.playing = false;
+    net.inGarage = false;
+    this.state = 'guest';
+    this.hud.hide();
+    this.audio.stopLoops();
+    this.screens.netStatus('Partida en línea', text, {
+      leave: () => this.leaveOnline(),
+      garage: () => this.showGarage(() => this.guestWait(net.waitText)),
+    });
+  }
+
+  /** Invitado: se perdió la conexión con el anfitrión. */
+  private hostLost(text: string): void {
+    const net = this.net;
+    if (!net || net.role !== 'guest') return;
+    this.net = null;
+    net.link.close();
+    net.view?.dispose();
+    this.loader.hide();
+    this.hud.hide();
+    this.audio.stopLoops();
+    this.state = 'menu';
+    this.screens.netError(text, () => this.showMenu());
+  }
+
+  private guestMessage(m: NetMessage): void {
+    const net = this.net;
+    if (!net || net.role !== 'guest') return;
+    switch (m.t) {
+      case 'welcome':
+        if (m.v !== PROTOCOL) this.hostLost('El anfitrión tiene otra versión del juego: actualicen ambos.');
+        break;
+      case 'lobby':
+        // El anfitrión volvió a la sala (también al salir desde la pausa): termina el nivel en curso.
+        net.waitText = String(m.text);
+        if (!net.inGarage) {
+          net.view?.dispose();
+          net.view = null;
+          this.guestWait(net.waitText);
+        }
+        break;
+      case 'screen':
+        net.inGarage = false;
+        this.state = 'guest';
+        if (m.variant !== 'pause') {
+          net.playing = false;
+          this.hud.hide();
+          this.audio.stopLoops();
+        }
+        this.screens.mirror(String(m.html), String(m.variant), () => this.leaveOnline());
+        break;
+      case 'music':
+        if (MUSIC_MODES.has(m.mode)) this.audio.playMusic(m.mode, Number(m.level) || 0);
+        break;
+      case 'begin':
+        net.view?.dispose();
+        net.view = null;
+        net.playing = false;
+        net.inGarage = false;
+        this.state = 'guest';
+        this.screens.hide();
+        this.hud.hide();
+        this.loader.show(`Preparando ${String(m.label).slice(0, 40)}`);
+        break;
+      case 'init':
+        net.view?.dispose();
+        try {
+          net.view = new GuestView(m.scene, m.hud, this.audio, Level.shadowSize);
+        } catch {
+          this.hostLost('No se pudo recibir la partida del anfitrión.');
+          return;
+        }
+        this.hud.show(net.view.hud, Number(m.baseCash) || 0, 1);
+        this.loader.hide();
+        this.screens.hide();
+        this.audio.duckMusic(false);
+        net.playing = true;
+        net.inputTimer = 0;
+        this.state = 'guest';
+        break;
+      case 'frame':
+        if (!net.view) return;
+        try {
+          net.view.apply(m);
+        } catch (err) {
+          console.warn('Cuadro inválido del anfitrión', err);
+          return;
+        }
+        for (const [text, color, seconds] of m.msg ?? []) this.hud.toast(String(text), safeColor(color), Number(seconds) || 1.8);
+        for (const c of m.flash ?? []) {
+          const color = safeColor(c);
+          if (color) this.hud.flash(color);
+        }
+        // Al reanudar tras una pausa vuelven a llegar cuadros: se quita la pantalla.
+        if (net.playing && this.screens.visible && !net.inGarage) this.screens.hide();
+        break;
+      case 'end':
+        net.playing = false;
+        this.hud.hide();
+        this.audio.stopLoops();
+        break;
+      case 'bye':
+        this.hostLost(String(m.text));
+        break;
+    }
+  }
+
+  /** Invitado jugando: envía sus controles y muestra lo que llega del anfitrión. */
+  private updateGuest(dt: number): void {
+    const net = this.net!;
+    const view = net.view!;
+    if (this.input.wasPressed('Escape', 'KeyP') || this.touch.consumePause()) net.link.send({ t: 'pause' });
+    const packed = packInput(this.localInput(1));
+    const key = packed.join(',');
+    net.inputTimer -= dt;
+    // Se envía al cambiar y, además, 10 veces por segundo por si se perdió alguno.
+    if (key !== net.lastInput || net.inputTimer <= 0) {
+      net.link.send({ t: 'input', i: packed });
+      net.lastInput = key;
+      net.inputTimer = 0.1;
+    }
+    this.audio.engine(view.engine[0], view.engine[1], view.engine[2]);
+    this.audio.siren(view.siren, dt);
+    this.audio.musicIntensity(view.intensity);
+    this.hud.update(view.hud);
   }
 }

@@ -145,6 +145,9 @@ export class Effects {
   private rings: Shockwave[] = [];
 
   constructor(scene: THREE.Scene) {
+    // Las partículas no se replican en línea: el invitado repite las llamadas con su propio sistema.
+    this.fire.mesh.userData.noSync = true;
+    this.smoke.mesh.userData.noSync = true;
     scene.add(this.fire.mesh, this.smoke.mesh);
     // Anillos de onda expansiva reutilizables.
     for (let i = 0; i < 10; i++) {
@@ -153,6 +156,7 @@ export class Effects {
         new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
       );
       mesh.visible = false;
+      mesh.userData.noSync = true;
       scene.add(mesh);
       this.rings.push({ mesh, t: 1, dur: 1, radius: 1 });
     }

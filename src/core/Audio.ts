@@ -137,7 +137,11 @@ export class Audio {
 
   // ------------------------------------------------------------ música
 
+  /** Avisa cada cambio de pieza (el anfitrión en línea lo reenvía al invitado). */
+  onMusic: ((mode: MusicMode, level: number) => void) | null = null;
+
   playMusic(mode: MusicMode, level = 0): void {
+    if (mode !== this.pendingMusic.mode || level !== this.pendingMusic.level) this.onMusic?.(mode, level);
     this.pendingMusic = { mode, level };
     this.music?.setMode(mode, level);
   }

@@ -7,7 +7,7 @@ import { VEHICLES, type VehicleDef } from '../config/vehicles';
 import type { Biome, Faction, FinishScene, LevelConfig, Mood, PursuerConfig, PursuerKind } from '../config/types';
 import type { Audio } from '../core/Audio';
 import type { DriveInput } from '../core/Input';
-import { clamp, clamp01, damp, wrapAngle } from '../core/math';
+import { clamp, clamp01, wrapAngle } from '../core/math';
 import { Rng } from '../core/Rng';
 import { Civilian } from '../entities/Civilian';
 import { Flyer } from '../entities/Flyer';
@@ -19,6 +19,7 @@ import { FLAME_ANGLE, FLAME_RANGE, Pursuer, PURSUER_STATS, type FireRequest } fr
 import { Sandstorm } from '../entities/Sandstorm';
 import { mat } from '../fx/Meshes';
 import { Effects } from '../fx/Particles';
+import { CameraRig } from './CameraRig';
 import { ChunkManager, type CivilianSpawn, type ObstacleRecord } from './ChunkManager';
 import { Physics, type Tag } from './Physics';
 import { CHUNK, ROUGH_BIOMES, Track } from './Track';
@@ -133,6 +134,9 @@ const REINFORCEMENTS = { police: 'La policía envía', gang: 'Los Cuervos mandan
  * Los niveles terminan por distancia al llegar a su estructura final.
  */
 export class Level {
+  /** Resolución del mapa de sombras (en celulares se reduce). */
+  static shadowSize = 2048;
+
   readonly scene = new THREE.Scene();
   readonly physics = new Physics();
   readonly rng = new Rng(Math.floor(Math.random() * 1e9));
@@ -184,10 +188,9 @@ export class Level {
   private combo = 0;
   private lastKill = -10;
   private recentKills: number[] = [];
-  private camX = 0;
-  private camZ = 0;
-  private camH = 50;
-  private shake = 0;
+  private cam = new CameraRig();
+  /** Temblor de cámara (0..~1.2). */
+  shake = 0;
   private spawnTimer = 2.5;
   private firstWave = true;
   private liveTimer = 0;
@@ -215,7 +218,7 @@ export class Level {
     this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(mood.sun, mood.sunI);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(Level.shadowSize, Level.shadowSize);
     const sc = this.sun.shadow.camera;
     sc.left = -90;
     sc.right = 90;
@@ -278,8 +281,7 @@ export class Level {
       config.pursuers = { ...config.pursuers!, kinds: { [ROSTERS[zone.faction][0]]: 1 } };
     }
 
-    this.camX = this.track.centerX(startD);
-    this.camZ = -startD - 8;
+    this.cam.place(this.track.centerX(startD), -startD - 8);
   }
 
   // ------------------------------------------------------------ mapa
@@ -1238,14 +1240,26 @@ export class Level {
       }
     });
     this.origMaterials.set(p, mats);
-    if (this.alivePlayers.length > 0) {
+    if (this.alivePlayers.length > 0 && !p.dropped) {
       this.respawnTimers.set(p, 6);
       this.hooks.message(`¡J${p.index + 1} cayó! Tu compañero vuelve por ti en 6 s`, p.color, 2.5);
     }
   }
 
+  /** Un jugador en línea se desconectó: sale de la carrera sin reaparecer. */
+  dropPlayer(index: number): void {
+    const p = this.players[index];
+    if (!p || p.dropped) return;
+    p.dropped = true;
+    p.alive = false;
+    p.setGhost(true);
+    p.mesh.visible = false;
+    this.respawnTimers.delete(p);
+  }
+
   private respawn(p: Player): void {
     this.respawnTimers.delete(p);
+    if (p.dropped) return;
     const partner = this.alivePlayers[0];
     if (!partner) return;
     const mats = this.origMaterials.get(p) ?? [];
@@ -1747,46 +1761,14 @@ export class Level {
   updateCamera(camera: THREE.PerspectiveCamera, dt: number): void {
     const alive = this.alivePlayers;
     const ref = alive.length ? alive : this.players;
-    let cx = 0;
-    let cz = 0;
-    let vx = 0;
-    let vz = 0;
-    for (const p of ref) {
-      cx += p.vehicle.px;
-      cz += p.vehicle.pz;
-      vx += p.vehicle.vx;
-      vz += p.vehicle.vz;
-    }
-    cx /= ref.length;
-    cz /= ref.length;
-    vx /= ref.length;
-    vz /= ref.length;
-    let spread = 0;
-    if (ref.length > 1) spread = Math.hypot(ref[0].vehicle.px - ref[1].vehicle.px, ref[0].vehicle.pz - ref[1].vehicle.pz);
+    this.cam.update(camera, dt, ref.map((p) => p.vehicle), this.shake, this.cameraZoom);
+    this.sun.position.set(this.cam.x + 35, 110, this.cam.z + 25);
+    this.sun.target.position.set(this.cam.x, 0, this.cam.z);
+  }
 
-    // Mirar hacia donde se va: más carretera visible por delante.
-    const look = Math.min(1, 14 / Math.max(1, Math.hypot(vx, vz)));
-    const tx = cx + vx * 0.4 * look;
-    const tz = cz + vz * 0.4 * look - 6;
-    const speed = Math.hypot(vx, vz);
-    const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const minForWidth = 19 / (tanHalf * camera.aspect);
-    // Durante la explosión de la planta la cámara se aleja para verla completa.
-    const blastZoom = this.blastCount > 0 ? 30 : 0;
-    const h = clamp(Math.max(36 + speed * 0.35 + spread * 0.8, minForWidth) + blastZoom, 28, 120);
-
-    this.camX = damp(this.camX, tx, 5, dt);
-    this.camZ = damp(this.camZ, tz, 5, dt);
-    this.camH = damp(this.camH, h, 2, dt);
-    const s = this.shake * this.shake * 1.4;
-    const sx = (Math.random() - 0.5) * s;
-    const sz = (Math.random() - 0.5) * s;
-    camera.up.set(0, 0, -1);
-    camera.position.set(this.camX + sx, this.camH, this.camZ + sz + 0.01);
-    camera.lookAt(this.camX + sx, 0, this.camZ + sz);
-
-    this.sun.position.set(this.camX + 35, 110, this.camZ + 25);
-    this.sun.target.position.set(this.camX, 0, this.camZ);
+  /** Durante la explosión de la planta la cámara se aleja para verla completa. */
+  get cameraZoom(): number {
+    return this.blastCount > 0 ? 30 : 0;
   }
 
   /** Distancia a la tormenta (nivel 0) del jugador más atrasado. */

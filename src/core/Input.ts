@@ -52,6 +52,9 @@ export class Input {
       if (e.button === 0) this.mouse.down = false;
     });
     window.addEventListener('keydown', (e) => {
+      // Escribir en un campo de texto (código de sala, IP) no maneja el vehículo ni activa atajos.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && e.code !== 'Escape') return;
       if (BLOCKED.has(e.code)) e.preventDefault();
       if (!this.down.has(e.code)) this.pressed.add(e.code);
       this.down.add(e.code);

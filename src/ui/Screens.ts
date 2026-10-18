@@ -20,6 +20,8 @@ export class Screens {
   private keys: [string[], string][] = [];
   /** Recibe canal y volumen (0..1) cuando se mueve un control deslizante. */
   onVolume: ((channel: SoundChannel, v: number) => void) | null = null;
+  /** Cada pantalla que se muestra (el anfitrión en línea la reenvía al invitado). */
+  onShow: ((html: string, variant: string) => void) | null = null;
 
   constructor() {
     this.el.addEventListener('click', (e) => {
@@ -99,6 +101,12 @@ export class Screens {
     this.el.innerHTML = `<div class="panel">${html}</div>`;
     this.actions = new Map(Object.entries(actions));
     this.keys = keys;
+    this.onShow?.(html, variant);
+  }
+
+  /** Valor de un campo de texto de la pantalla actual. */
+  private field(name: string): string {
+    return this.el.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value ?? '';
   }
 
   hide(): void {
@@ -121,7 +129,7 @@ export class Screens {
 
   // ------------------------------------------------------------ menú
 
-  menu(save: SaveData, a: { play: Action; select: Action; garage: Action; controls: Action; stats: Action; sound: Action; mute: Action; music: Action }): void {
+  menu(save: SaveData, a: { play: Action; select: Action; online: Action; garage: Action; controls: Action; stats: Action; sound: Action; mute: Action; music: Action }): void {
     this.show(
       `
       <div class="logo">
@@ -133,6 +141,7 @@ export class Screens {
       <div class="menu-buttons">
         <button data-action="play" class="primary">JUGAR <kbd>1</kbd></button>
         <button data-action="select">SELECCIONAR NIVEL <kbd>2</kbd></button>
+        <button data-action="online">EN LÍNEA · 2 JUGADORES <kbd>5</kbd> <small>código, hotspot o IP</small></button>
         <button data-action="garage">GARAJE <kbd>3</kbd> <small>${esc(vehicleById(save.vehicles[0]).name)}</small></button>
         <button data-action="controls">CONTROLES</button>
         <button data-action="stats">PERFIL DE LA IA Y ESTADÍSTICAS</button>
@@ -145,6 +154,7 @@ export class Screens {
         [['Digit2', 'Numpad2'], 'select'],
         [['Digit3', 'Numpad3'], 'garage'],
         [['Digit4', 'Numpad4'], 'sound'],
+        [['Digit5', 'Numpad5'], 'online'],
         [['KeyM'], 'mute'],
         [['KeyN'], 'music'],
       ],
@@ -168,6 +178,133 @@ export class Screens {
       'Cada nivel empieza con una fase de calibración: El Analista mide tu habilidad en los primeros metros y ajusta ese mismo nivel.' +
       (save.profile ? ` Último perfil: <b>${save.profile.tier}</b> (${Math.round(save.profile.skill * 100)}%).` : '');
     this.show(`<h2>Seleccionar nivel</h2><p class="muted">${prof}</p>${rows}<div class="menu-buttons"><button data-action="back" class="ghost">Volver <kbd>Esc</kbd></button></div>`, actions, [[['Escape', 'Backspace'], 'back']]);
+  }
+
+  // ------------------------------------------------------------ en línea
+
+  /**
+   * Menú en línea: crear una sala (por código o por IP) o unirse a una.
+   * `lan`: direcciones del servidor de red local si el juego se abrió desde él.
+   */
+  online(
+    opts: { lan: { ips: string[]; port: number } | null; secure: boolean },
+    a: { hostCode: Action; hostIp: Action; joinCode: (code: string) => void; joinIp: (address: string) => void; back: Action },
+  ): void {
+    const ipHost = opts.lan
+      ? `<button data-action="hostIp">CREAR PARTIDA POR IP <small>red local, sin internet</small></button>`
+      : `<p class="muted small">Para crear una partida por IP (sin internet), un PC de la red debe ejecutar <code>npm run lan</code> y abrir el juego desde la dirección que muestra.</p>`;
+    this.show(
+      `<h2>En línea · 2 jugadores</h2>
+      <p class="muted">Un jugador crea la partida y el otro se une. El anfitrión elige el nivel; cada uno juega con el vehículo de su garaje.</p>
+      <div class="net-grid">
+        <section class="net-card">
+          <h3>Crear partida</h3>
+          <button data-action="hostCode" class="primary">CREAR CON CÓDIGO <small>internet o hotspot</small></button>
+          ${ipHost}
+        </section>
+        <section class="net-card">
+          <h3>Unirse</h3>
+          <label class="net-field"><span>Código de la sala</span><input name="code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE" /></label>
+          <button data-action="joinCode">UNIRSE CON CÓDIGO</button>
+          <label class="net-field"><span>IP del anfitrión</span><input name="ip" inputmode="url" autocomplete="off" spellcheck="false" placeholder="192.168.43.1:8080" value="${opts.lan ? esc(location.host) : ''}" /></label>
+          <button data-action="joinIp">UNIRSE POR IP</button>
+          ${opts.secure ? '<p class="muted small">Al unirte por IP se abrirá el juego desde el equipo del anfitrión (misma red Wi-Fi o hotspot).</p>' : ''}
+        </section>
+      </div>
+      <div class="menu-buttons"><button data-action="back" class="ghost">Volver <kbd>Esc</kbd></button></div>`,
+      {
+        hostCode: a.hostCode,
+        hostIp: a.hostIp,
+        joinCode: () => a.joinCode(this.field('code')),
+        joinIp: () => a.joinIp(this.field('ip')),
+        back: a.back,
+      },
+      [[['Escape'], 'back']],
+    );
+  }
+
+  /** Sala del anfitrión: código o direcciones para compartir y estado del invitado. */
+  room(
+    info: { kind: 'code' | 'ip'; code: string; addresses: string[]; guest: string | null; vehicle: string },
+    a: { play: Action; garage: Action; leave: Action },
+  ): void {
+    const share =
+      info.kind === 'code'
+        ? `<div class="net-code">${esc(info.code)}</div><p class="muted small">El otro jugador elige <b>EN LÍNEA › Unirse con código</b>. Ambos necesitan internet (los datos del hotspot sirven); la partida va directo entre los dos dispositivos.</p>`
+        : `<div class="net-addresses">${info.addresses.map((ip) => `<div class="net-code small">${esc(ip)}</div>`).join('')}</div><p class="muted small">Conecta el otro dispositivo a la misma red Wi-Fi o al hotspot, abre esa dirección en su navegador y elige <b>EN LÍNEA › Unirse por IP</b>.</p>`;
+    const guest = info.guest
+      ? `<p class="net-status ok">Jugador 2 conectado · ${esc(info.guest)}</p>`
+      : `<p class="net-status wait">Esperando al jugador 2…</p>`;
+    this.show(
+      `<h2>Tu partida</h2>
+      ${share}
+      ${guest}
+      <p class="muted small">Tu vehículo: <b>${esc(info.vehicle)}</b></p>
+      <div class="menu-buttons">
+        <button data-action="play" class="primary"${info.guest ? '' : ' disabled'}>ELEGIR NIVEL Y JUGAR <kbd>Enter</kbd></button>
+        <button data-action="garage">GARAJE</button>
+        <button data-action="leave" class="ghost danger">Cerrar partida <kbd>Esc</kbd></button>
+      </div>`,
+      a,
+      [
+        [['Enter', 'NumpadEnter'], 'play'],
+        [['Escape'], 'leave'],
+      ],
+    );
+  }
+
+  /** Estado de la conexión (conectando, esperando al anfitrión...). */
+  netStatus(title: string, text: string, a: { leave: Action; garage?: Action }): void {
+    this.show(
+      `<h2>${esc(title)}</h2>
+      <p class="net-status wait">${esc(text)}</p>
+      <div class="menu-buttons">
+        ${a.garage ? '<button data-action="garage">GARAJE</button>' : ''}
+        <button data-action="leave" class="ghost danger">Salir <kbd>Esc</kbd></button>
+      </div>`,
+      a,
+      [[['Escape'], 'leave']],
+    );
+  }
+
+  /** Error de conexión con un botón para volver. */
+  netError(text: string, back: Action): void {
+    this.show(
+      `<h2>Sin conexión</h2>
+      <p class="net-status bad">${esc(text)}</p>
+      <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Enter</kbd></button></div>`,
+      { back },
+      [[['Escape', 'Enter', 'NumpadEnter'], 'back']],
+    );
+  }
+
+  /**
+   * Invitado: muestra la pantalla que el anfitrión tiene abierta (historia,
+   * pausa, resultados...) sin sus botones. El HTML viene de otro dispositivo,
+   * así que se limpia de scripts, eventos y enlaces antes de mostrarlo.
+   */
+  mirror(html: string, variant: string, leave: Action): void {
+    const tpl = document.createElement('template');
+    // La pausa del anfitrión incluye sus controles de volumen: aquí basta con avisar.
+    tpl.innerHTML = variant === 'pause' ? '<h2>Pausa</h2><p class="muted">El anfitrión pausó la partida.</p>' : html;
+    const allowed = new Set(['DIV', 'P', 'SPAN', 'B', 'I', 'EM', 'SMALL', 'STRONG', 'H1', 'H2', 'H3', 'UL', 'OL', 'LI', 'TABLE', 'TR', 'TD', 'TH', 'TBODY', 'THEAD', 'BR', 'KBD', 'LABEL', 'SECTION', 'ARTICLE']);
+    for (const el of [...tpl.content.querySelectorAll('*')]) {
+      if (!allowed.has(el.tagName) || el.closest('.menu-buttons') || el.hasAttribute('data-action') || el.hasAttribute('data-volume')) {
+        el.remove();
+        continue;
+      }
+      for (const attr of [...el.attributes]) {
+        if (attr.name !== 'class' && attr.name !== 'style') el.removeAttribute(attr.name);
+        else if (attr.name === 'style' && /url\s*\(|expression/i.test(attr.value)) el.removeAttribute(attr.name);
+      }
+    }
+    const holder = document.createElement('div');
+    holder.appendChild(tpl.content);
+    const safeVariant = /^[a-z]*$/.test(variant) ? variant : '';
+    this.el.className = `screen ${safeVariant}`;
+    this.el.innerHTML = `<div class="panel">${holder.innerHTML}<p class="net-status wait">Esperando al anfitrión…</p><div class="menu-buttons"><button data-action="leave" class="ghost danger">Salir de la partida</button></div></div>`;
+    this.actions = new Map(Object.entries({ leave }));
+    this.keys = [];
   }
 
   /**
@@ -249,6 +386,9 @@ export class Screens {
         <p><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> girar</p>
         <p><kbd>Espacio</kbd> / <kbd>Shift</kbd> / <kbd>Enter</kbd> turbo</p>
         <p><kbd>F</kbd> / <kbd>Ctrl der.</kbd> disparar al más cercano · <b>clic izquierdo</b> disparar donde apunta la mira</p>
+      </div>
+      <div class="ctrl-card" style="--pc:#4d9dff">
+        <p><b>En celular:</b> el vehículo acelera solo. Joystick a la izquierda para girar (hacia abajo frena o da reversa), botones de <b>TURBO</b> y <b>DISPARO</b> a la derecha y pausa abajo al centro. Mejor con el teléfono en horizontal.</p>
       </div>
       <p class="muted"><kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio · <kbd>N</kbd> música · <kbd>-</kbd> <kbd>+</kbd> volumen de la música.</p>
       <ul class="tips">
