@@ -695,11 +695,11 @@ export class Level {
     }
 
     for (const h of this.chunks.hazards()) {
-      if (Math.abs(v.d - h.d) > h.hd || Math.abs(v.px - h.x) > h.hw) continue;
       if (h.kind === 'ramp') {
-        if (v.speed > 12) this.launch(p);
+        this.tryRamp(p, h, dt);
         continue;
       }
+      if (Math.abs(v.d - h.d) > h.hd || Math.abs(v.px - h.x) > h.hw) continue;
       this.tracker.hazard(dt);
       if (h.kind === 'sand') {
         if (!p.def.sandProof) speedMul *= 0.5;
@@ -947,10 +947,35 @@ export class Level {
     return false;
   }
 
-  /** Despegue desde una rampa: en el aire no hay colisiones ni se puede girar. */
-  private launch(p: Player): void {
+  /**
+   * ¿Toma la rampa? Basta con entrar de frente, con buena parte del vehículo
+   * sobre ella y algo de velocidad: despega justo antes de tocarla. Si no (de
+   * lado, desde atrás, casi detenido), la rampa es sólida y choca.
+   */
+  private tryRamp(p: Player, h: { x: number; d: number; hw: number; hd: number }, dt: number): boolean {
     const v = p.vehicle;
-    p.airDur = clamp((0.45 + (v.speed / v.spec.maxSpeed) * 0.5) * p.def.jump, 0.45, 1.4);
+    const s = v.spec;
+    const speed = v.speed;
+    if (p.air > 0 || speed < 4) return false;
+    // Entre un poco antes del borde de entrada (lo que avanzará este cuadro) y el final de la rampa.
+    const front = v.d + s.hz;
+    if (front + speed * dt * 2 + 0.4 < h.d - h.hd || v.d - s.hz > h.d + h.hd) return false;
+    // De frente: rumbo parecido al de la carretera.
+    if (Math.abs(wrapAngle(v.heading - this.track.angle(v.d))) > 0.75) return false;
+    // Al menos el 40 % del ancho del vehículo sobre la rampa (o toda la rampa bajo él).
+    const lat = v.px - h.x;
+    const overlap = Math.min(lat + s.hx, h.hw) - Math.max(lat - s.hx, -h.hw);
+    if (overlap < Math.min(2 * s.hx, 2 * h.hw) * 0.4) return false;
+    this.launch(p, h.d + h.hd - v.d + s.hz + 1);
+    return true;
+  }
+
+  /** Despegue desde una rampa: en el aire no hay colisiones ni se puede girar. */
+  private launch(p: Player, clearance = 0): void {
+    const v = p.vehicle;
+    // Vuela al menos lo necesario para pasar la rampa completa (aunque se tome despacio).
+    const minAir = clearance > 0 ? clearance / Math.max(4, v.speed * 1.05) : 0;
+    p.airDur = clamp(Math.max((0.45 + (v.speed / v.spec.maxSpeed) * 0.5) * p.def.jump, minAir), 0.45, 1.6);
     p.air = p.airDur;
     p.setGhost(true);
     v.vx *= 1.05;
@@ -967,7 +992,8 @@ export class Level {
     p.mesh.position.y = h * 3.2 * (p.airDur / 0.9);
     p.mesh.scale.setScalar(1 + h * 0.35);
     p.mesh.rotation.x = (0.5 - t) * 0.8;
-    v.drive(dt, 0, 0, 0);
+    // En el aire no hay roce con el suelo: conserva la velocidad del despegue.
+    v.apply();
     // Nunca aterrizar dentro de un edificio ni sobre el río.
     const lat = this.track.lateral(v.px, v.d);
     const edge = this.track.waterEdge(v.d);

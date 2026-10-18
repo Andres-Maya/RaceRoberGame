@@ -137,6 +137,10 @@ const GROUND: Record<Biome, number> = {
 /** Biomas con tráfico, obstáculos normales, retenes y recompensas. */
 const ROAD_BIOMES = new Set<Biome>(['desert', 'outskirts', 'city', 'bridge', 'industrial', 'wasteland']);
 
+/** Mitad del ancho y del largo de una rampa (coinciden con su modelo). */
+export const RAMP_HW = 2.2;
+export const RAMP_HD = 1.7;
+
 /**
  * Genera el mapa por tramos de 40 m delante de los jugadores y libera los que
  * quedan atrás. Cada bioma tiene su propio generador; la densidad y la mezcla
@@ -1211,7 +1215,7 @@ export class ChunkManager {
         const off = rng.range(-half * 0.4, half * 0.4);
         const d = Math.min(start, c.d1 - 26);
         if (d < c.d0 + 2 || !this.isClear(this.track.centerX(d) + off, d, 3)) break;
-        this.hazard(c, 'ramp', d, off, 2.2, 1.6);
+        this.hazard(c, 'ramp', d, off, RAMP_HW, RAMP_HD);
         this.reserve(c, d, off, 3);
         // El tramo de aterrizaje queda despejado.
         for (const ahead of [14, 20, 25]) this.reserve(c, d + ahead, off, 2.6);
@@ -1263,9 +1267,15 @@ export class ChunkManager {
     const count = rng.poisson((this.ctx.config.hazardDensity * CHUNK) / 100);
     for (let i = 0; i < count; i++) {
       const kind = rng.weighted(weights);
-      const size = { sand: [3.5, 3], oil: [1.8, 1.6], spikes: [3.2, 0.4], acid: [2.2, 2], ramp: [2.2, 1.6] }[kind];
+      const size = { sand: [3.5, 3], oil: [1.8, 1.6], spikes: [3.2, 0.4], acid: [2.2, 2], ramp: [RAMP_HW, RAMP_HD] }[kind];
       const d = rng.range(c.d0 + 3, c.d1 - 3);
       const off = rng.range(-half + size[0], half - size[0]);
+      // Las rampas son sólidas: no se ponen encima de otro obstáculo y reservan su lugar y el aterrizaje.
+      if (kind === 'ramp') {
+        if (!this.isClear(this.track.centerX(d) + off, d, 3)) continue;
+        this.reserve(c, d, off, 3);
+        this.reserve(c, d + 12, off, 2.6);
+      }
       this.hazard(c, kind, d, off, size[0], size[1]);
     }
   }
@@ -1284,6 +1294,9 @@ export class ChunkManager {
       this.add(c, m, d, off);
     } else if (kind === 'ramp') {
       this.add(c, rampMesh(), d, off);
+      // Cuerpo sólido: quien la toque de lado, desde atrás o despacio choca en vez de atravesarla.
+      // Al tomarla de frente, el jugador despega antes de tocarla (Level.tryRamp).
+      this.solid(c, d, off, hw, hd);
     } else if (kind === 'acid') {
       const m = new THREE.Mesh(sandGeo, mat(0x4cff2a, 0x1fae0a));
       m.scale.set(hw * 2, 1, hd * 2);

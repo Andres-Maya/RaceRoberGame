@@ -137,7 +137,7 @@ La banda sonora es brutal death metal sintetizado en tiempo real con WebAudio (`
 
 - **Barriles de combustible:** abundan en el camino y explotan al chocarlos (tú o los enemigos) o si una bala los roza. Encadenan a los barriles cercanos. La onda daña mucho a los perseguidores y poco a la moto (máximo ~16 de 150).
 - **Explosiones en cadena:** cuando un perseguidor estalla, su onda daña y empuja a los que tiene al lado. Hay bola de fuego, columna, escombros, onda expansiva y temblor de cámara según la distancia.
-- **Rampas:** saltas por encima de muros, obstáculos y autos (sin colisiones en el aire) y ganas 300 puntos y turbo. Siempre hay un hueco para rodear, por si prefieres no saltar.
+- **Rampas:** saltas por encima de muros, obstáculos y autos (sin colisiones en el aire) y ganas 300 puntos y turbo. Siempre hay un hueco para rodear, por si prefieres no saltar. Basta con entrar de frente con buena parte del vehículo sobre la rampa (aunque no vayas centrado) y a más de 4 m/s; el salto siempre pasa la rampa completa y en el aire no se pierde velocidad. La rampa es sólida: quien la toma de lado, la cruza por delante, la roza apenas o llega casi detenido choca con ella, y los perseguidores y el tráfico la esquivan como a un muro.
 - **Granadas y bombas:** algunos enemigos las lanzan en arco. Un anillo rojo o naranja parpadea en el suelo donde van a caer, así que se pueden esquivar. Su onda también daña a otros enemigos.
 - **Lluvia de ácido:** las harpías dejan caer gotas de ácido verde, marcadas en el suelo, que salpican y dejan charcos que queman unos segundos.
 - **Lanzallamas:** los incineradores queman a corta distancia por delante, en ráfagas, y su fuego también hace estallar barriles y quema zombis.
