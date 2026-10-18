@@ -1,4 +1,4 @@
-// Servidor de red local de Race Robber: sirve el juego compilado (dist/) y une
+// Servidor de red local de Turbo Ratas: sirve el juego compilado (dist/) y une
 // al anfitrión con un invitado por WebSocket. Sirve con un hotspot del celular o
 // cualquier red Wi-Fi, sin internet.
 //
@@ -143,7 +143,7 @@ async function main() {
   attachRelay(server);
   server.listen(port, '0.0.0.0', () => {
     const ips = localIps();
-    console.log('\nRace Robber — servidor de red local');
+    console.log('\nTurbo Ratas — servidor de red local');
     console.log(`  En este equipo:     http://localhost:${port}`);
     for (const ip of ips) console.log(`  Desde otro equipo:  http://${ip}:${port}`);
     if (!ips.length) console.log('  (No se detectó red local: conéctate a un Wi-Fi o al hotspot del celular.)');

@@ -1,7 +1,7 @@
 {
   "name": "racerobergame",
   "version": "1.0.0",
-  "description": "Escape en moto tras un robo: juego 2D cenital estilo GTA 1 con Three.js, Rapier y dificultad adaptativa por IA",
+  "description": "Turbo Ratas: escape tras un robo: juego 2D cenital estilo GTA 1 con Three.js, Rapier y dificultad adaptativa por IA",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

@@ -1,4 +1,4 @@
-// Service worker de Race Robber: guarda el juego completo en el teléfono para
+// Service worker de Turbo Ratas: guarda el juego completo en el teléfono para
 // que abra sin internet (por ejemplo, jugando por hotspot). El build rellena la
 // versión y la lista de archivos generados (vite.config.ts).
 const VERSION = '__VERSION__';

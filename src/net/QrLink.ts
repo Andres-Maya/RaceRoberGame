@@ -59,7 +59,7 @@ async function pack(desc: RTCSessionDescription | null, kind: 'O' | 'A'): Promis
 
 async function unpack(text: string, kind: 'O' | 'A'): Promise<RTCSessionDescriptionInit> {
   const t = text.trim();
-  if (!t.startsWith(MAGIC)) throw new Error('Ese código no es de Race Robber.');
+  if (!t.startsWith(MAGIC)) throw new Error('Ese código no es de Turbo Ratas.');
   if (t[3] !== kind) throw new Error(kind === 'O' ? 'Ese es el código de respuesta: escanea el que muestra el anfitrión.' : 'Ese es el código del anfitrión: escanea el que muestra el invitado.');
   let bytes = fromBase64Url(t.slice(5));
   if (t[4] === 'z') bytes = await pipe(bytes, new DecompressionStream('deflate-raw'));

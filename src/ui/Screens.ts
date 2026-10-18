@@ -144,9 +144,9 @@ export class Screens {
     this.show(
       `
       <div class="logo">
-        <div class="logo-top">RACE</div>
-        <div class="logo-main">ROBBER</div>
-        <div class="logo-sub">Fuga en moto · Ciudad Cobalto</div>
+        <div class="logo-top">TURBO</div>
+        <div class="logo-main">RATAS</div>
+        <div class="logo-sub">Robo, fuga y radiación · Ciudad Cobalto</div>
       </div>
       <p class="tagline">Un golpe al Banco Central. Tres niveles de persecución. Una IA que estudia cómo manejas.</p>
       <div class="menu-buttons">

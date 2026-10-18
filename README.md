@@ -1,6 +1,6 @@
-# Race Robber — Fuga en Moto
+# Turbo Ratas — Robo, fuga y radiación
 
-Videojuego 2D con vista cenital al estilo GTA 1, para 1 jugador o 2 en línea, en PC o celular. Una banda de ladrones en moto asalta el Banco Central de Ciudad Cobalto y huye de la policía, de una banda rival y de los mutantes de una tierra baldía. Al comienzo de cada nivel, una IA ("El Analista") estudia cómo manejas y ajusta ese mismo nivel: cuántos tipos de vehículos te persiguen, cuántos a la vez, cuántos obstáculos hay y cuánto falta para la meta.
+Videojuego 2D con vista cenital al estilo GTA 1, para 1 jugador o 2 en línea, en PC o celular. Las Turbo Ratas, una banda de ladrones a todo turbo, asaltan el Banco Central de Ciudad Cobalto y huyen de la policía, de una banda rival y de los mutantes de una tierra baldía. Al comienzo de cada nivel, una IA ("El Analista") estudia cómo manejas y ajusta ese mismo nivel: cuántos tipos de vehículos te persiguen, cuántos a la vez, cuántos obstáculos hay y cuánto falta para la meta.
 
 ## Cómo ejecutarlo
 
