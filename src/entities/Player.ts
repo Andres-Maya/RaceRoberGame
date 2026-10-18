@@ -43,6 +43,15 @@ export class Player {
   /** Salto desde una rampa: segundos de vuelo restantes y duración total. */
   air = 0;
   airDur = 0;
+  /**
+   * Salto torcido (solo un lado de llantas subió la rampa): inclinación hacia
+   * el lado que no tocó (-1..1), giro en el aire (rad/s) y qué tan alto vuela.
+   */
+  airRoll = 0;
+  airYaw = 0;
+  airLift = 1;
+  /** Rozón con la esquina de una rampa: segundos en que pasa de largo sin quedar enganchado. */
+  graze = 0;
   /** Enfriamiento de daño por cada objeto contra el que choca. */
   readonly hitCooldown = new Map<unknown, number>();
 
@@ -60,6 +69,8 @@ export class Player {
     this.ammo = def.ammoStart;
     this.maxAmmo = def.ammoMax;
     this.vehicle = new Vehicle(physics, def.spec, x, z, heading, { kind: 'player', ref: null }, mesh);
+    // Rumbo, luego cabeceo y alabeo locales: el vehículo se inclina bien en cualquier dirección.
+    mesh.rotation.order = 'YXZ';
     // La etiqueta apunta al propio jugador para resolver colisiones.
     const tag = physics.tagOf(this.vehicle.body.collider(0).handle);
     if (tag) tag.ref = this;

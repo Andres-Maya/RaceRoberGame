@@ -40,6 +40,8 @@ export interface VehicleDef {
   jump: number;
   /** Tono del motor (1 = moto; menor = más grave). */
   engineTone: number;
+  /** Una sola línea de ruedas (moto): salta aunque tome la rampa por la esquina. */
+  twoWheeler: boolean;
   /** Habilidades que se muestran en la tarjeta del garaje. */
   perks: string[];
   /** Requisito de desbloqueo (null = disponible desde el inicio). */
@@ -77,6 +79,7 @@ export const VEHICLES: VehicleDef[] = [
     armor: 1,
     jump: 1,
     engineTone: 1,
+    twoWheeler: true,
     perks: ['Silueta pequeña: cabe por cualquier hueco', 'El turbo se recarga más rápido'],
     unlock: null,
   },
@@ -98,6 +101,7 @@ export const VEHICLES: VehicleDef[] = [
     armor: 1,
     jump: 1.1,
     engineTone: 1.3,
+    twoWheeler: false,
     perks: ['Velocidad punta y aceleración máximas', 'Frágil y torpe fuera del asfalto'],
     unlock: null,
   },
@@ -119,6 +123,7 @@ export const VEHICLES: VehicleDef[] = [
     armor: 0.9,
     jump: 0.85,
     engineTone: 0.72,
+    twoWheeler: false,
     perks: ['Embestida ×2,2: destroza patrullas', 'Cajón de munición grande (80)'],
     unlock: null,
   },
@@ -140,6 +145,7 @@ export const VEHICLES: VehicleDef[] = [
     armor: 1,
     jump: 1.3,
     engineTone: 1.12,
+    twoWheeler: false,
     perks: ['Sin penalización fuera del asfalto ni en la arena', 'Salta más lejos en las rampas'],
     unlock: null,
   },
@@ -161,6 +167,7 @@ export const VEHICLES: VehicleDef[] = [
     armor: 1,
     jump: 1,
     engineTone: 0.82,
+    twoWheeler: false,
     perks: ['Turbo potente y duradero', 'Embestida ×1,6', 'Derrapa en las curvas'],
     unlock: null,
   },
@@ -182,6 +189,7 @@ export const VEHICLES: VehicleDef[] = [
     armor: 0.65,
     jump: 0.75,
     engineTone: 0.6,
+    twoWheeler: false,
     perks: ['Blindaje: −35 % de daño de balas, explosiones, ácido y fuego', 'Embestida ×2,6 · 100 balas', 'Muy lento'],
     unlock: { text: 'Supera el nivel 2 o recorre 2 km en el nivel infinito', check: (s) => s.unlocked >= 3 || s.victories > 0 || s.bestEndless >= 2000 },
   },
