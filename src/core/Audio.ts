@@ -34,8 +34,15 @@ export class Audio {
   musicOn = true;
   volumes: Volumes = { ...DEFAULT_VOLUMES };
 
+  /** El audio está sonando (el navegador ya permitió reproducir). */
+  get running(): boolean {
+    return this.ctx?.state === 'running';
+  }
+
   /**
    * Debe llamarse dentro de una interacción del usuario (política de autoplay).
+   * Fuera de ella también se intenta: si el navegador lo permite (app instalada
+   * o sitio que se visita seguido), la música arranca sin esperar un toque.
    * En celulares solo cuentan el toque al soltar (pointerup/touchend) y el clic:
    * por eso se llama en varios eventos y se reanuda el audio si quedó suspendido.
    */

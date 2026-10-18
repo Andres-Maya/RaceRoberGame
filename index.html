@@ -153,6 +153,25 @@
         font-size: 0.95rem;
       }
 
+      #loader.press {
+        cursor: pointer;
+      }
+
+      #loader.press .loader-text {
+        animation: press-pulse 1.1s ease-in-out infinite;
+      }
+
+      #loader.press .loader-text::after {
+        content: none;
+      }
+
+      @keyframes press-pulse {
+        50% {
+          opacity: 0.45;
+          transform: scale(0.97);
+        }
+      }
+
       #loader.error .tire,
       #loader.error .loader-road,
       #loader.error .loader-dust i {

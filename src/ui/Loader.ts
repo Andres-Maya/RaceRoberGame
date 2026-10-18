@@ -1,3 +1,5 @@
+import { IS_TOUCH } from './Touch';
+
 const TIPS = [
   'Dispara a los bidones rojos cuando un perseguidor pase al lado.',
   'Un anillo parpadeante en el suelo marca dónde caerá una granada.',
@@ -26,6 +28,31 @@ export class Loader {
     window.setTimeout(() => {
       if (this.el.classList.contains('fade')) this.el.classList.add('hidden');
     }, 260);
+  }
+
+  /**
+   * Pantalla de inicio al estilo arcade: espera un toque, clic o tecla (el gesto
+   * que el navegador exige para reproducir sonido) y se retira. La tecla no
+   * llega al menú, para que Enter no empiece una partida sin querer.
+   */
+  pressStart(): Promise<void> {
+    this.text.textContent = IS_TOUCH ? 'Toca la pantalla para empezar' : 'Haz clic o presiona una tecla para empezar';
+    this.tip.textContent = '';
+    this.el.classList.remove('hidden', 'fade');
+    this.el.classList.add('press');
+    return new Promise((resolve) => {
+      const events = ['pointerup', 'keydown'] as const;
+      const go = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        for (const ev of events) window.removeEventListener(ev, go, { capture: true });
+        this.el.classList.remove('press');
+        this.hide();
+        resolve();
+      };
+      // Se registra después de los del juego: su desbloqueo de audio corre primero.
+      for (const ev of events) window.addEventListener(ev, go, { capture: true });
+    });
   }
 
   error(text: string): void {

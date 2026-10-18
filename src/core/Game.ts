@@ -170,6 +170,17 @@ export class Game {
     requestAnimationFrame((t) => this.frame(t));
   }
 
+  /**
+   * Intenta que suene la música al abrir la página. Devuelve false si el
+   * navegador exige primero un toque o una tecla (y la música está activada).
+   */
+  async tryAutoplay(): Promise<boolean> {
+    this.audio.unlock();
+    if (this.storage.data.muted || !this.storage.data.musicOn) return true;
+    await new Promise((r) => window.setTimeout(r, 250));
+    return this.audio.running;
+  }
+
   private resize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;

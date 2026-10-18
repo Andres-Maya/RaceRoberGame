@@ -113,6 +113,8 @@ El modo de dos jugadores en el mismo teclado se retiró del menú para preparar 
 
 ## Música
 
+Los navegadores no dejan que una página suene hasta que el jugador la toca o presiona una tecla. Al abrir, el juego intenta arrancar la música de todos modos (lo logra, por ejemplo, instalado como app); si el navegador lo bloquea, muestra **«Toca la pantalla para empezar»** y ese primer toque enciende la música del menú (la tecla no llega al menú, así que no empieza una partida sin querer).
+
 La banda sonora es brutal death metal sintetizado en tiempo real con WebAudio (`src/core/Music.ts`), sin archivos de audio:
 
 - Dos guitarras afinadas muy grave con distorsión, abiertas a izquierda y derecha: trémolo, *palm mutes* y acordes de quinta. El bajo dobla la tónica.
