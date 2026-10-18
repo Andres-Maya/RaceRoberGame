@@ -1,10 +1,10 @@
 # Race Robber — Fuga en Moto
 
-Videojuego 2D con vista cenital al estilo GTA 1 para 1 o 2 jugadores. Una banda de ladrones en moto asalta el Banco Central de Ciudad Cobalto y huye de la policía, de una banda rival y de los mutantes de una tierra baldía. Al comienzo de cada nivel, una IA ("El Analista") estudia cómo manejas y ajusta ese mismo nivel: cuántos tipos de vehículos te persiguen, cuántos a la vez, cuántos obstáculos hay y cuánto falta para la meta.
+Videojuego 2D con vista cenital al estilo GTA 1. Una banda de ladrones en moto asalta el Banco Central de Ciudad Cobalto y huye de la policía, de una banda rival y de los mutantes de una tierra baldía. Al comienzo de cada nivel, una IA ("El Analista") estudia cómo manejas y ajusta ese mismo nivel: cuántos tipos de vehículos te persiguen, cuántos a la vez, cuántos obstáculos hay y cuánto falta para la meta.
 
 ## Cómo ejecutarlo
 
-Requisitos: Node.js 18 o superior.
+Requisitos: Node.js 20.19 o superior (Vite 8). El proyecto fija Node 22 para el despliegue.
 
 ```bash
 npm install
@@ -12,6 +12,22 @@ npm run dev        # servidor de desarrollo en http://localhost:5173
 npm run build      # verificación de tipos + build de producción en dist/
 npm run preview    # sirve el build de producción
 ```
+
+### Desplegar en Vercel
+
+El repositorio incluye `vercel.json`, así que al importarlo en Vercel la configuración se detecta sola:
+
+| Parámetro | Valor |
+|---|---|
+| Framework Preset | Vite |
+| Root Directory | `./` (la raíz del repositorio) |
+| Install Command | `npm ci` |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+| Node.js Version | 22.x (tomada de `engines` en `package.json`) |
+| Variables de entorno | Ninguna |
+
+El juego es 100 % estático (HTML, CSS y JS; el WASM de Rapier va incrustado en el JS), así que no necesita funciones de servidor. Los archivos de `/assets` llevan caché de un año porque su nombre cambia en cada build.
 
 ## Historia y niveles
 
@@ -30,7 +46,7 @@ Desde **Seleccionar nivel** puedes empezar en cualquier nivel: cada uno calibra 
 
 ## Garaje
 
-En el menú principal, **Garaje** (tecla `5`) muestra una tarjeta por vehículo con su foto (renderizada con el mismo modelo 3D del juego), su papel, barras de atributos y habilidades. Cada jugador elige el suyo con **Elegir J1** / **Elegir J2** (o las teclas `1`–`6` para el jugador 1) y la elección se guarda.
+En el menú principal, **Garaje** (tecla `3`) muestra una tarjeta por vehículo con su foto (renderizada con el mismo modelo 3D del juego), su papel, barras de atributos y habilidades. Se elige con **Elegir** (o las teclas `1`–`6`) y la elección se guarda.
 
 | Vehículo | Papel | Vida | Punta con turbo | Balas (máx.) | Particularidades |
 |---|---|---|---|---|---|
@@ -47,15 +63,15 @@ Al empezar cada nivel aparece una pantalla de carga con una llanta rodando mient
 
 ## Controles
 
-| Acción | Jugador 1 | Jugador 2 |
-|---|---|---|
-| Acelerar / frenar-reversa | `W` / `S` | `↑` / `↓` |
-| Girar | `A` / `D` | `←` / `→` |
-| Turbo | `Espacio` o `Shift izq.` | `Shift der.` o `Enter` |
-| Disparar al objetivo más cercano | `F` | `Ctrl der.` o `.` |
-| Disparar hacia la mira | Clic izquierdo del ratón | — |
+| Acción | Teclas |
+|---|---|
+| Acelerar / frenar-reversa | `W` / `S` o `↑` / `↓` |
+| Girar | `A` / `D` o `←` / `→` |
+| Turbo | `Espacio`, `Shift` o `Enter` |
+| Disparar al objetivo más cercano | `F` o `Ctrl der.` |
+| Disparar hacia la mira | Clic izquierdo del ratón |
 
-Con un solo jugador sirven ambos esquemas. `Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen.
+`Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen.
 
 ### Sonido
 
@@ -71,7 +87,7 @@ En el menú principal, **Sonido** (tecla `4`) abre un apartado con volúmenes in
 | Choques y explosiones | Colisiones, vehículos destruidos y la planta nuclear |
 | Interfaz | Cuenta regresiva, recompensas y avisos |
 
-Modo cooperativo (mismo teclado): la cámara sigue a los dos vehículos. Si un jugador cae, reaparece a los 6 s junto a su compañero (cuesta $20.000). Si uno se queda muy atrás, se le trae de vuelta junto al otro.
+El modo de dos jugadores en el mismo teclado se retiró del menú para preparar el juego en línea. El nivel sigue admitiendo varios jugadores por dentro (cámara compartida, reaparición del compañero a los 6 s por $20.000 y arrastre del rezagado), que es la base para conectar jugadores remotos.
 
 ## Música
 
