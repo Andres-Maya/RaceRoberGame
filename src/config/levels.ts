@@ -36,6 +36,9 @@ export const LEVEL_0: LevelConfig = {
  * Valores base de los niveles de persecución. Durante la calibración se usa
  * una versión neutral; al terminarla la IA los escala con la habilidad medida.
  */
+/** Nombre corto de cada nivel (0 = prólogo, 4 = infinito). */
+export const LEVEL_NAMES = ['La Ruta del Polvo', 'El Golpe', 'Territorio Enemigo', 'Tierra Baldía', 'Carretera Sin Fin'];
+
 export const BASE_LEVELS: Record<1 | 2 | 3, LevelConfig> = {
   1: {
     index: 1,

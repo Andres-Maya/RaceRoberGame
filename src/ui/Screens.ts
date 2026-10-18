@@ -1,5 +1,6 @@
 import type { PerformanceMetrics } from '../ai/PerformanceTracker';
 import { FEATURES, type SkillProfile } from '../ai/SkillClassifier';
+import { LEVEL_NAMES } from '../config/levels';
 import type { LevelConfig } from '../config/types';
 import { isUnlocked, VEHICLES, vehicleById, vehicleStats, type VehicleId } from '../config/vehicles';
 import type { SoundChannel, Volumes } from '../core/Audio';
@@ -150,7 +151,11 @@ export class Screens {
       </div>
       <p class="tagline">Un golpe al Banco Central. Tres niveles de persecución. Una IA que estudia cómo manejas.</p>
       <div class="menu-buttons">
-        <button data-action="play" class="primary">JUGAR <kbd>1</kbd></button>
+        ${
+          save.campaign && save.campaign.level > 0
+            ? `<button data-action="play" class="primary">CONTINUAR <kbd>1</kbd> <small>${save.campaign.level === 4 ? 'Nivel ∞' : `Nivel ${save.campaign.level}`} · ${esc(LEVEL_NAMES[save.campaign.level] ?? '')} · ${formatMoney(save.campaign.cash)}</small></button>`
+            : '<button data-action="play" class="primary">JUGAR <kbd>1</kbd></button>'
+        }
         <button data-action="select">SELECCIONAR NIVEL <kbd>2</kbd></button>
         <button data-action="online">EN LÍNEA · 2 JUGADORES <kbd>5</kbd> <small>código, hotspot o IP</small></button>
         <button data-action="garage">GARAJE <kbd>3</kbd> <small>${esc(vehicleById(save.vehicles[0]).name)}</small></button>
@@ -175,8 +180,7 @@ export class Screens {
   }
 
   levelSelect(save: SaveData, start: (level: number) => void, back: Action): void {
-    const names = ['La Ruta del Polvo', 'El Golpe', 'Territorio Enemigo', 'Tierra Baldía', 'Carretera Sin Fin'];
-    const rows = names
+    const rows = LEVEL_NAMES
       .map(
         (n, i) => `<div class="level-row">
           <div><b>Nivel ${i === 4 ? '∞' : i}</b> — ${n}${i === 4 ? ` <small class="muted">(récord ${(save.bestEndless / 1000).toFixed(2)} km)</small>` : ''}</div>
@@ -187,7 +191,7 @@ export class Screens {
     const actions: Record<string, Action> = { back };
     for (let i = 0; i < 5; i++) actions[`l${i}`] = () => start(i);
     const prof =
-      'Cada nivel empieza con una fase de calibración: El Analista mide tu habilidad en los primeros metros y ajusta ese mismo nivel.' +
+      'Elegir un nivel también deja ahí tu campaña (el prólogo es una partida nueva). Cada nivel empieza con una fase de calibración: El Analista mide tu habilidad en los primeros metros y ajusta ese mismo nivel.' +
       (save.profile ? ` Último perfil: <b>${save.profile.tier}</b> (${Math.round(save.profile.skill * 100)}%).` : '');
     this.show(`<h2>Seleccionar nivel</h2><p class="muted">${prof}</p>${rows}<div class="menu-buttons"><button data-action="back" class="ghost">Volver <kbd>Esc</kbd></button></div>`, actions, [[['Escape', 'Backspace'], 'back']]);
   }

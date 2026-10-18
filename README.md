@@ -67,7 +67,7 @@ El juego detecta la pantalla táctil y muestra controles en pantalla. El vehícu
 
 Los niveles 0 a 3 terminan **por distancia**: el HUD muestra cuánto falta para la meta. Cada disparo que recibes te quita $2.500 del botín.
 
-Desde **Seleccionar nivel** puedes empezar en cualquier nivel: cada uno calibra tu habilidad por su cuenta.
+El juego recuerda tu campaña: **JUGAR** pasa a ser **CONTINUAR** y te lleva al nivel en que quedaste, con el botín y el puntaje acumulados (si superaste un nivel y volviste al menú, al siguiente; tras ganar la campaña, al nivel infinito). Desde **Seleccionar nivel** puedes empezar en cualquier nivel, y la campaña sigue desde ahí (el prólogo es una partida nueva); cada nivel calibra tu habilidad por su cuenta.
 
 ## Garaje
 

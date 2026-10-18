@@ -32,6 +32,14 @@ export interface SaveData {
   vehicles: VehicleId[];
   /** Totales de todas las partidas (desbloquean vehículos). */
   totals: { wrecks: number; jumps: number };
+  /** Campaña en curso: nivel por jugar, botín y puntaje acumulados (JUGAR continúa desde aquí). */
+  campaign: SavedCampaign | null;
+}
+
+export interface SavedCampaign {
+  level: number;
+  cash: number;
+  score: number;
 }
 
 const defaults = (): SaveData => ({
@@ -48,6 +56,7 @@ const defaults = (): SaveData => ({
   bestEndless: 0,
   vehicles: ['cacharro', 'cacharro'],
   totals: { wrecks: 0, jumps: 0 },
+  campaign: null,
 });
 
 export class Storage {

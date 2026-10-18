@@ -301,7 +301,7 @@ export class Game {
     this.audio.duckMusic(false);
     this.audio.playMusic('calm');
     this.screens.menu(this.storage.data, {
-      play: () => this.newCampaign(),
+      play: () => this.continueCampaign(),
       select: () => this.screens.levelSelect(this.storage.data, (l) => this.startFrom(l), () => this.showMenu()),
       online: () => this.showOnline(),
       garage: () => this.showGarage(() => this.showMenu()),
@@ -440,6 +440,18 @@ export class Game {
     return this.net?.role === 'host' && this.net.peer && this.net.link.connected ? 2 : 1;
   }
 
+  /** JUGAR: sigue la campaña guardada en el nivel en que quedó; si no hay, empieza en el prólogo. */
+  private continueCampaign(): void {
+    const saved = this.storage.data.campaign;
+    if (!saved || saved.level <= 0) {
+      this.newCampaign();
+      return;
+    }
+    enterFullscreen();
+    this.campaign = { players: this.playerCount, level: Math.min(4, saved.level), profile: this.storage.data.profile, cash: saved.cash, score: saved.score, config: null };
+    this.showIntro();
+  }
+
   private newCampaign(): void {
     enterFullscreen();
     this.campaign = { players: this.playerCount, level: 0, profile: null, cash: 0, score: 0, config: null };
@@ -464,6 +476,12 @@ export class Game {
 
   private showIntro(): void {
     this.campaign.players = this.playerCount;
+    // La campaña de un jugador se guarda en el nivel que se va a jugar: JUGAR vuelve aquí.
+    if (!this.net) {
+      const { level, cash, score } = this.campaign;
+      this.storage.data.campaign = { level, cash, score };
+      this.storage.save();
+    }
     if (this.net) this.net.inRoom = false;
     this.state = 'intro';
     this.disposeLevel();
@@ -598,6 +616,8 @@ export class Game {
     this.campaign.cash = cfg.index === 0 ? LOOT : Math.max(0, this.campaign.cash - level.cashLost);
     data.profile = this.campaign.profile;
     data.unlocked = Math.max(data.unlocked, Math.min(3, cfg.index + 1));
+    // Aunque se vuelva al menú desde los resultados, CONTINUAR sigue en el nivel siguiente (tras ganar, el infinito).
+    if (!this.net) data.campaign = { level: Math.min(4, cfg.index + 1), cash: this.campaign.cash, score: this.campaign.score };
     this.storage.save();
     this.hud.hide();
     this.audio.playMusic('victory');
