@@ -5,15 +5,15 @@ import type { CamPlayer } from '../world/CameraRig';
 import type { SceneDelta } from './SceneSync';
 
 /** Cambia si el formato de los mensajes deja de ser compatible. */
-export const PROTOCOL = 3;
+export const PROTOCOL = 5;
 
 /** Sonidos puntuales que el invitado repite. */
 export const SFX_CALLS = new Set(['blip', 'crash', 'explosion', 'shot', 'playerShot', 'emptyClick', 'stopLoops']);
 /** Efectos de partículas que el invitado repite con su propio sistema. */
 export const FX_CALLS = ['blast', 'shockwave', 'flame', 'explosion', 'splash', 'splatter', 'sparks', 'dust', 'muzzle', 'turbo', 'smokeTrail'] as const;
 
-/** Controles del invitado en forma compacta: [acelerar, frenar, giro, turbo, disparo, mira x, mira z, rumbo del joystick]. */
-export type PackedInput = [number, number, number, 0 | 1, 0 | 1, number | null, number | null, number | null];
+/** Controles del invitado en forma compacta: [acelerar, frenar, giro, turbo, disparo, rumbo del joystick]. */
+export type PackedInput = [number, number, number, 0 | 1, 0 | 1, number | null];
 
 /** Llamada a efectos o sonidos que el invitado repite: [método, argumentos]. */
 export type NetCall = [string, unknown[]];
@@ -50,5 +50,6 @@ export type NetMessage =
   | { t: 'begin'; label: string }
   | { t: 'init'; me: number; baseCash: number; scene: SceneDelta; hud: HudState }
   | FrameMessage
-  | { t: 'end' }
+  /** Fin del nivel, con lo que el invitado suma a su propio progreso (desbloqueos). */
+  | { t: 'end'; level: number; outcome: 'complete' | 'failed'; wrecks: number; jumps: number; distance: number }
   | { t: 'bye'; text: string };

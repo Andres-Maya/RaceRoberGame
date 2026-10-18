@@ -16,14 +16,13 @@ export function unpackInput(i: PackedInput): DriveInput {
     steer: i[2],
     turbo: i[3] === 1,
     shoot: i[4] === 1,
-    aim: i[5] !== null && i[6] !== null ? { x: i[5], z: i[6] } : null,
-    dir: i[7] ?? null,
+    dir: i[5] ?? null,
   };
 }
 
 export function packInput(d: DriveInput): PackedInput {
   const r = (x: number) => Math.round(x * 100) / 100;
-  return [d.throttle, d.brake, r(d.steer), d.turbo ? 1 : 0, d.shoot ? 1 : 0, d.aim ? r(d.aim.x) : null, d.aim ? r(d.aim.z) : null, d.dir != null ? Math.round(d.dir * 1000) / 1000 : null];
+  return [d.throttle, d.brake, r(d.steer), d.turbo ? 1 : 0, d.shoot ? 1 : 0, d.dir != null ? Math.round(d.dir * 1000) / 1000 : null];
 }
 
 /**

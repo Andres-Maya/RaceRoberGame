@@ -30,6 +30,8 @@ export interface SaveData {
   bestEndless: number;
   /** Vehículo elegido en el garaje por cada jugador. */
   vehicles: VehicleId[];
+  /** Totales de todas las partidas (desbloquean vehículos). */
+  totals: { wrecks: number; jumps: number };
 }
 
 const defaults = (): SaveData => ({
@@ -44,7 +46,8 @@ const defaults = (): SaveData => ({
   musicOn: true,
   volumes: { ...DEFAULT_VOLUMES },
   bestEndless: 0,
-  vehicles: ['moto', 'moto'],
+  vehicles: ['cacharro', 'cacharro'],
+  totals: { wrecks: 0, jumps: 0 },
 });
 
 export class Storage {
@@ -60,8 +63,9 @@ export class Storage {
         const volumes = { ...DEFAULT_VOLUMES, ...(saved.volumes ?? {}) };
         if (!saved.volumes && typeof saved.musicVolume === 'number') volumes.music = saved.musicVolume;
         delete saved.musicVolume;
-        const vehicles = Array.isArray(saved.vehicles) ? [...saved.vehicles, 'moto', 'moto'].slice(0, 2) : ['moto', 'moto'];
-        this.data = { ...defaults(), ...saved, volumes, vehicles };
+        const vehicles = Array.isArray(saved.vehicles) ? [...saved.vehicles, 'cacharro', 'cacharro'].slice(0, 2) : ['cacharro', 'cacharro'];
+        const totals = { wrecks: Number(saved.totals?.wrecks) || 0, jumps: Number(saved.totals?.jumps) || 0 };
+        this.data = { ...defaults(), ...saved, volumes, vehicles, totals };
       }
     } catch {
       // Sin almacenamiento disponible (modo privado): se juega sin guardar.

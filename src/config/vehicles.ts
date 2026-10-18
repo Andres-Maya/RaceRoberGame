@@ -1,12 +1,25 @@
 import type { VehicleSpec } from '../entities/Vehicle';
 
-export type VehicleId = 'moto' | 'sport' | 'truck' | 'buggy' | 'muscle' | 'armored';
+export type VehicleId = 'cacharro' | 'moto' | 'sport' | 'truck' | 'buggy' | 'muscle' | 'armored';
 
-/** Datos de progreso necesarios para saber si un vehículo está desbloqueado. */
+/** Progreso del jugador que decide qué vehículos están desbloqueados. */
 export interface UnlockState {
+  /** Nivel más alto desbloqueado (1 = superó el prólogo). */
   unlocked: number;
   victories: number;
+  /** Mejor distancia (m) en el nivel infinito. */
   bestEndless: number;
+  /** Totales de todas las partidas. */
+  totals: { wrecks: number; jumps: number };
+}
+
+/** Cómo se consigue un vehículo: se desbloquea cuando `current` alcanza `target`. */
+export interface Unlock {
+  text: string;
+  current: (s: UnlockState) => number;
+  target: number;
+  /** Progreso legible ("12/40"); sin él no se muestra (metas de sí o no). */
+  progress?: (s: UnlockState) => string;
 }
 
 /**
@@ -44,8 +57,8 @@ export interface VehicleDef {
   twoWheeler: boolean;
   /** Habilidades que se muestran en la tarjeta del garaje. */
   perks: string[];
-  /** Requisito de desbloqueo (null = disponible desde el inicio). */
-  unlock: { text: string; check: (s: UnlockState) => boolean } | null;
+  /** Cómo se desbloquea (null = el vehículo inicial). */
+  unlock: Unlock | null;
 }
 
 const spec = (maxSpeed: number, accel: number, steerRate: number, grip: number, hx: number, hz: number, density: number, brake = 42): VehicleSpec => ({
@@ -61,6 +74,28 @@ const spec = (maxSpeed: number, accel: number, steerRate: number, grip: number, 
 });
 
 export const VEHICLES: VehicleDef[] = [
+  {
+    id: 'cacharro',
+    name: 'Cacharro',
+    role: 'Inicial',
+    description: 'Un hatchback oxidado con el escape amarrado con alambre. No es bonito, pero arranca y aguanta.',
+    spec: spec(33, 22, 2.4, 8, 0.95, 2.0, 2.6),
+    hp: 170,
+    ammoStart: 30,
+    ammoMax: 60,
+    turboMul: 1.4,
+    turboDrain: 0.32,
+    turboRegen: 0.12,
+    offroad: 0.65,
+    sandProof: false,
+    ram: 1.3,
+    armor: 1,
+    jump: 1,
+    engineTone: 0.9,
+    twoWheeler: false,
+    perks: ['Fácil de manejar y resistente', 'Cuatro ruedas: salta bien si toma la rampa de frente'],
+    unlock: null,
+  },
   {
     id: 'moto',
     name: 'Furia',
@@ -81,7 +116,7 @@ export const VEHICLES: VehicleDef[] = [
     engineTone: 1,
     twoWheeler: true,
     perks: ['Silueta pequeña: cabe por cualquier hueco', 'El turbo se recarga más rápido'],
-    unlock: null,
+    unlock: { text: 'Supera el prólogo (nivel 0)', current: (s) => Math.min(s.unlocked, 1), target: 1 },
   },
   {
     id: 'sport',
@@ -103,7 +138,7 @@ export const VEHICLES: VehicleDef[] = [
     engineTone: 1.3,
     twoWheeler: false,
     perks: ['Velocidad punta y aceleración máximas', 'Frágil y torpe fuera del asfalto'],
-    unlock: null,
+    unlock: { text: 'Supera el nivel 1', current: (s) => Math.min(s.unlocked, 2), target: 2 },
   },
   {
     id: 'truck',
@@ -125,7 +160,7 @@ export const VEHICLES: VehicleDef[] = [
     engineTone: 0.72,
     twoWheeler: false,
     perks: ['Embestida ×2,2: destroza patrullas', 'Cajón de munición grande (80)'],
-    unlock: null,
+    unlock: { text: 'Derriba 40 perseguidores en total', current: (s) => s.totals.wrecks, target: 40, progress: (s) => `${Math.min(40, s.totals.wrecks)}/40` },
   },
   {
     id: 'buggy',
@@ -147,7 +182,7 @@ export const VEHICLES: VehicleDef[] = [
     engineTone: 1.12,
     twoWheeler: false,
     perks: ['Sin penalización fuera del asfalto ni en la arena', 'Salta más lejos en las rampas'],
-    unlock: null,
+    unlock: { text: 'Completa 15 saltos en rampas', current: (s) => s.totals.jumps, target: 15, progress: (s) => `${Math.min(15, s.totals.jumps)}/15` },
   },
   {
     id: 'muscle',
@@ -169,7 +204,7 @@ export const VEHICLES: VehicleDef[] = [
     engineTone: 0.82,
     twoWheeler: false,
     perks: ['Turbo potente y duradero', 'Embestida ×1,6', 'Derrapa en las curvas'],
-    unlock: null,
+    unlock: { text: 'Supera el nivel 2', current: (s) => Math.min(s.unlocked, 3), target: 3 },
   },
   {
     id: 'armored',
@@ -191,7 +226,12 @@ export const VEHICLES: VehicleDef[] = [
     engineTone: 0.6,
     twoWheeler: false,
     perks: ['Blindaje: −35 % de daño de balas, explosiones, ácido y fuego', 'Embestida ×2,6 · 100 balas', 'Muy lento'],
-    unlock: { text: 'Supera el nivel 2 o recorre 2 km en el nivel infinito', check: (s) => s.unlocked >= 3 || s.victories > 0 || s.bestEndless >= 2000 },
+    unlock: {
+      text: 'Gana la campaña (supera el nivel 3) o recorre 3 km en el nivel infinito',
+      current: (s) => (s.victories > 0 ? 3000 : s.bestEndless),
+      target: 3000,
+      progress: (s) => (s.victories > 0 ? 'campaña ganada' : `${(Math.min(3000, s.bestEndless) / 1000).toFixed(1)}/3 km`),
+    },
   },
 ];
 
@@ -200,7 +240,12 @@ export function vehicleById(id: string): VehicleDef {
 }
 
 export function isUnlocked(def: VehicleDef, s: UnlockState): boolean {
-  return !def.unlock || def.unlock.check(s);
+  return !def.unlock || def.unlock.current(s) >= def.unlock.target;
+}
+
+/** Identificadores de los vehículos desbloqueados. */
+export function unlockedIds(s: UnlockState): Set<VehicleId> {
+  return new Set(VEHICLES.filter((v) => isUnlocked(v, s)).map((v) => v.id));
 }
 
 /** Barras de la tarjeta (0..1) comparando contra el mejor de cada atributo. */

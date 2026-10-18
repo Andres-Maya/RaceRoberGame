@@ -4,10 +4,8 @@ export interface DriveInput {
   /** -1 izquierda .. +1 derecha */
   steer: number;
   turbo: boolean;
-  /** Disparar: con tecla apunta solo al objetivo más cercano; con el ratón, hacia la mira. */
+  /** Disparar: el arma apunta sola al objetivo más cercano. */
   shoot: boolean;
-  /** Punto del mundo bajo la mira del ratón (solo jugador 1), o null para apuntado automático. */
-  aim: { x: number; z: number } | null;
   /**
    * Joystick del celular: rumbo del mundo hacia el que apunta la bolita
    * (null = sin dirección). El nivel lo convierte en giro, aceleración o reversa.
@@ -43,14 +41,14 @@ interface Scheme {
   shoot: string[];
 }
 
-const P1: Scheme = { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], turbo: ['Space', 'ShiftLeft'], shoot: ['KeyF'] };
-const P2: Scheme = {
-  up: ['ArrowUp'],
-  down: ['ArrowDown'],
-  left: ['ArrowLeft'],
-  right: ['ArrowRight'],
-  turbo: ['ShiftRight', 'Enter', 'NumpadEnter', 'Numpad0'],
-  shoot: ['ControlRight', 'Period', 'NumpadDecimal'],
+/** WASD y flechas valen igual: un solo jugador por dispositivo. */
+const KEYS: Scheme = {
+  up: ['KeyW', 'ArrowUp'],
+  down: ['KeyS', 'ArrowDown'],
+  left: ['KeyA', 'ArrowLeft'],
+  right: ['KeyD', 'ArrowRight'],
+  turbo: ['Space', 'ShiftLeft', 'ShiftRight', 'Enter', 'NumpadEnter', 'Numpad0'],
+  shoot: ['KeyF', 'ControlRight', 'Period', 'NumpadDecimal'],
 };
 
 const BLOCKED = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
@@ -84,20 +82,15 @@ export class Input {
     this.pressed.clear();
   }
 
-  /**
-   * Controles de un jugador. Con un solo jugador se aceptan ambos esquemas
-   * (WASD y flechas); con dos, P1 usa WASD y P2 las flechas.
-   */
-  drive(player: number, playerCount: number): DriveInput {
-    const schemes = playerCount === 1 ? [P1, P2] : [player === 0 ? P1 : P2];
-    const any = (keys: (s: Scheme) => string[]) => schemes.some((s) => keys(s).some((k) => this.down.has(k)));
+  /** Controles del jugador de este dispositivo (en línea, el otro juega en el suyo). */
+  drive(): DriveInput {
+    const any = (keys: string[]) => keys.some((k) => this.down.has(k));
     return {
-      throttle: any((s) => s.up) ? 1 : 0,
-      brake: any((s) => s.down) ? 1 : 0,
-      steer: (any((s) => s.right) ? 1 : 0) - (any((s) => s.left) ? 1 : 0),
-      turbo: any((s) => s.turbo),
-      shoot: any((s) => s.shoot),
-      aim: null,
+      throttle: any(KEYS.up) ? 1 : 0,
+      brake: any(KEYS.down) ? 1 : 0,
+      steer: (any(KEYS.right) ? 1 : 0) - (any(KEYS.left) ? 1 : 0),
+      turbo: any(KEYS.turbo),
+      shoot: any(KEYS.shoot),
     };
   }
 }

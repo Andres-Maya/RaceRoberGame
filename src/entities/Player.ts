@@ -5,8 +5,8 @@ import type { Physics } from '../world/Physics';
 import { Vehicle } from './Vehicle';
 
 export const PLAYER_COLORS = [
-  { body: 0xd62828, accent: 0xfcbf49, css: '#ff4d4d', name: 'Rojo' },
-  { body: 0x1d4ed8, accent: 0x7dd3fc, css: '#4d9dff', name: 'Azul' },
+  { body: 0xd62828, accent: 0xfcbf49, css: '#ff4d4d' },
+  { body: 0x1d4ed8, accent: 0x7dd3fc, css: '#4d9dff' },
 ];
 
 export class Player {
@@ -24,7 +24,6 @@ export class Player {
   flash = 0;
   /** Segundos desde el último daño recibido. */
   sinceHit = 0;
-  steer = 0;
   offroad = false;
   /** Escena automática en curso: entrar a la estructura final o salir de la inicial. */
   cutscene: 'enter' | 'exit' | null = null;

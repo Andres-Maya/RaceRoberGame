@@ -7,11 +7,11 @@ import type { Input } from '../core/Input';
 import { formatMoney, formatTime } from '../core/math';
 import type { SaveData } from '../core/Storage';
 import { PLAYER_COLORS } from '../entities/Player';
+import { esc } from './html';
 import { vehicleThumbnails } from './Thumbnails';
 
 type Action = () => void;
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /** Pantallas superpuestas en HTML: menú, historia, resultados, pausa... */
 export class Screens {
@@ -335,6 +335,16 @@ export class Screens {
     );
   }
 
+  /** Aviso destacado arriba de la pantalla actual (por ejemplo, un vehículo desbloqueado). */
+  notice(names: string[]): void {
+    const panel = this.el.querySelector('.panel');
+    if (!panel || !names.length) return;
+    const note = document.createElement('div');
+    note.className = 'unlock-note';
+    note.innerHTML = `<b>¡${names.length > 1 ? 'Nuevos vehículos desbloqueados' : 'Nuevo vehículo desbloqueado'}!</b> ${names.map(esc).join(', ')} · elígelo en el garaje`;
+    panel.prepend(note);
+  }
+
   /** Estado de la conexión (conectando, esperando al anfitrión...). */
   netStatus(title: string, text: string, a: { leave: Action; garage?: Action }): void {
     this.show(
@@ -411,7 +421,7 @@ export class Screens {
         <div class="vphoto">
           ${photos[v.id] ? `<img src="${photos[v.id]}" alt="${esc(v.name)}" draggable="false" />` : ''}
           <div class="vbadges"><span class="vbadge" style="--pc:${PLAYER_COLORS[0].css}">ELEGIDO</span></div>
-          ${locked ? `<div class="vlock"><b>BLOQUEADO</b><span>${esc(v.unlock!.text)}</span></div>` : ''}
+          ${locked ? `<div class="vlock"><b>BLOQUEADO</b><span>${esc(v.unlock!.text)}</span>${v.unlock!.progress ? `<em>${esc(v.unlock!.progress(save))}</em>` : ''}</div>` : ''}
         </div>
         <div class="vhead"><h3>${esc(v.name)}</h3><span class="vrole">${esc(v.role)}</span><kbd>${i + 1}</kbd></div>
         <p class="vdesc">${esc(v.description)}</p>
@@ -450,7 +460,7 @@ export class Screens {
     });
     this.show(
       `<h2>Garaje</h2>
-      <p class="muted">Cada vehículo tiene su propia vida, velocidad, munición y habilidades. Teclas <kbd>1</kbd>–<kbd>6</kbd> para elegir rápido.</p>
+      <p class="muted">Cada vehículo tiene su propia vida, velocidad, munición y habilidades. Empiezas con el Cacharro; los demás se desbloquean jugando. Teclas <kbd>1</kbd>–<kbd>${VEHICLES.length}</kbd> para elegir rápido.</p>
       <div class="garage-grid">${cards}</div>
       <div class="menu-buttons"><button data-action="back" class="primary">Listo <kbd>Esc</kbd></button></div>`,
       actions,

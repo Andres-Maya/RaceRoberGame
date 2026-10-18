@@ -1502,3 +1502,38 @@ body.touch #hud-toasts {
   user-select: text;
   resize: vertical;
 }
+
+/* ------------------------------------------------------------ desbloqueos */
+
+.unlock-note {
+  margin: -6px 0 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(244, 208, 63, 0.6);
+  background: linear-gradient(90deg, rgba(244, 208, 63, 0.22), rgba(244, 208, 63, 0.05));
+  color: #ffe9a3;
+  animation: unlock-glow 1.6s ease-in-out 3;
+}
+
+.unlock-note b {
+  color: var(--gold);
+  font-family: var(--display);
+  letter-spacing: 0.05em;
+}
+
+.vlock em {
+  margin-top: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(244, 208, 63, 0.18);
+  color: var(--gold);
+  font: 0.9rem var(--display);
+  font-style: normal;
+  letter-spacing: 0.05em;
+}
+
+@keyframes unlock-glow {
+  50% {
+    box-shadow: 0 0 22px rgba(244, 208, 63, 0.45);
+  }
+}

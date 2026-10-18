@@ -1,5 +1,6 @@
 import { formatMoney } from '../core/math';
 import { PLAYER_COLORS } from '../entities/Player';
+import { esc } from './html';
 import type { FinishScene } from '../config/types';
 import type { Level } from '../world/Level';
 
@@ -97,7 +98,6 @@ export function hudState(level: Level): HudState {
   };
 }
 
-const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T => root.querySelector(sel) as T;
 
 /** Interfaz durante el juego: cronómetro, vida, turbo, policía y panel de la IA. */

@@ -3,7 +3,7 @@ import { AdaptiveDifficulty } from '../ai/AdaptiveDifficulty';
 import { buildProfile, RuleBasedClassifier, type SkillProfile } from '../ai/SkillClassifier';
 import { ENDLESS_LEVEL, LEVEL_0, VICTORY_TEXT } from '../config/levels';
 import type { LevelConfig } from '../config/types';
-import { isUnlocked, VEHICLES, vehicleById, type VehicleDef, type VehicleId } from '../config/vehicles';
+import { isUnlocked, unlockedIds, VEHICLES, vehicleById, type VehicleDef, type VehicleId } from '../config/vehicles';
 import { GuestView } from '../net/GuestView';
 import { HostSync, packInput, unpackInput } from '../net/HostSync';
 import { lanAddress, lanInfo, PeerLink, WsLink, type LanInfo, type Link } from '../net/Link';
@@ -59,12 +59,14 @@ interface Net {
   view: GuestView | null;
   playing: boolean;
   inGarage: boolean;
+  /** Invitado: vehículos recién desbloqueados que se avisan en la siguiente pantalla. */
+  unlocks: string[];
   waitText: string;
   lastInput: string;
   inputTimer: number;
 }
 
-const idleInput = (): DriveInput => ({ throttle: 0, brake: 0, steer: 0, turbo: false, shoot: false, aim: null });
+const idleInput = (): DriveInput => ({ throttle: 0, brake: 0, steer: 0, turbo: false, shoot: false });
 
 /** Color de un aviso recibido por red (evita valores que no sean colores simples). */
 const safeColor = (c: unknown): string | undefined => (typeof c === 'string' && /^(#[0-9a-f]{3,8}|[a-z]{3,20})$/i.test(c) ? c : undefined);
@@ -204,8 +206,8 @@ export class Game {
   }
 
   /** Controles del jugador de este dispositivo: teclado o controles táctiles. */
-  private localInput(players: number): DriveInput {
-    return this.touch.apply(this.input.drive(0, players));
+  private localInput(): DriveInput {
+    return this.touch.apply(this.input.drive());
   }
 
   private tick(dt: number, render = true): void {
@@ -226,10 +228,8 @@ export class Game {
       if (this.input.wasPressed('Escape', 'KeyP') || this.touch.consumePause()) {
         this.pause();
       } else {
-        const online = this.net?.role === 'host';
-        const inputs = online
-          ? [this.localInput(1), this.net!.remote]
-          : [this.localInput(this.campaign.players), this.input.drive(1, this.campaign.players)];
+        // El jugador 1 es el de este dispositivo; en línea, el 2 llega por la red.
+        const inputs = this.net?.role === 'host' ? [this.localInput(), this.net.remote] : [this.localInput()];
         this.level.update(dt, inputs);
         this.audio.musicIntensity(this.level.musicIntensity);
         // Cuando caen todos los vehículos, el metal se corta y entra el réquiem.
@@ -276,7 +276,7 @@ export class Game {
       mine = { x: own.vehicle.px, z: own.vehicle.pz };
     } else if (guest && this.net?.view) {
       const view = this.net.view;
-      mates = view.players.map((p, i) => ({ index: i, x: p.px, z: p.pz, vehicle: view.hud.players[i]?.vehicle ?? 'moto', alive: p.alive }));
+      mates = view.players.map((p, i) => ({ index: i, x: p.px, z: p.pz, vehicle: view.hud.players[i]?.vehicle ?? VEHICLES[0].id, alive: p.alive }));
       const own = view.players[me];
       mine = own ? { x: own.px, z: own.pz } : null;
     }
@@ -341,6 +341,13 @@ export class Game {
             ? 'android'
             : 'desktop';
     this.screens.installHelp({ browser, secure: window.isSecureContext, host: location.host }, () => this.showMenu());
+  }
+
+  /** Vehículos que se desbloquearon desde `before` (para avisar en la pantalla de resultados). */
+  private newUnlocks(before: Set<VehicleId>): string[] {
+    const fresh = VEHICLES.filter((v) => !before.has(v.id) && isUnlocked(v, this.storage.data)).map((v) => v.name);
+    if (fresh.length) this.audio.blip(1320);
+    return fresh;
   }
 
   /** Garaje: el vehículo elegido se guarda (y en línea se avisa al anfitrión). */
@@ -505,7 +512,7 @@ export class Game {
         const sync = net?.sync ?? null;
         let hooks: LevelHooks = { message: (t, c, s) => this.hud.toast(t, c, s), flash: (c) => this.hud.flash(c) };
         if (sync) hooks = sync.wrapHooks(hooks);
-        const vehicles = online ? [this.chosenVehicles()[0], vehicleById(net!.peer ?? 'moto')] : this.chosenVehicles();
+        const vehicles = online ? [this.chosenVehicles()[0], vehicleById(net!.peer ?? VEHICLES[0].id)] : this.chosenVehicles();
         const level = new Level(cfg, this.campaign.players, sync ? sync.wrapAudio(this.audio) : this.audio, hooks, this.classifier, vehicles);
         sync?.attach(level);
         this.level = level;
@@ -548,15 +555,24 @@ export class Game {
   }
 
   private onLevelDone(): void {
+    const before = unlockedIds(this.storage.data);
+    this.levelDone();
+    // Lo que se desbloqueó con este nivel aparece sobre la pantalla de resultados.
+    this.screens.notice(this.newUnlocks(before));
+  }
+
+  private levelDone(): void {
     const level = this.level!;
     const cfg = level.config;
     const m = level.tracker.m;
     const data = this.storage.data;
     if (this.net?.role === 'host') {
-      this.net.link.send({ t: 'end' });
+      this.net.link.send({ t: 'end', level: cfg.index, outcome: level.outcome ?? 'failed', wrecks: m.copsWrecked, jumps: level.jumps.landed, distance: Math.round(level.maxD) });
       this.net.sync = null;
     }
     data.runs++;
+    data.totals.wrecks += m.copsWrecked;
+    data.totals.jumps += level.jumps.landed;
     // El perfil del nivel es el medido en su calibración (o el recorrido completo si no llegó a terminarla).
     const measured = level.calibratedProfile ?? buildProfile(this.classifier, m);
     this.storage.record({ date: new Date().toISOString(), players: this.campaign.players, level: cfg.index, skill: measured.skill, features: measured.features });
@@ -646,6 +662,7 @@ export class Game {
       view: null,
       playing: false,
       inGarage: false,
+      unlocks: [],
       waitText: '',
       lastInput: '',
       inputTimer: 0,
@@ -914,7 +931,7 @@ export class Game {
         if (net.inRoom) this.screens.roomGuest(vehicleById(net.peer).name);
         break;
       case 'input':
-        if (Array.isArray(m.i) && m.i.length === 8) net.remote = this.cleanInput(m.i);
+        if (Array.isArray(m.i) && m.i.length === 6) net.remote = this.cleanInput(m.i);
         break;
       case 'pause':
         if (this.state === 'playing' && this.level && this.level.players.length > 1) this.pause();
@@ -932,7 +949,6 @@ export class Game {
       steer: num(d.steer, -1, 1),
       turbo: d.turbo === true,
       shoot: d.shoot === true,
-      aim: d.aim && Number.isFinite(d.aim.x) && Number.isFinite(d.aim.z) ? { x: d.aim.x, z: d.aim.z } : null,
       dir: typeof d.dir === 'number' && Number.isFinite(d.dir) ? d.dir : null,
     };
   }
@@ -1057,6 +1073,7 @@ export class Game {
           this.audio.stopLoops();
         }
         this.screens.mirror(String(m.html), String(m.variant), () => this.leaveOnline());
+        this.screens.notice(net.unlocks.splice(0));
         break;
       case 'music':
         if (MUSIC_MODES.has(m.mode)) this.audio.playMusic(m.mode, Number(m.level) || 0);
@@ -1103,11 +1120,26 @@ export class Game {
         // Al reanudar tras una pausa vuelven a llegar cuadros: se quita la pantalla.
         if (net.playing && this.screens.visible && !net.inGarage) this.screens.hide();
         break;
-      case 'end':
+      case 'end': {
         net.playing = false;
         this.hud.hide();
         this.audio.stopLoops();
+        // El invitado también avanza: niveles superados, récords y totales para desbloquear vehículos.
+        const data = this.storage.data;
+        const before = unlockedIds(data);
+        const n = (x: unknown, max: number) => Math.max(0, Math.min(max, Math.round(Number(x)) || 0));
+        const index = n(m.level, 4);
+        data.totals.wrecks += n(m.wrecks, 500);
+        data.totals.jumps += n(m.jumps, 200);
+        if (m.outcome === 'complete' && index <= 3) {
+          data.unlocked = Math.max(data.unlocked, Math.min(3, index + 1));
+          if (index === 3) data.victories++;
+        }
+        if (index === 4) data.bestEndless = Math.max(data.bestEndless, n(m.distance, 1_000_000));
+        this.storage.save();
+        net.unlocks.push(...this.newUnlocks(before));
         break;
+      }
       case 'bye':
         this.hostLost(String(m.text));
         break;
@@ -1119,7 +1151,7 @@ export class Game {
     const net = this.net!;
     const view = net.view!;
     if (this.input.wasPressed('Escape', 'KeyP') || this.touch.consumePause()) net.link.send({ t: 'pause' });
-    const packed = packInput(this.localInput(1));
+    const packed = packInput(this.localInput());
     const key = packed.join(',');
     net.inputTimer -= dt;
     // Se envía al cambiar y, además, 10 veces por segundo por si se perdió alguno.

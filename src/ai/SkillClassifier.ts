@@ -95,13 +95,3 @@ export function buildProfile(classifier: SkillClassifier, m: PerformanceMetrics)
   return { skill, tier: tierFor(skill), features, samples: 1, classifier: classifier.name };
 }
 
-/**
- * Reajuste tras un nivel de persecución: el nivel 0 pesa más, pero el perfil
- * se mueve hacia el desempeño reciente para que la dificultad siga al jugador.
- */
-export function blendProfile(previous: SkillProfile, recent: SkillProfile, weightRecent = 0.3): SkillProfile {
-  const skill = previous.skill * (1 - weightRecent) + recent.skill * weightRecent;
-  const features = { ...previous.features };
-  for (const { key } of FEATURES) features[key] = previous.features[key] * (1 - weightRecent) + recent.features[key] * weightRecent;
-  return { skill, tier: tierFor(skill), features, samples: previous.samples + 1, classifier: previous.classifier };
-}

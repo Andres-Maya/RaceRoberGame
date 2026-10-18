@@ -94,6 +94,20 @@ export function playerVehicleMesh(id: string, color: number, accent: number): TH
     g.add(box(0.42, 0.14, 0.06, 0xd01010, w * 0.32, y, l / 2 + 0.02));
   };
   switch (id) {
+    case 'cacharro':
+      // Hatchback viejo: óxido, una puerta de otro color, parrilla en el techo y escape amarrado.
+      wheels(g, 1.9, 3.8, 0.7, 0.45);
+      g.add(box(1.9, 0.75, 3.8, color, 0, 0.22, 0));
+      g.add(box(1.7, 0.6, 2.0, 0x1b242c, 0, 0.97, 0.35));
+      g.add(box(1.72, 0.08, 2.02, color, 0, 1.57, 0.35));
+      g.add(box(0.06, 0.55, 1.1, accent, 0.96, 0.4, -0.1));
+      for (const [x, z, w] of [[-0.6, -1.5, 0.5], [0.5, 1.4, 0.6], [-0.95, 0.9, 0.04]] as const) g.add(box(w, 0.04, 0.4, 0x8a4a22, x, 0.98, z));
+      for (const x of [-0.55, 0, 0.55]) g.add(box(0.06, 0.1, 1.6, 0x555555, x, 1.66, 0.35));
+      g.add(box(1.2, 0.1, 0.06, 0x555555, 0, 1.7, -0.45));
+      g.add(cyl(0.09, 0.5, 0x777777, 0.6, 0.12, 2.0));
+      g.add(box(0.5, 0.08, 0.04, 0xc9b27a, 0.6, 0.22, 2.16));
+      lights(1.9, 3.8, 0.5);
+      break;
     case 'sport':
       // Deportivo bajo con alerón y franja central
       wheels(g, 1.9, 4.2, 0.6, 0.45);
