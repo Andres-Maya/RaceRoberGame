@@ -131,7 +131,7 @@ const REINFORCEMENTS = { police: 'La policía envía', gang: 'Los Cuervos mandan
 /** Distancia (m) por detrás del compañero a la que un jugador es capturado. */
 const CAPTURE_GAP = 60;
 /** Segundos que tarda en reaparecer un jugador caído o capturado. */
-const RESPAWN_TIME = 6;
+const RESPAWN_TIME = 10;
 
 /**
  * Una partida de un nivel: escena, física, mapa procedural, jugadores,
