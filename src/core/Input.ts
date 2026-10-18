@@ -8,6 +8,30 @@ export interface DriveInput {
   shoot: boolean;
   /** Punto del mundo bajo la mira del ratón (solo jugador 1), o null para apuntado automático. */
   aim: { x: number; z: number } | null;
+  /**
+   * Joystick del celular: rumbo del mundo hacia el que apunta la bolita
+   * (null = sin dirección). El nivel lo convierte en giro, aceleración o reversa.
+   */
+  dir?: number | null;
+}
+
+/**
+ * Convierte la dirección del joystick en controles: el vehículo gira hacia
+ * donde apunta la bolita; si apunta hacia atrás, retrocede en esa dirección.
+ * `speed` es la velocidad longitudinal actual (negativa en reversa).
+ */
+export function steerToward(input: DriveInput, heading: number, speed: number): DriveInput {
+  if (input.dir === null || input.dir === undefined) return input;
+  const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+  const diff = wrap(input.dir - heading);
+  // Con histéresis: ya en reversa, sigue en reversa mientras la dirección quede bastante atrás.
+  const reversing = speed < -0.5 ? Math.abs(diff) > 1.5 : Math.abs(diff) > 2.1;
+  if (reversing) {
+    // La cola apunta hacia la bolita; en reversa el giro se invierte.
+    const back = wrap(input.dir + Math.PI - heading);
+    return { ...input, throttle: 0, brake: 1, turbo: false, steer: Math.max(-1, Math.min(1, back * 3)) };
+  }
+  return { ...input, throttle: 1, brake: 0, steer: Math.max(-1, Math.min(1, -diff * 3)) };
 }
 
 interface Scheme {

@@ -697,7 +697,7 @@ export class Game {
         if (net.inRoom) this.showRoom();
         break;
       case 'input':
-        if (Array.isArray(m.i) && m.i.length === 7) net.remote = this.cleanInput(m.i);
+        if (Array.isArray(m.i) && m.i.length === 8) net.remote = this.cleanInput(m.i);
         break;
       case 'pause':
         if (this.state === 'playing' && this.level && this.level.players.length > 1) this.pause();
@@ -716,6 +716,7 @@ export class Game {
       turbo: d.turbo === true,
       shoot: d.shoot === true,
       aim: d.aim && Number.isFinite(d.aim.x) && Number.isFinite(d.aim.z) ? { x: d.aim.x, z: d.aim.z } : null,
+      dir: typeof d.dir === 'number' && Number.isFinite(d.dir) ? d.dir : null,
     };
   }
 

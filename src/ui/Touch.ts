@@ -5,9 +5,10 @@ export const IS_TOUCH =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 
 /**
- * Controles en pantalla para celular: un joystick a la izquierda (girar y,
- * hacia abajo, frenar) y botones de turbo y disparo a la derecha. El vehículo
- * acelera solo mientras no se frene.
+ * Controles en pantalla para celular: un joystick a la izquierda y botones de
+ * turbo y disparo a la derecha. El joystick marca la dirección en la pantalla
+ * hacia donde debe ir el vehículo (arriba = hacia arriba de la pantalla); sin
+ * tocarlo, el vehículo sigue acelerando de frente.
  */
 export class TouchControls {
   private root: HTMLElement;
@@ -120,14 +121,14 @@ export class TouchControls {
   /** Mezcla el control táctil con el del teclado. */
   apply(input: DriveInput): DriveInput {
     if (this.root.classList.contains('hidden')) return input;
-    const steer = Math.abs(this.sx) < 0.15 ? 0 : Math.max(-1, Math.min(1, (this.sx - Math.sign(this.sx) * 0.15) / 0.7));
-    const braking = this.sy > 0.55;
+    // La cámara mira hacia abajo con el norte (-Z) arriba: derecha de la pantalla = +X, abajo = +Z.
+    const active = Math.hypot(this.sx, this.sy) > 0.3;
+    const keyboard = input.throttle > 0 || input.brake > 0 || input.steer !== 0;
     return {
       ...input,
-      // Aceleración automática: tirar del joystick hacia abajo frena o da reversa.
-      throttle: braking ? 0 : Math.max(input.throttle, 1),
-      brake: braking ? 1 : input.brake,
-      steer: steer !== 0 ? steer : input.steer,
+      // Sin joystick ni teclas, el vehículo acelera solo de frente.
+      throttle: keyboard ? input.throttle : 1,
+      dir: active ? Math.atan2(-this.sx, -this.sy) : null,
       turbo: input.turbo || this.turbo,
       shoot: input.shoot || this.shoot,
     };

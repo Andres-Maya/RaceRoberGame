@@ -6,7 +6,7 @@ import { BASE_LEVELS } from '../config/levels';
 import { VEHICLES, type VehicleDef } from '../config/vehicles';
 import type { Biome, Faction, FinishScene, LevelConfig, Mood, PursuerConfig, PursuerKind } from '../config/types';
 import type { Audio } from '../core/Audio';
-import type { DriveInput } from '../core/Input';
+import { steerToward, type DriveInput } from '../core/Input';
 import { clamp, clamp01, wrapAngle } from '../core/math';
 import { Rng } from '../core/Rng';
 import { Civilian } from '../entities/Civilian';
@@ -669,6 +669,8 @@ export class Level {
       v.halt(dt, 14);
       return;
     }
+    // Joystick del celular: girar hacia donde apunta la bolita (o retroceder si apunta atrás).
+    input = steerToward(input, v.heading, v.speed);
     // Red de seguridad: la moto nunca circula sobre el río.
     if (this.track.isWater(v.px, v.d)) {
       this.fallInRiver(p);

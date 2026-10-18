@@ -388,7 +388,7 @@ export class Screens {
         <p><kbd>F</kbd> / <kbd>Ctrl der.</kbd> disparar al más cercano · <b>clic izquierdo</b> disparar donde apunta la mira</p>
       </div>
       <div class="ctrl-card" style="--pc:#4d9dff">
-        <p><b>En celular:</b> el vehículo acelera solo. Joystick a la izquierda para girar (hacia abajo frena o da reversa), botones de <b>TURBO</b> y <b>DISPARO</b> a la derecha y pausa abajo al centro. Mejor con el teléfono en horizontal.</p>
+        <p><b>En celular:</b> el vehículo acelera solo y va hacia donde apuntes el joystick de la izquierda (arriba = hacia arriba de la pantalla; si apuntas hacia atrás, retrocede). Botones de <b>TURBO</b> y <b>DISPARO</b> a la derecha y pausa abajo al centro. Mejor con el teléfono en horizontal.</p>
       </div>
       <p class="muted"><kbd>Esc</kbd> / <kbd>P</kbd> pausa · <kbd>M</kbd> silencio · <kbd>N</kbd> música · <kbd>-</kbd> <kbd>+</kbd> volumen de la música.</p>
       <ul class="tips">

@@ -5,15 +5,15 @@ import type { CamTarget } from '../world/CameraRig';
 import type { SceneDelta } from './SceneSync';
 
 /** Cambia si el formato de los mensajes deja de ser compatible. */
-export const PROTOCOL = 1;
+export const PROTOCOL = 2;
 
 /** Sonidos puntuales que el invitado repite. */
 export const SFX_CALLS = new Set(['blip', 'crash', 'explosion', 'shot', 'playerShot', 'emptyClick', 'stopLoops']);
 /** Efectos de partículas que el invitado repite con su propio sistema. */
 export const FX_CALLS = ['blast', 'shockwave', 'flame', 'explosion', 'splash', 'splatter', 'sparks', 'dust', 'muzzle', 'turbo', 'smokeTrail'] as const;
 
-/** Controles del invitado en forma compacta: [acelerar, frenar, giro, turbo, disparo, mira x, mira z]. */
-export type PackedInput = [number, number, number, 0 | 1, 0 | 1, number | null, number | null];
+/** Controles del invitado en forma compacta: [acelerar, frenar, giro, turbo, disparo, mira x, mira z, rumbo del joystick]. */
+export type PackedInput = [number, number, number, 0 | 1, 0 | 1, number | null, number | null, number | null];
 
 /** Llamada a efectos o sonidos que el invitado repite: [método, argumentos]. */
 export type NetCall = [string, unknown[]];
