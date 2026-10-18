@@ -385,7 +385,7 @@ export class Screens {
         <p><kbd>W</kbd> / <kbd>↑</kbd> acelerar · <kbd>S</kbd> / <kbd>↓</kbd> frenar / reversa</p>
         <p><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> girar</p>
         <p><kbd>Espacio</kbd> / <kbd>Shift</kbd> / <kbd>Enter</kbd> turbo</p>
-        <p><kbd>F</kbd> / <kbd>Ctrl der.</kbd> disparar al más cercano · <b>clic izquierdo</b> disparar donde apunta la mira</p>
+        <p><kbd>F</kbd> / <kbd>Ctrl der.</kbd> disparar al objetivo más cercano</p>
       </div>
       <div class="ctrl-card" style="--pc:#4d9dff">
         <p><b>En celular:</b> el vehículo acelera solo y va hacia donde apuntes el joystick de la izquierda (arriba = hacia arriba de la pantalla; si apuntas hacia atrás, retrocede). Botones de <b>TURBO</b> y <b>DISPARO</b> a la derecha y pausa abajo al centro. Mejor con el teléfono en horizontal.</p>

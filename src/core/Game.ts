@@ -124,9 +124,9 @@ export class Game {
     this.audio.onMusic = (mode, level) => {
       if (this.net?.role === 'host') this.net.link.send({ t: 'music', mode, level });
     };
+    // El audio solo puede arrancar dentro de un gesto válido; en táctil, al soltar el dedo.
     const unlock = () => this.audio.unlock();
-    window.addEventListener('pointerdown', unlock);
-    window.addEventListener('keydown', unlock);
+    for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(ev, unlock, { capture: true });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.state === 'playing') this.pause();
       if (!document.hidden) this.audio.resyncMusic();
@@ -166,35 +166,16 @@ export class Game {
     for (let t = 0; t < seconds; t += step) this.tick(step, t + step >= seconds);
   }
 
-  private raycaster = new THREE.Raycaster();
-  private aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1);
-  private aimPoint = new THREE.Vector3();
-
-  /** Punto del suelo bajo el cursor (para apuntar con el ratón o tocando la pantalla). */
-  private mouseWorld(): { x: number; z: number } | null {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((this.input.mouse.x - rect.left) / rect.width) * 2 - 1, -((this.input.mouse.y - rect.top) / rect.height) * 2 + 1);
-    this.raycaster.setFromCamera(ndc, this.camera);
-    const hit = this.raycaster.ray.intersectPlane(this.aimPlane, this.aimPoint);
-    return hit ? { x: hit.x, z: hit.z } : null;
-  }
-
-  /** Controles del jugador de este dispositivo: teclado, táctil y ratón. */
+  /** Controles del jugador de este dispositivo: teclado o controles táctiles. */
   private localInput(players: number): DriveInput {
-    const input = this.touch.apply(this.input.drive(0, players));
-    // Clic izquierdo (o un toque en la pantalla): disparar hacia ese punto.
-    if (this.input.mouse.down) {
-      input.shoot = true;
-      input.aim = this.mouseWorld();
-    }
-    return input;
+    return this.touch.apply(this.input.drive(0, players));
   }
 
   private tick(dt: number, render = true): void {
     const playing = this.state === 'playing' && !!this.level;
     const guest = this.state === 'guest' && !!this.net?.view && this.net.playing && !this.screens.visible;
-    // Durante la partida el cursor es una mira; en celular aparecen los controles táctiles.
-    document.body.classList.toggle('aiming', (playing || guest) && !IS_TOUCH);
+    // Durante la partida se oculta el cursor; en celular aparecen los controles táctiles.
+    document.body.classList.toggle('in-game', playing || guest);
     this.touch.show(IS_TOUCH && (playing || guest));
     const typing = this.state === 'online' || (this.state === 'menu' && this.screens.visible);
     if (this.input.wasPressed('KeyM') && !typing) this.toggleMute();

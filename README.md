@@ -86,7 +86,6 @@ Al empezar cada nivel aparece una pantalla de carga con una llanta rodando mient
 | Girar | `A` / `D` o `←` / `→` |
 | Turbo | `Espacio`, `Shift` o `Enter` |
 | Disparar al objetivo más cercano | `F` o `Ctrl der.` |
-| Disparar hacia la mira | Clic izquierdo del ratón |
 | Celular | Joystick de dirección (el vehículo va hacia donde apunta), botones TURBO y DISPARO, pausa abajo al centro |
 
 `Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen.
@@ -123,7 +122,7 @@ La banda sonora es brutal death metal sintetizado en tiempo real con WebAudio (`
 ## Arma del vehículo
 
 - **Auto-apuntado:** la tecla de disparo apunta sola al objetivo más cercano a la vista dentro de 45 m: perseguidores, harpías o bidones explosivos. Un anillo del color del jugador marca el objetivo.
-- **Ratón:** el clic izquierdo dispara hacia la mira (el cursor se convierte en mira durante la partida).
+- **Sin ratón:** durante la partida el cursor se oculta; se dispara con la tecla (o el botón DISPARO en celular) y el arma apunta sola.
 - **Daño:** cada bala hace 20 de daño a los perseguidores, revienta zombis y hace estallar los bidones. Los mutantes a pie y los moteros mutantes aguantan 4 balas y las harpías 3. Las paredes las bloquean y los civiles solo se asustan.
 - **Munición:** depende del vehículo (la moto empieza con 30 balas y lleva como máximo 60; el blindado, 50 y 100). Las cajas amarillas del camino dan +20, igual que las llaves verdes reparan y las latas azules llenan el turbo.
 

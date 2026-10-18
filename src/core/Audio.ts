@@ -34,15 +34,26 @@ export class Audio {
   musicOn = true;
   volumes: Volumes = { ...DEFAULT_VOLUMES };
 
-  /** Debe llamarse tras una interacción del usuario (política de autoplay). */
+  /**
+   * Debe llamarse dentro de una interacción del usuario (política de autoplay).
+   * En celulares solo cuentan el toque al soltar (pointerup/touchend) y el clic:
+   * por eso se llama en varios eventos y se reanuda el audio si quedó suspendido.
+   */
   unlock(): void {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      // "suspended" al crearse sin gesto válido; "interrupted" en iPhone tras una llamada o al volver a la app.
+      if (this.ctx.state !== 'running') void this.ctx.resume().catch(() => {});
       return;
     }
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
-    const ctx = new AC();
+    // iPhone: que el interruptor de silencio no apague la música (Safari 17+).
+    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = 'playback';
+    // En celulares, búferes más grandes: la música sintetizada no se entrecorta.
+    const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    const ctx = new AC({ latencyHint: touch ? 'playback' : 'interactive' });
+    if (ctx.state !== 'running') void ctx.resume().catch(() => {});
     this.ctx = ctx;
     this.master = ctx.createGain();
     this.master.connect(ctx.destination);

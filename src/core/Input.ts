@@ -58,23 +58,7 @@ const BLOCKED = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Spa
 export class Input {
   private down = new Set<string>();
   private pressed = new Set<string>();
-  /** Posición del ratón en pantalla y si el botón izquierdo está presionado. */
-  readonly mouse = { x: 0, y: 0, down: false };
-
   constructor() {
-    window.addEventListener('mousemove', (e) => {
-      this.mouse.x = e.clientX;
-      this.mouse.y = e.clientY;
-    });
-    window.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-      this.mouse.x = e.clientX;
-      this.mouse.y = e.clientY;
-      this.mouse.down = true;
-    });
-    window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) this.mouse.down = false;
-    });
     window.addEventListener('keydown', (e) => {
       // Escribir en un campo de texto (código de sala, IP) no maneja el vehículo ni activa atajos.
       const t = e.target as HTMLElement | null;
@@ -84,10 +68,7 @@ export class Input {
       this.down.add(e.code);
     });
     window.addEventListener('keyup', (e) => this.down.delete(e.code));
-    window.addEventListener('blur', () => {
-      this.down.clear();
-      this.mouse.down = false;
-    });
+    window.addEventListener('blur', () => this.down.clear());
   }
 
   isDown(code: string): boolean {
