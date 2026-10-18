@@ -28,6 +28,23 @@ Los niveles 0 a 3 terminan **por distancia**: el HUD muestra cuánto falta para 
 
 Desde **Seleccionar nivel** puedes empezar en cualquier nivel: cada uno calibra tu habilidad por su cuenta.
 
+## Garaje
+
+En el menú principal, **Garaje** (tecla `5`) muestra una tarjeta por vehículo con su foto (renderizada con el mismo modelo 3D del juego), su papel, barras de atributos y habilidades. Cada jugador elige el suyo con **Elegir J1** / **Elegir J2** (o las teclas `1`–`6` para el jugador 1) y la elección se guarda.
+
+| Vehículo | Papel | Vida | Punta con turbo | Balas (máx.) | Particularidades |
+|---|---|---|---|---|---|
+| **Furia** (moto) | Equilibrada | 150 | ~219 km/h | 60 | Pequeña y ágil, cabe por cualquier hueco; el turbo se recarga rápido |
+| **Relámpago** (deportivo) | Velocista | 110 | ~273 km/h | 50 | La mayor velocidad y aceleración; frágil y lento fuera del asfalto |
+| **Toro** (camioneta 4x4) | Tanque | 260 | ~180 km/h | 80 | Embestida ×2,2, casi no sufre fuera del asfalto, −10 % de daño de armas |
+| **Escorpión** (buggy) | Todoterreno | 140 | ~242 km/h | 60 | Sin penalización fuera del asfalto ni en la arena; salta más lejos en las rampas |
+| **Bestia** (muscle car) | Clásico | 180 | ~263 km/h | 60 | Turbo potente que dura más; embestida ×1,6; derrapa |
+| **Bóveda** (furgón blindado) | Blindado | 340 | ~161 km/h | 100 | −35 % de daño de balas, explosiones, ácido y fuego; embestida ×2,6; muy lento. Se desbloquea superando el nivel 2 o recorriendo 2 km en el nivel infinito |
+
+Cada vehículo tiene además su propio tono de motor. La tormenta de arena del prólogo ajusta su ritmo al vehículo más lento para que siempre se pueda escapar de ella.
+
+Al empezar cada nivel aparece una pantalla de carga con una llanta rodando mientras se construye el mundo y se preparan los gráficos.
+
 ## Controles
 
 | Acción | Jugador 1 | Jugador 2 |
@@ -48,13 +65,13 @@ En el menú principal, **Sonido** (tecla `4`) abre un apartado con volúmenes in
 |---|---|
 | General | Todo el audio del juego |
 | Música | La banda sonora |
-| Motor de la moto | El rugido del motor según la velocidad |
-| Disparos de la moto | El arma del jugador |
+| Motor del vehículo | El rugido del motor según la velocidad (cada vehículo con su tono) |
+| Tus disparos | El arma del jugador |
 | Enemigos | Sirenas y disparos |
 | Choques y explosiones | Colisiones, vehículos destruidos y la planta nuclear |
 | Interfaz | Cuenta regresiva, recompensas y avisos |
 
-Modo cooperativo (mismo teclado): la cámara sigue a las dos motos. Si un jugador cae, reaparece a los 6 s junto a su compañero (cuesta $20.000). Si uno se queda muy atrás, se le trae de vuelta junto al otro.
+Modo cooperativo (mismo teclado): la cámara sigue a los dos vehículos. Si un jugador cae, reaparece a los 6 s junto a su compañero (cuesta $20.000). Si uno se queda muy atrás, se le trae de vuelta junto al otro.
 
 ## Música
 
@@ -69,12 +86,12 @@ La banda sonora es brutal death metal sintetizado en tiempo real con WebAudio (`
 - Cada nivel tiene su tonalidad, tempo (de 176 a 222 BPM) y escala (frigia, frigia dominante, locria, cromática). Los riffs se generan con semilla, así que se repiten como en una canción.
 - La intensidad sigue a la acción: en calma suenan *chugs* y *breakdowns*; con muchos perseguidores, la tormenta cerca o la meta a la vista, entran los blast beats.
 
-## Arma de la moto
+## Arma del vehículo
 
 - **Auto-apuntado:** la tecla de disparo apunta sola al objetivo más cercano a la vista dentro de 45 m: perseguidores, harpías o bidones explosivos. Un anillo del color del jugador marca el objetivo.
 - **Ratón:** el clic izquierdo dispara hacia la mira (el cursor se convierte en mira durante la partida).
 - **Daño:** cada bala hace 20 de daño a los perseguidores, revienta zombis y hace estallar los bidones. Los mutantes a pie y los moteros mutantes aguantan 4 balas y las harpías 3. Las paredes las bloquean y los civiles solo se asustan.
-- **Munición:** empiezas con 30 balas y llevas como máximo 60. Las cajas amarillas del camino dan +20, igual que las llaves verdes reparan y las latas azules llenan el turbo.
+- **Munición:** depende del vehículo (la moto empieza con 30 balas y lleva como máximo 60; el blindado, 50 y 100). Las cajas amarillas del camino dan +20, igual que las llaves verdes reparan y las latas azules llenan el turbo.
 
 ## Adrenalina
 
@@ -121,7 +138,7 @@ class TfClassifier implements SkillClassifier {
 src/
   main.ts                 Arranque: inicializa Rapier (WASM) y el juego
   core/                   Game (bucle y estados), Input, Audio y Music (WebAudio), Storage, Rng, math
-  config/                 Tipos y configuración base de los niveles e historia
+  config/                 Tipos y configuración base de los niveles e historia; vehicles.ts (garaje)
   ai/                     Métricas, clasificador de habilidad y dificultad adaptativa
   world/
     Physics.ts            Envoltura de Rapier: plano XZ, colisiones y raycasts
@@ -132,7 +149,7 @@ src/
                           banda y mutantes), Flyer (harpías), Civilian, Helicopter,
                           Projectiles, Sandstorm
   fx/                     Modelos low-poly y partículas instanciadas
-  ui/                     HUD y pantallas HTML/CSS
+  ui/                     HUD, pantallas HTML/CSS, fotos del garaje (Thumbnails) y pantalla de carga (Loader)
 ```
 
 Notas técnicas:
