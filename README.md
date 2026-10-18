@@ -44,7 +44,7 @@ Si el invitado se desconecta a mitad de nivel, su vehículo sale de la carrera y
 
 ## Celular
 
-El juego detecta la pantalla táctil y muestra controles en pantalla: el vehículo acelera solo, el joystick de la izquierda gira (hacia abajo frena o da reversa) y a la derecha están los botones de **TURBO** y **DISPARO** (apuntado automático); la pausa está abajo al centro. Al empezar a jugar pasa a pantalla completa en horizontal cuando el navegador lo permite. En celulares se dibuja a menor resolución y con sombras más livianas para mantener la fluidez.
+El juego detecta la pantalla táctil y muestra controles en pantalla. El vehículo acelera solo y **va hacia donde apunta la bolita del joystick** (arriba = hacia arriba de la pantalla, derecha = hacia la derecha; si apunta hacia atrás, retrocede en esa dirección); sin tocar el joystick sigue de frente. A la derecha están los botones de **TURBO** y **DISPARO** (apuntado automático); la pausa está abajo al centro. Al empezar a jugar pasa a pantalla completa en horizontal cuando el navegador lo permite. En celulares se dibuja a menor resolución y con sombras más livianas para mantener la fluidez.
 
 ## Historia y niveles
 
@@ -87,7 +87,7 @@ Al empezar cada nivel aparece una pantalla de carga con una llanta rodando mient
 | Turbo | `Espacio`, `Shift` o `Enter` |
 | Disparar al objetivo más cercano | `F` o `Ctrl der.` |
 | Disparar hacia la mira | Clic izquierdo del ratón |
-| Celular | Joystick (girar y frenar), botones TURBO y DISPARO, pausa abajo al centro |
+| Celular | Joystick de dirección (el vehículo va hacia donde apunta), botones TURBO y DISPARO, pausa abajo al centro |
 
 `Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen.
 
