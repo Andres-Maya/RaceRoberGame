@@ -13,7 +13,10 @@ npm run build      # verificación de tipos + build de producción en dist/
 npm run preview    # sirve el build de producción
 npm run lan        # compila y sirve el juego en la red local para jugar por IP (puerto 8080)
 npm run dev:lan    # servidor de desarrollo visible en la red local (también admite la conexión por IP)
+npm test           # pruebas automáticas (unos 10 s)
 ```
+
+Las pruebas (`tests/`) corren la lógica real del juego en Node, con física y azar con semilla para que siempre den lo mismo: desbloqueos de vehículos, rampas (saltos normales, torcidos, rozones y que nunca se atraviesen), la réplica de la escena del modo en línea, los códigos QR de conexión y el servidor de red local.
 
 ### Desplegar en Vercel
 
@@ -68,16 +71,19 @@ Desde **Seleccionar nivel** puedes empezar en cualquier nivel: cada uno calibra 
 
 ## Garaje
 
-En el menú principal, **Garaje** (tecla `3`) muestra una tarjeta por vehículo con su foto (renderizada con el mismo modelo 3D del juego), su papel, barras de atributos y habilidades. Se elige con **Elegir** (o las teclas `1`–`6`) y la elección se guarda.
+En el menú principal, **Garaje** (tecla `3`) muestra una tarjeta por vehículo con su foto (renderizada con el mismo modelo 3D del juego), su papel, barras de atributos y habilidades. Se elige con **Elegir** (o las teclas `1`–`7`) y la elección se guarda.
 
-| Vehículo | Papel | Vida | Punta con turbo | Balas (máx.) | Particularidades |
-|---|---|---|---|---|---|
-| **Furia** (moto) | Equilibrada | 150 | ~219 km/h | 60 | Pequeña y ágil, cabe por cualquier hueco; el turbo se recarga rápido |
-| **Relámpago** (deportivo) | Velocista | 110 | ~273 km/h | 50 | La mayor velocidad y aceleración; frágil y lento fuera del asfalto |
-| **Toro** (camioneta 4x4) | Tanque | 260 | ~180 km/h | 80 | Embestida ×2,2, casi no sufre fuera del asfalto, −10 % de daño de armas |
-| **Escorpión** (buggy) | Todoterreno | 140 | ~242 km/h | 60 | Sin penalización fuera del asfalto ni en la arena; salta más lejos en las rampas |
-| **Bestia** (muscle car) | Clásico | 180 | ~263 km/h | 60 | Turbo potente que dura más; embestida ×1,6; derrapa |
-| **Bóveda** (furgón blindado) | Blindado | 340 | ~161 km/h | 100 | −35 % de daño de balas, explosiones, ácido y fuego; embestida ×2,6; muy lento. Se desbloquea superando el nivel 2 o recorriendo 2 km en el nivel infinito |
+Se empieza con el **Cacharro**; cada uno de los demás se desbloquea con un objetivo distinto. Las tarjetas bloqueadas muestran el objetivo y el progreso (por ejemplo, «12/40»), y al conseguirlo aparece un aviso en la pantalla de resultados. En línea, el invitado también suma a su propio progreso.
+
+| Vehículo | Papel | Vida | Punta con turbo | Balas (máx.) | Particularidades | Cómo se consigue |
+|---|---|---|---|---|---|---|
+| **Cacharro** (hatchback viejo) | Inicial | 170 | ~213 km/h | 60 | Fácil de manejar y resistente; cuatro ruedas | Desde el inicio |
+| **Furia** (moto) | Equilibrada | 150 | ~219 km/h | 60 | Pequeña y ágil, cabe por cualquier hueco; salta las rampas hasta por la esquina | Superar el prólogo |
+| **Relámpago** (deportivo) | Velocista | 110 | ~273 km/h | 50 | La mayor velocidad y aceleración; frágil y lento fuera del asfalto | Superar el nivel 1 |
+| **Toro** (camioneta 4x4) | Tanque | 260 | ~180 km/h | 80 | Embestida ×2,2, casi no sufre fuera del asfalto, −10 % de daño de armas | Derribar 40 perseguidores en total |
+| **Escorpión** (buggy) | Todoterreno | 140 | ~242 km/h | 60 | Sin penalización fuera del asfalto ni en la arena; salta más lejos en las rampas | Completar 15 saltos en rampas |
+| **Bestia** (muscle car) | Clásico | 180 | ~263 km/h | 60 | Turbo potente que dura más; embestida ×1,6; derrapa | Superar el nivel 2 |
+| **Bóveda** (furgón blindado) | Blindado | 340 | ~161 km/h | 100 | −35 % de daño de balas, explosiones, ácido y fuego; embestida ×2,6; muy lento | Ganar la campaña o recorrer 3 km en el nivel infinito |
 
 Cada vehículo tiene además su propio tono de motor. La tormenta de arena del prólogo ajusta su ritmo al vehículo más lento para que siempre se pueda escapar de ella.
 
@@ -188,6 +194,8 @@ src/
     Track.ts              Trazado curvo de la vía y biomas
     ChunkManager.ts       Generación procedural por tramos de 40 m (y su liberación)
     Level.ts              Una partida: calibración, reglas, colisiones, escenas, cámara
+    Jumps.ts              Rampas y saltos: despegue, salto torcido, rozones, vuelo y aterrizaje
+    CameraRig.ts          Cámara cenital que sigue al vehículo de cada jugador
   entities/               Vehicle (controlador arcade), Player, Pursuer (IA de policía,
                           banda y mutantes), Flyer (harpías), Civilian, Helicopter,
                           Projectiles, Sandstorm
@@ -197,6 +205,7 @@ src/
 server/lan.mjs            Servidor de red local: sirve dist/ y une anfitrión e invitado por WebSocket
 pwa/sw.js                 Service worker (el build le agrega la lista de archivos) para jugar sin internet
 public/                   Manifiesto de la app instalable e íconos
+tests/                    Pruebas automáticas (npm test)
 ```
 
 Notas técnicas:
