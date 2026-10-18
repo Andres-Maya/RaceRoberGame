@@ -3,17 +3,22 @@ import { AdaptiveDifficulty } from '../ai/AdaptiveDifficulty';
 import { buildProfile, RuleBasedClassifier, type SkillProfile } from '../ai/SkillClassifier';
 import { ENDLESS_LEVEL, LEVEL_0, VICTORY_TEXT } from '../config/levels';
 import type { LevelConfig } from '../config/types';
+import { isUnlocked, VEHICLES, vehicleById, type VehicleDef } from '../config/vehicles';
 import { Hud } from '../ui/Hud';
+import type { Loader } from '../ui/Loader';
 import { Screens } from '../ui/Screens';
 import { Level } from '../world/Level';
 import { Audio, type SoundChannel } from './Audio';
 import { Input } from './Input';
 import { Storage } from './Storage';
 
-type State = 'menu' | 'intro' | 'playing' | 'paused' | 'results' | 'gameover' | 'victory';
+type State = 'menu' | 'intro' | 'loading' | 'playing' | 'paused' | 'results' | 'gameover' | 'victory';
 
 /** Botín obtenido del Banco Central al terminar el nivel 0. */
 const LOOT = 500_000;
+
+/** Tiempo mínimo de la pantalla de carga entre niveles (que la llanta alcance a rodar). */
+const MIN_LOADING_MS = 700;
 
 interface Campaign {
   players: number;
@@ -42,8 +47,13 @@ export class Game {
   private state: State = 'menu';
   private last = performance.now();
   private campaign: Campaign = { players: 1, level: 0, profile: null, cash: 0, score: 0, config: null };
+  /** Cambia con cada carga para descartar una que quedó obsoleta. */
+  private loadToken = 0;
 
-  constructor(container: HTMLElement) {
+  constructor(
+    container: HTMLElement,
+    private loader: Loader,
+  ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -153,6 +163,7 @@ export class Game {
 
   private showMenu(): void {
     this.state = 'menu';
+    this.loadToken++;
     this.disposeLevel();
     this.hud.hide();
     this.audio.duckMusic(false);
@@ -161,6 +172,7 @@ export class Game {
       one: () => this.newCampaign(1),
       two: () => this.newCampaign(2),
       select: () => this.screens.levelSelect(this.storage.data, (l, p) => this.startFrom(l, p), () => this.showMenu()),
+      garage: () => this.showGarage(),
       controls: () => this.screens.controls(() => this.showMenu()),
       stats: () => this.showStats(),
       sound: () => this.showSound(),
@@ -172,6 +184,28 @@ export class Game {
         this.toggleMusic();
         this.showMenu();
       },
+    });
+  }
+
+  /** Garaje: cada jugador elige su vehículo y la elección se guarda. */
+  private showGarage(): void {
+    this.screens.garage(
+      this.storage.data,
+      (player, id) => {
+        this.storage.data.vehicles[player] = id;
+        this.storage.save();
+        this.audio.unlock();
+        this.audio.blip(player === 0 ? 660 : 880);
+      },
+      () => this.showMenu(),
+    );
+  }
+
+  /** Vehículos elegidos (si uno quedó bloqueado, por ejemplo al borrar el progreso, se usa la moto). */
+  private chosenVehicles(): VehicleDef[] {
+    return this.storage.data.vehicles.map((id) => {
+      const def = vehicleById(id);
+      return isUnlocked(def, this.storage.data) ? def : VEHICLES[0];
     });
   }
 
@@ -257,22 +291,55 @@ export class Game {
     const cfg = this.configFor(this.campaign.level);
     this.campaign.config = cfg;
     this.audio.playMusic('epic');
-    this.screens.intro(cfg, this.campaign.players, () => this.beginLevel(), () => this.showMenu());
+    this.screens.intro(
+      cfg,
+      this.campaign.players,
+      this.chosenVehicles().map((v) => v.id),
+      () => this.beginLevel(),
+      () => this.showMenu(),
+    );
   }
 
+  /**
+   * Arranca el nivel tras la pantalla de carga: se muestra la llanta, se
+   * construye el mundo y se compilan los shaders antes de soltar el control.
+   */
   private beginLevel(): void {
     const cfg = this.configFor(this.campaign.level);
     this.campaign.config = cfg;
     this.disposeLevel();
     this.screens.hide();
+    this.hud.hide();
     this.audio.unlock();
-    const hooks = { message: (t: string, c?: string, s?: number) => this.hud.toast(t, c, s), flash: (c: string) => this.hud.flash(c) };
-    this.level = new Level(cfg, this.campaign.players, this.audio, hooks, this.classifier);
-    this.hud.show(this.level, this.campaign.cash);
-    this.audio.duckMusic(false);
-    this.audio.playMusic('level', this.level.musicStyle);
-    this.state = 'playing';
-    this.last = performance.now();
+    this.audio.stopLoops();
+    this.state = 'loading';
+    const token = ++this.loadToken;
+    const started = performance.now();
+    const label = cfg.index === 0 ? 'Prólogo' : cfg.index === 4 ? 'Nivel infinito' : `Nivel ${cfg.index}`;
+    this.loader.show(`Preparando ${label}`);
+    // Dos cuadros de espera para que la llanta aparezca antes del trabajo pesado.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (token !== this.loadToken) return;
+        const hooks = { message: (t: string, c?: string, s?: number) => this.hud.toast(t, c, s), flash: (c: string) => this.hud.flash(c) };
+        const level = new Level(cfg, this.campaign.players, this.audio, hooks, this.classifier, this.chosenVehicles());
+        this.level = level;
+        level.updateCamera(this.camera, 0);
+        this.renderer.compile(level.scene, this.camera);
+        window.setTimeout(
+          () => {
+            if (token !== this.loadToken || this.level !== level) return;
+            this.loader.hide();
+            this.hud.show(level, this.campaign.cash);
+            this.audio.duckMusic(false);
+            this.audio.playMusic('level', level.musicStyle);
+            this.state = 'playing';
+            this.last = performance.now();
+          },
+          Math.max(0, MIN_LOADING_MS - (performance.now() - started)),
+        );
+      }),
+    );
   }
 
   private pause(): void {

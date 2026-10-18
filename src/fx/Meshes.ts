@@ -76,6 +76,91 @@ export function motorbike(color: number, accent: number): THREE.Group {
   return g;
 }
 
+/** Ruedas oscuras en las cuatro esquinas (vistas desde arriba sobresalen del chasis). */
+function wheels(g: THREE.Group, w: number, l: number, size = 0.75, wide = 0.4): void {
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(wide, size, size * 1.2, 0x151515, sx * (w / 2 + wide / 2 - 0.08), 0, sz * l * 0.32));
+}
+
+/**
+ * Vehículos que puede elegir el jugador en el garaje (miran hacia -Z).
+ * `color` es el color del jugador y `accent` su color secundario.
+ */
+export function playerVehicleMesh(id: string, color: number, accent: number): THREE.Group {
+  const g = new THREE.Group();
+  const lights = (w: number, l: number, y = 0.55) => {
+    g.add(box(0.42, 0.14, 0.06, 0xfff4c0, -w * 0.32, y, -l / 2 - 0.02));
+    g.add(box(0.42, 0.14, 0.06, 0xfff4c0, w * 0.32, y, -l / 2 - 0.02));
+    g.add(box(0.42, 0.14, 0.06, 0xd01010, -w * 0.32, y, l / 2 + 0.02));
+    g.add(box(0.42, 0.14, 0.06, 0xd01010, w * 0.32, y, l / 2 + 0.02));
+  };
+  switch (id) {
+    case 'sport':
+      // Deportivo bajo con alerón y franja central
+      wheels(g, 1.9, 4.2, 0.6, 0.45);
+      g.add(box(1.9, 0.5, 4.2, color, 0, 0.2, 0));
+      g.add(box(1.5, 0.35, 1.5, 0x10161c, 0, 0.7, 0.35));
+      g.add(box(0.4, 0.02, 4.22, accent, 0, 0.71, 0));
+      g.add(box(1.8, 0.08, 0.45, color, 0, 1.0, 1.95));
+      for (const s of [-1, 1]) g.add(box(0.1, 0.35, 0.1, 0x222222, s * 0.7, 0.68, 1.95));
+      g.add(box(0.7, 0.05, 0.6, 0x111111, 0, 0.71, -1.3));
+      lights(1.9, 4.2, 0.45);
+      break;
+    case 'truck':
+      // Camioneta 4x4 con defensa de tubos, barra antivuelco y caja
+      wheels(g, 2.1, 4.6, 0.95, 0.5);
+      g.add(box(2.1, 0.85, 4.6, color, 0, 0.35, 0));
+      g.add(box(1.9, 0.7, 1.7, 0x1d2a35, 0, 1.2, -0.75));
+      g.add(box(1.92, 0.1, 1.72, color, 0, 1.9, -0.75));
+      for (const s of [-1, 1]) g.add(box(0.1, 0.5, 2.0, color, s * 1.0, 1.2, 1.25));
+      g.add(box(2.0, 0.12, 0.12, accent, 0, 1.75, 0.3));
+      for (const s of [-1, 1]) g.add(box(0.12, 0.6, 0.12, accent, s * 0.94, 1.2, 0.3));
+      g.add(box(2.2, 0.5, 0.25, 0x9a9a9a, 0, 0.3, -2.45));
+      for (const x of [-0.6, 0, 0.6]) g.add(box(0.1, 0.7, 0.1, 0x9a9a9a, x, 0.25, -2.45));
+      lights(2.1, 4.6, 0.7);
+      break;
+    case 'buggy':
+      // Buggy de dunas: chasis abierto, jaula y ruedas enormes
+      wheels(g, 1.8, 3.4, 1.0, 0.55);
+      g.add(box(1.5, 0.4, 3.2, color, 0, 0.45, 0));
+      g.add(box(0.9, 0.5, 0.6, 0x222222, 0, 0.85, 1.1));
+      for (const s of [-1, 1]) {
+        g.add(box(0.1, 1.2, 0.1, accent, s * 0.65, 0.85, -0.4));
+        g.add(box(0.1, 1.2, 0.1, accent, s * 0.65, 0.85, 0.8));
+        g.add(box(0.1, 0.1, 1.3, accent, s * 0.65, 2.0, 0.2));
+      }
+      g.add(box(1.4, 0.1, 0.1, accent, 0, 2.0, -0.4));
+      g.add(ball(0.25, 0x333333, 0, 1.35, 0.3));
+      lights(1.5, 3.2, 0.6);
+      break;
+    case 'muscle':
+      // Muscle car con toma de aire y doble franja
+      wheels(g, 2.0, 4.5, 0.7, 0.5);
+      g.add(box(2.0, 0.7, 4.5, color, 0, 0.25, 0));
+      g.add(box(1.6, 0.5, 1.7, 0x111111, 0, 0.95, 0.45));
+      for (const x of [-0.28, 0.28]) g.add(box(0.26, 0.02, 4.52, accent, x, 0.96, 0));
+      g.add(box(0.8, 0.3, 1.0, 0x333333, 0, 0.95, -1.2));
+      g.add(cyl(0.12, 0.6, 0x888888, -0.6, 0.15, 2.4));
+      g.add(cyl(0.12, 0.6, 0x888888, 0.6, 0.15, 2.4));
+      lights(2.0, 4.5);
+      break;
+    case 'armored':
+      // Furgón blindado del banco con ariete y torreta
+      wheels(g, 2.5, 5.4, 0.95, 0.5);
+      g.add(box(2.5, 1.7, 5.4, 0x3d4a3a, 0, 0.3, 0));
+      for (const s of [-1, 1]) g.add(box(0.06, 0.8, 3.6, color, s * 1.27, 0.7, 0.4));
+      g.add(box(2.1, 0.25, 0.1, 0x10161c, 0, 1.45, -2.72));
+      g.add(box(2.7, 0.9, 0.35, 0x8a8a8a, 0, 0.2, -2.9));
+      g.add(cyl(0.55, 0.4, accent, 0, 2.0, 0.6));
+      g.add(box(0.2, 0.2, 1.4, 0x222222, 0, 2.2, -0.3));
+      g.add(box(1.2, 0.04, 1.2, 0xf1c40f, 0, 2.01, 1.8));
+      lights(2.5, 5.4, 0.8);
+      break;
+    default:
+      return motorbike(color, accent);
+  }
+  return g;
+}
+
 export function civilianCar(color: number): THREE.Group {
   const g = new THREE.Group();
   g.add(box(1.9, 0.75, 4.0, color, 0, 0.25, 0));

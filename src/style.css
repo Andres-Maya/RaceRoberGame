@@ -52,14 +52,205 @@ kbd {
   background: rgba(255, 255, 255, 0.08);
 }
 
-#boot {
+/* ------------------------------------------------------------ pantalla de carga */
+
+#loader {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+  text-align: center;
+  background:
+    radial-gradient(ellipse at 50% 115%, rgba(255, 120, 40, 0.28), transparent 60%),
+    linear-gradient(180deg, #1a1d27, #0c0d12);
+  transition: opacity 0.25s;
+}
+
+#loader.fade {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loader-stage {
+  position: relative;
+  width: min(320px, 80vw);
+  height: 150px;
+  overflow: hidden;
+}
+
+.tire {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  width: 112px;
+  height: 112px;
+  margin-left: -56px;
+  animation:
+    tire-spin 0.55s linear infinite,
+    tire-bounce 0.55s ease-in-out infinite alternate;
+  filter: drop-shadow(0 8px 6px rgba(0, 0, 0, 0.5));
+}
+
+.tire-rubber {
+  fill: #191919;
+}
+
+.tire-tread {
+  fill: none;
+  stroke: #2f2f2f;
+  stroke-width: 5;
+  stroke-dasharray: 7 5.8;
+}
+
+.tire-wall {
+  fill: #232323;
+  stroke: #0d0d0d;
+  stroke-width: 2;
+}
+
+.tire-rim {
+  fill: #9aa3ad;
+  stroke: #d7dde3;
+  stroke-width: 2;
+}
+
+.tire-spokes rect {
+  fill: #5d666f;
+}
+
+.tire-hub {
+  fill: var(--gold);
+  stroke: #6b3a00;
+  stroke-width: 2;
+}
+
+.tire-lugs circle {
+  fill: #2a2a2a;
+}
+
+.loader-road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  height: 6px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(90deg, var(--gold) 0 26px, transparent 26px 46px), #2a2d36;
+  background-size: 46px 100%;
+  animation: road-scroll 0.42s linear infinite;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+}
+
+.loader-dust i {
+  position: absolute;
+  bottom: 14px;
+  left: calc(50% - 60px);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(214, 196, 160, 0.45);
+  animation: dust 0.9s ease-out infinite;
+}
+
+.loader-dust i:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.loader-dust i:nth-child(3) {
+  animation-delay: 0.6s;
+}
+
+.loader-text {
   font: 1.4rem var(--display);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--gold);
+}
+
+.loader-text::after {
+  content: '';
+  animation: dots 1.2s steps(4) infinite;
+}
+
+.loader-tip {
+  max-width: 420px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+#loader.error .tire,
+#loader.error .loader-road,
+#loader.error .loader-dust i {
+  animation-play-state: paused;
+}
+
+#loader.error .loader-text {
+  color: var(--red);
+}
+
+#loader.error .loader-text::after {
+  content: none;
+}
+
+@keyframes tire-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes tire-bounce {
+  from {
+    bottom: 14px;
+  }
+  to {
+    bottom: 17px;
+  }
+}
+
+@keyframes road-scroll {
+  to {
+    background-position: -46px 0;
+  }
+}
+
+@keyframes dust {
+  from {
+    opacity: 0.9;
+    transform: translate(0, 0) scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-70px, -22px) scale(2.2);
+  }
+}
+
+@keyframes dots {
+  0% {
+    content: '';
+  }
+  25% {
+    content: '.';
+  }
+  50% {
+    content: '..';
+  }
+  75% {
+    content: '...';
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tire {
+    animation-duration: 2.2s, 2.2s;
+  }
+  .loader-road {
+    animation-duration: 1.7s;
+  }
 }
 
 /* ------------------------------------------------------------ overlays */
@@ -711,10 +902,212 @@ table.hist th {
   text-shadow: 0 0 30px rgba(76, 211, 123, 0.4);
 }
 
-.loading {
-  font: 1.5rem var(--display);
+/* ------------------------------------------------------------ garaje */
+
+.screen.garage .panel {
+  width: min(1120px, 100%);
+}
+
+.garage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.vcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 2px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.vcard:hover {
+  transform: translateY(-2px);
+}
+
+.vcard.sel1 {
+  border-color: var(--blue);
+}
+
+.vcard.sel0 {
+  border-color: var(--red);
+}
+
+.vcard.sel0.sel1 {
+  border-color: var(--red) var(--blue) var(--blue) var(--red);
+}
+
+.vphoto {
+  position: relative;
+  aspect-ratio: 36 / 22;
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 85%, rgba(255, 255, 255, 0.14), transparent 60%),
+    repeating-linear-gradient(90deg, transparent 0 47%, rgba(244, 208, 63, 0.25) 47% 53%, transparent 53% 100%) center / 100% 100%,
+    linear-gradient(180deg, #2a2f3b, #15171e);
+}
+
+.vphoto img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.vbadges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.vbadge {
+  display: none;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--pc);
+  color: #fff;
+  font: 0.85rem var(--display);
+  letter-spacing: 0.08em;
+}
+
+.vbadge.on {
+  display: inline-block;
+}
+
+.vlock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px;
   text-align: center;
+  background: rgba(8, 9, 13, 0.72);
+}
+
+.vlock b {
+  font: 1.2rem var(--display);
+  letter-spacing: 0.12em;
   color: var(--gold);
+}
+
+.vlock span {
+  font-size: 0.85rem;
+  color: #d6d6d6;
+}
+
+.vcard.locked .vphoto img {
+  filter: grayscale(1) brightness(0.6);
+}
+
+.vhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vhead h3 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--text);
+}
+
+.vrole {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(244, 208, 63, 0.15);
+  color: var(--gold);
+  font-size: 0.8rem;
+}
+
+.vhead kbd {
+  margin-left: auto;
+}
+
+.vdesc {
+  margin: 0;
+  color: #cfd3da;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.vfacts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  text-align: center;
+}
+
+.vfacts div {
+  padding: 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.vfacts b {
+  display: block;
+  font: 1.1rem var(--display);
+  letter-spacing: 0.04em;
+}
+
+.vfacts span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.vstats {
+  display: grid;
+  gap: 3px;
+}
+
+.vstat {
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.vstat .bar {
+  height: 6px;
+}
+
+.vperks {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #9be7a1;
+  flex: 1;
+}
+
+.vbuttons {
+  display: flex;
+  gap: 8px;
+}
+
+.vbuttons button {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  border-color: color-mix(in srgb, var(--pc) 60%, transparent);
+}
+
+.vbuttons button.chosen {
+  background: var(--pc);
+  border-color: var(--pc);
+  color: #fff;
 }
 
 @media (max-width: 640px) {

@@ -166,11 +166,11 @@ export class Audio {
 
   // ------------------------------------------------------------ efectos
 
-  /** speed01: 0..1, active: si hay motos en marcha. */
-  engine(speed01: number, active: boolean): void {
+  /** speed01: 0..1, active: si hay vehículos en marcha, tone: tono del motor (1 = moto). */
+  engine(speed01: number, active: boolean, tone = 1): void {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    this.engineOsc.frequency.setTargetAtTime(45 + speed01 * 130, t, 0.08);
+    this.engineOsc.frequency.setTargetAtTime((45 + speed01 * 130) * tone, t, 0.08);
     this.engineGain.gain.setTargetAtTime(active ? 0.05 + speed01 * 0.07 : 0, t, 0.1);
   }
 

@@ -1,4 +1,5 @@
 import type { FeatureVector, SkillProfile } from '../ai/SkillClassifier';
+import type { VehicleId } from '../config/vehicles';
 import { DEFAULT_VOLUMES, type Volumes } from './Audio';
 
 const KEY = 'racerober.save.v1';
@@ -27,6 +28,8 @@ export interface SaveData {
   volumes: Volumes;
   /** Mejor distancia (m) en el nivel infinito. */
   bestEndless: number;
+  /** Vehículo elegido en el garaje por cada jugador. */
+  vehicles: VehicleId[];
 }
 
 const defaults = (): SaveData => ({
@@ -41,6 +44,7 @@ const defaults = (): SaveData => ({
   musicOn: true,
   volumes: { ...DEFAULT_VOLUMES },
   bestEndless: 0,
+  vehicles: ['moto', 'moto'],
 });
 
 export class Storage {
@@ -56,7 +60,8 @@ export class Storage {
         const volumes = { ...DEFAULT_VOLUMES, ...(saved.volumes ?? {}) };
         if (!saved.volumes && typeof saved.musicVolume === 'number') volumes.music = saved.musicVolume;
         delete saved.musicVolume;
-        this.data = { ...defaults(), ...saved, volumes };
+        const vehicles = Array.isArray(saved.vehicles) ? [...saved.vehicles, 'moto', 'moto'].slice(0, 2) : ['moto', 'moto'];
+        this.data = { ...defaults(), ...saved, volumes, vehicles };
       }
     } catch {
       // Sin almacenamiento disponible (modo privado): se juega sin guardar.

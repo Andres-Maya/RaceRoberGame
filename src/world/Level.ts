@@ -3,6 +3,7 @@ import { AdaptiveDifficulty, kindLabel } from '../ai/AdaptiveDifficulty';
 import { PerformanceTracker } from '../ai/PerformanceTracker';
 import { buildProfile, type SkillClassifier, type SkillProfile } from '../ai/SkillClassifier';
 import { BASE_LEVELS } from '../config/levels';
+import { VEHICLES, type VehicleDef } from '../config/vehicles';
 import type { Biome, Faction, FinishScene, LevelConfig, Mood, PursuerConfig, PursuerKind } from '../config/types';
 import type { Audio } from '../core/Audio';
 import type { DriveInput } from '../core/Input';
@@ -11,7 +12,7 @@ import { Rng } from '../core/Rng';
 import { Civilian } from '../entities/Civilian';
 import { Flyer } from '../entities/Flyer';
 import { Helicopter } from '../entities/Helicopter';
-import { BIKE_SPEC, Player, TURBO_MUL } from '../entities/Player';
+import { Player } from '../entities/Player';
 import { Lobs, type Lob } from '../entities/Lobs';
 import { Projectiles, segmentDistance } from '../entities/Projectiles';
 import { FLAME_ANGLE, FLAME_RANGE, Pursuer, PURSUER_STATS, type FireRequest } from '../entities/Pursuer';
@@ -205,6 +206,8 @@ export class Level {
     private audio: Audio,
     private hooks: LevelHooks,
     private classifier: SkillClassifier,
+    /** Vehículo de cada jugador (por defecto, la moto). */
+    vehicles: VehicleDef[] = [],
   ) {
     const mood = MOODS[config.mood];
     this.scene.background = new THREE.Color(mood.bg);
@@ -246,10 +249,13 @@ export class Level {
     // En los niveles 1-3 las motos esperan dentro de la estructura inicial y salen por su puerta.
     const inside = config.start !== 'road';
     const startD = inside ? -9 : 6;
-    const spacing = inside ? 1.3 : 2.2;
+    const defs = Array.from({ length: playerCount }, (_, i) => vehicles[i] ?? VEHICLES[0]);
+    // Separación según el ancho de los vehículos elegidos (dos autos no caben tan juntos como dos motos).
+    const halfWidths = defs.reduce((s, d) => s + d.spec.hx, 0) / 2;
+    const spacing = Math.max(inside ? 1.3 : 2.2, halfWidths + 0.35);
     for (let i = 0; i < playerCount; i++) {
       const off = playerCount === 1 ? 0 : i === 0 ? -spacing : spacing;
-      const p = new Player(this.physics, i, this.track.centerX(startD) + off, -startD, 0);
+      const p = new Player(this.physics, i, this.track.centerX(startD) + off, -startD, 0, defs[i]);
       if (inside) {
         p.setGhost(true);
         p.cutscene = 'exit';
@@ -258,7 +264,7 @@ export class Level {
       this.scene.add(p.mesh);
       this.players.push(p);
     }
-    if (config.index === 0) this.storm = new Sandstorm(this.scene, 60);
+    if (config.index === 0) this.storm = new Sandstorm(this.scene, 60, Math.min(1, ...defs.map((d) => d.spec.maxSpeed / VEHICLES[0].spec.maxSpeed)));
     for (const p of this.players) {
       const marker = new THREE.Mesh(TARGET_RING, new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: 0.85, depthWrite: false }));
       marker.visible = false;
@@ -494,7 +500,7 @@ export class Level {
         this.fx.sparks(x, z, 8);
         this.fx.dust(x, z, 0x3fae5a, 3, 0.6);
         this.cashLost += 2500;
-        this.damagePlayer(p, dmg);
+        this.damagePlayer(p, dmg, true);
       },
       onWall: (x, z) => this.fx.sparks(x, z, 5),
       onSegment: (x0, z0, x1, z1) => this.bulletHitsBarrel(x0, z0, x1, z1),
@@ -527,8 +533,8 @@ export class Level {
     }
 
     // ---- audio
-    const sp = ref.reduce((s, p) => s + Math.abs(p.vehicle.speed), 0) / ref.length / BIKE_SPEC.maxSpeed;
-    this.audio.engine(clamp01(sp), alive.length > 0);
+    const sp = ref.reduce((s, p) => s + Math.abs(p.vehicle.speed) / p.def.spec.maxSpeed, 0) / ref.length;
+    this.audio.engine(clamp01(sp), alive.length > 0, ref.reduce((s, p) => s + p.def.engineTone, 0) / ref.length);
     let nearest = Infinity;
     {
       for (const u of this.pursuers) {
@@ -673,8 +679,9 @@ export class Level {
     let gripMul = 1;
     let accelMul = 1;
     if (offroad && ROUGH_BIOMES.has(this.track.biomeAt(v.d))) {
-      speedMul *= 0.68;
-      gripMul *= 0.8;
+      // Cada vehículo sufre distinto fuera del asfalto (el buggy, nada).
+      speedMul *= p.def.offroad;
+      if (p.def.offroad < 1) gripMul *= 0.8;
       if (Math.abs(v.speed) > 6 && this.rng.chance(0.5)) this.fx.dust(v.px, v.pz);
     }
 
@@ -686,14 +693,14 @@ export class Level {
       }
       this.tracker.hazard(dt);
       if (h.kind === 'sand') {
-        speedMul *= 0.5;
+        if (!p.def.sandProof) speedMul *= 0.5;
         if (this.rng.chance(0.6)) this.fx.dust(v.px, v.pz, 0xe2c48e, 1, 1.6);
       } else if (h.kind === 'oil') {
         if (p.oilTimer <= 0) this.hooks.message(`J${p.index + 1}: ¡Aceite!`, '#cccccc', 0.8);
         p.oilTimer = 1.1;
       } else if (h.kind === 'acid') {
         // El ácido corroe la moto mientras se está encima.
-        this.damagePlayer(p, dt * 16);
+        this.damagePlayer(p, dt * 16, true);
         speedMul *= 0.8;
         if (this.rng.chance(0.4)) this.fx.splatter(v.px, v.pz, 2);
         if (this.rng.chance(dt * 2)) this.hooks.message(`J${p.index + 1}: ¡Ácido!`, '#9dff6a', 0.8);
@@ -733,18 +740,18 @@ export class Level {
     const wantsTurbo = input.turbo && input.throttle > 0 && p.turbo > 0.02;
     p.turboActive = wantsTurbo;
     if (wantsTurbo) {
-      p.turbo = Math.max(0, p.turbo - dt * 0.36);
-      speedMul *= TURBO_MUL;
+      p.turbo = Math.max(0, p.turbo - dt * p.def.turboDrain);
+      speedMul *= p.def.turboMul;
       accelMul = 1.7;
-      this.fx.turbo(v.px + Math.sin(v.heading) * 1.2, v.pz + Math.cos(v.heading) * 1.2, v.heading + Math.PI);
+      this.fx.turbo(v.px + Math.sin(v.heading) * (v.spec.hz + 0.1), v.pz + Math.cos(v.heading) * (v.spec.hz + 0.1), v.heading + Math.PI);
     } else {
-      p.turbo = Math.min(1, p.turbo + dt * 0.11);
+      p.turbo = Math.min(1, p.turbo + dt * p.def.turboRegen);
     }
 
     p.steer = input.steer;
     v.drive(dt, input.throttle, input.brake, input.steer, { speedMul, accelMul, gripMul });
     this.handleShooting(p, input, dt);
-    this.tracker.samplePlayer(p.index, dt, Math.max(0, v.speed), BIKE_SPEC.maxSpeed, input.steer, offroad);
+    this.tracker.samplePlayer(p.index, dt, Math.max(0, v.speed), v.spec.maxSpeed, input.steer, offroad);
 
     // Peligro cercano (para la métrica "sangre fría").
     let danger = false;
@@ -873,7 +880,7 @@ export class Level {
     p.ammo--;
     p.fireCooldown = 0.16;
     this.bullets.fire(v.px, v.pz, angle, PLAYER_BULLET_DAMAGE, false, 'player', true);
-    this.fx.muzzle(v.px - Math.sin(angle) * 1.3, v.pz - Math.cos(angle) * 1.3, angle);
+    this.fx.muzzle(v.px - Math.sin(angle) * (v.spec.hz + 0.2), v.pz - Math.cos(angle) * (v.spec.hz + 0.2), angle);
     this.audio.playerShot();
   }
 
@@ -920,7 +927,7 @@ export class Level {
   /** Despegue desde una rampa: en el aire no hay colisiones ni se puede girar. */
   private launch(p: Player): void {
     const v = p.vehicle;
-    p.airDur = clamp(0.45 + (v.speed / 34) * 0.5, 0.55, 1.1);
+    p.airDur = clamp((0.45 + (v.speed / v.spec.maxSpeed) * 0.5) * p.def.jump, 0.45, 1.4);
     p.air = p.airDur;
     p.setGhost(true);
     v.vx *= 1.05;
@@ -1017,7 +1024,7 @@ export class Level {
       this.fx.splatter(l.x1, l.z1, 10);
       for (const p of this.alivePlayers) {
         if (p.ghost || Math.hypot(p.vehicle.px - l.x1, p.vehicle.pz - l.z1) > 1.6) continue;
-        if (p.canTakeHit('acidDrop', this.elapsed, 0.3)) this.damagePlayer(p, l.damage);
+        if (p.canTakeHit('acidDrop', this.elapsed, 0.3)) this.damagePlayer(p, l.damage, true);
       }
       if (this.rng.chance(0.45)) this.addAcidPool(l.x1, l.z1);
       return;
@@ -1044,7 +1051,7 @@ export class Level {
       pool.mesh.scale.set(pool.r * 2 * k, 1, pool.r * 2 * k);
       for (const p of this.alivePlayers) {
         if (p.ghost || p.air > 0 || Math.hypot(p.vehicle.px - pool.x, p.vehicle.pz - pool.z) > pool.r) continue;
-        this.damagePlayer(p, dt * 12);
+        this.damagePlayer(p, dt * 12, true);
         this.tracker.hazard(dt);
         if (this.rng.chance(dt * 6)) this.fx.splatter(p.vehicle.px, p.vehicle.pz, 2);
       }
@@ -1075,7 +1082,7 @@ export class Level {
       };
       for (const p of this.alivePlayers) {
         if (p.ghost || p.air > 0 || !inCone(p.vehicle.px, p.vehicle.pz)) continue;
-        this.damagePlayer(p, dt * 15);
+        this.damagePlayer(p, dt * 15, true);
         if (this.flameWarn <= 0) {
           this.flameWarn = 2;
           this.hooks.message(`J${p.index + 1}: ¡Te queman!`, toxic ? '#9dff6a' : '#ff7a45', 1);
@@ -1136,7 +1143,7 @@ export class Level {
       if (dist > r) continue;
       const f = 1 - dist / r;
       push(p.vehicle, 10 * f);
-      if (p.canTakeHit('blast', this.elapsed, 0.5)) this.damagePlayer(p, spec.playerDmg * f);
+      if (p.canTakeHit('blast', this.elapsed, 0.5)) this.damagePlayer(p, spec.playerDmg * f, true);
     }
     for (const c of this.civilians) {
       if (Math.hypot(c.vehicle.px - x, c.vehicle.pz - z) > R) continue;
@@ -1202,7 +1209,9 @@ export class Level {
     }
   }
 
-  private damagePlayer(p: Player, amount: number): void {
+  /** `weapon`: balas, explosiones, ácido y fuego, que el blindaje del vehículo reduce. */
+  private damagePlayer(p: Player, amount: number, weapon = false): void {
+    if (weapon) amount *= p.def.armor;
     if (amount <= 0 || !p.alive) return;
     if (p.invuln <= 0) this.tracker.damage(amount);
     const destroyed = p.damage(amount);
@@ -1321,7 +1330,7 @@ export class Level {
       }
       if (attack) {
         const p = attack.player;
-        if (p.turboActive && attack.playerSpeed > 30) {
+        if (p.turboActive && attack.playerSpeed > p.def.spec.maxSpeed * 0.88) {
           // A toda velocidad con turbo, la moto embiste a la harpía en picada.
           f.shootDown();
           this.fx.splatter(f.x, f.z, 24);
@@ -1331,7 +1340,7 @@ export class Level {
           this.fx.splatter(p.vehicle.px, p.vehicle.pz, 14);
           this.audio.crash(0.8);
           this.shake = Math.max(this.shake, 0.9);
-          this.damagePlayer(p, 10 + cfg.aggression * 8);
+          this.damagePlayer(p, 10 + cfg.aggression * 8, true);
           this.hooks.message(`J${p.index + 1}: ¡Ataque de harpía!`, '#c08aff', 1);
         }
       }
@@ -1437,7 +1446,7 @@ export class Level {
             break;
           }
           dmg = impact * 0.35 + u.stats.ram * (u.isRamming ? 0.8 : 0.25) * (0.5 + this.config.pursuers!.aggression * 0.5);
-          this.damagePursuer(u, impact * 0.6);
+          this.damagePursuer(u, impact * 0.6 * p.def.ram);
           this.shake = Math.max(this.shake, 0.8);
           break;
         }

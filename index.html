@@ -9,7 +9,23 @@
   </head>
   <body>
     <div id="app">
-      <div id="boot">Cargando motor de física…</div>
+      <div id="loader">
+        <div class="loader-stage">
+          <div class="loader-dust"><i></i><i></i><i></i></div>
+          <svg class="tire" viewBox="-50 -50 100 100" aria-hidden="true">
+            <circle r="46" class="tire-rubber" />
+            <circle r="44" class="tire-tread" />
+            <circle r="31" class="tire-wall" />
+            <circle r="27" class="tire-rim" />
+            <g class="tire-spokes"><rect x="-3" y="-27" width="6" height="22" rx="2" transform="rotate(0)" /><rect x="-3" y="-27" width="6" height="22" rx="2" transform="rotate(72)" /><rect x="-3" y="-27" width="6" height="22" rx="2" transform="rotate(144)" /><rect x="-3" y="-27" width="6" height="22" rx="2" transform="rotate(216)" /><rect x="-3" y="-27" width="6" height="22" rx="2" transform="rotate(288)" /></g>
+            <circle r="9" class="tire-hub" />
+            <g class="tire-lugs"><circle cx="0" cy="-11" r="2.6" transform="rotate(36)" /><circle cx="0" cy="-11" r="2.6" transform="rotate(108)" /><circle cx="0" cy="-11" r="2.6" transform="rotate(180)" /><circle cx="0" cy="-11" r="2.6" transform="rotate(252)" /><circle cx="0" cy="-11" r="2.6" transform="rotate(324)" /></g>
+          </svg>
+          <div class="loader-road"></div>
+        </div>
+        <div class="loader-text">Cargando motor de física…</div>
+        <div class="loader-tip"></div>
+      </div>
 
       <div id="storm-overlay"></div>
       <div id="damage-overlay"></div>

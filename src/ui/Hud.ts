@@ -1,5 +1,5 @@
 import { formatMoney } from '../core/math';
-import { BIKE_SPEC, PLAYER_COLORS, TURBO_MUL } from '../entities/Player';
+import { PLAYER_COLORS } from '../entities/Player';
 import type { Level } from '../world/Level';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T => root.querySelector(sel) as T;
@@ -40,7 +40,7 @@ export class Hud {
       .map(
         (p) => `
       <div class="pcard" style="--pc:${PLAYER_COLORS[p.index].css}">
-        <div class="pcard-title">J${p.index + 1} · Moto ${PLAYER_COLORS[p.index].name}</div>
+        <div class="pcard-title">J${p.index + 1} · ${p.def.name} ${PLAYER_COLORS[p.index].name}</div>
         <div class="bar"><div class="fill hp" data-hp="${p.index}"></div></div>
         <div class="bar small"><div class="fill turbo" data-turbo="${p.index}"></div></div>
         <div class="pcard-speed"><span data-speed="${p.index}">0</span> km/h <span class="pcard-ammo" data-ammo-box="${p.index}">BALAS <b data-ammo="${p.index}">0</b></span></div>
@@ -125,8 +125,8 @@ export class Hud {
         tb.style.width = `${p.turbo * 100}%`;
         tb.classList.toggle('active', p.turboActive);
       }
-      // Escala visual: velocidad máxima con turbo ≈ 220 km/h.
-      if (sp) this.set(sp, p.alive ? String(Math.round((Math.abs(p.vehicle.speed) / (BIKE_SPEC.maxSpeed * TURBO_MUL)) * 220)) : 'KO');
+      // Escala visual: la moto con turbo ≈ 220 km/h; el deportivo pasa de 270.
+      if (sp) this.set(sp, p.alive ? String(Math.round(Math.abs(p.vehicle.speed) * 4.6)) : 'KO');
       flash = Math.max(flash, p.flash * 2);
     }
     this.damageOverlay.style.opacity = String(Math.min(0.6, flash));

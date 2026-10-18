@@ -1,34 +1,18 @@
 import type * as THREE from 'three';
-import { motorbike } from '../fx/Meshes';
+import { VEHICLES, type VehicleDef } from '../config/vehicles';
+import { playerVehicleMesh } from '../fx/Meshes';
 import type { Physics } from '../world/Physics';
-import { Vehicle, type VehicleSpec } from './Vehicle';
-
-export const BIKE_SPEC: VehicleSpec = {
-  maxSpeed: 34,
-  accel: 24,
-  brake: 42,
-  reverse: 9,
-  steerRate: 2.7,
-  grip: 8,
-  hx: 0.45,
-  hz: 1.1,
-  density: 2,
-};
+import { Vehicle } from './Vehicle';
 
 export const PLAYER_COLORS = [
   { body: 0xd62828, accent: 0xfcbf49, css: '#ff4d4d', name: 'Rojo' },
   { body: 0x1d4ed8, accent: 0x7dd3fc, css: '#4d9dff', name: 'Azul' },
 ];
 
-export const TURBO_MUL = 1.4;
-
-/** Vida máxima de la moto. */
-export const BIKE_HP = 150;
-
 export class Player {
   readonly vehicle: Vehicle;
-  readonly maxHp = BIKE_HP;
-  hp = BIKE_HP;
+  readonly maxHp: number;
+  hp: number;
   /** Medidor de turbo 0..1 */
   turbo = 1;
   turboActive = false;
@@ -49,8 +33,8 @@ export class Player {
   /** Sin colisiones: la moto atraviesa puertas y escombros durante las escenas. */
   ghost = false;
   /** Munición del arma de la moto. */
-  ammo = 30;
-  readonly maxAmmo = 60;
+  ammo: number;
+  readonly maxAmmo: number;
   fireCooldown = 0;
   /** Salto desde una rampa: segundos de vuelo restantes y duración total. */
   air = 0;
@@ -64,9 +48,14 @@ export class Player {
     x: number,
     z: number,
     heading: number,
-    readonly mesh: THREE.Group = motorbike(PLAYER_COLORS[index].body, PLAYER_COLORS[index].accent),
+    /** Vehículo elegido en el garaje. */
+    readonly def: VehicleDef = VEHICLES[0],
+    readonly mesh: THREE.Group = playerVehicleMesh(def.id, PLAYER_COLORS[index].body, PLAYER_COLORS[index].accent),
   ) {
-    this.vehicle = new Vehicle(physics, BIKE_SPEC, x, z, heading, { kind: 'player', ref: null }, mesh);
+    this.maxHp = this.hp = def.hp;
+    this.ammo = def.ammoStart;
+    this.maxAmmo = def.ammoMax;
+    this.vehicle = new Vehicle(physics, def.spec, x, z, heading, { kind: 'player', ref: null }, mesh);
     // La etiqueta apunta al propio jugador para resolver colisiones.
     const tag = physics.tagOf(this.vehicle.body.collider(0).handle);
     if (tag) tag.ref = this;

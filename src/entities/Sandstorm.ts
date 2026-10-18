@@ -16,6 +16,8 @@ export class Sandstorm {
   constructor(
     private scene: THREE.Scene,
     private duration: number,
+    /** Ritmo según el vehículo más lento (1 = moto): con un blindado la tormenta avanza más despacio. */
+    private pace = 1,
   ) {
     for (let i = 0; i < 6; i++) {
       const m = new THREE.Mesh(
@@ -31,7 +33,7 @@ export class Sandstorm {
   get speed(): number {
     if (this.t < 4) return 6;
     const p = Math.min(1, this.t / this.duration);
-    return 19 + p * 11;
+    return (19 + p * 11) * this.pace;
   }
 
   update(dt: number, slowestD: number, track: Track, fx: Effects): void {
