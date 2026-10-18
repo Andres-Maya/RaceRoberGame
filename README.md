@@ -47,7 +47,7 @@ Si el invitado se desconecta a mitad de nivel, su vehículo sale de la carrera y
 
 ## Celular
 
-**Instalar como app:** en el menú aparece **Instalar en este dispositivo** cuando el navegador lo permite (en iPhone: Compartir › *Añadir a pantalla de inicio*). Un *service worker* guarda el juego completo en el teléfono, así que después abre sin internet; con conexión, se actualiza solo a la última versión publicada.
+**Instalar como app:** en el menú, **Instalar en este dispositivo** (aparece mientras el juego no esté instalado). Si el navegador ofrece la instalación directa, se abre su aviso; si no (iPhone, Firefox, Samsung Internet o un aviso que se cerró antes), muestra los pasos para ese navegador. Solo se puede instalar desde una dirección https (por ejemplo, la de Vercel), no desde `http://IP:8080`. Un *service worker* guarda el juego completo en el teléfono, así que después abre sin internet; con conexión, se actualiza solo a la última versión publicada.
 
 El juego detecta la pantalla táctil y muestra controles en pantalla. El vehículo **va hacia donde apunta la bolita del joystick** (arriba = hacia arriba de la pantalla, derecha = hacia la derecha; si apunta hacia atrás, retrocede en esa dirección); al soltar el joystick deja de acelerar y se detiene. A la derecha están los botones de **TURBO** y **DISPARO** (apuntado automático); la pausa está abajo al centro. Al empezar a jugar pasa a pantalla completa en horizontal cuando el navegador lo permite. En celulares se dibuja a menor resolución y con sombras más livianas para mantener la fluidez.
 

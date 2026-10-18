@@ -69,6 +69,13 @@ const idleInput = (): DriveInput => ({ throttle: 0, brake: 0, steer: 0, turbo: f
 /** Color de un aviso recibido por red (evita valores que no sean colores simples). */
 const safeColor = (c: unknown): string | undefined => (typeof c === 'string' && /^(#[0-9a-f]{3,8}|[a-z]{3,20})$/i.test(c) ? c : undefined);
 
+type InstallBrowser = 'ios' | 'android' | 'samsung' | 'firefox' | 'desktop';
+
+/** El juego ya corre como app instalada (abierto desde su ícono). */
+const isInstalled = (): boolean =>
+  ['fullscreen', 'standalone', 'minimal-ui'].some((m) => window.matchMedia?.(`(display-mode: ${m})`).matches) ||
+  (navigator as Navigator & { standalone?: boolean }).standalone === true;
+
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : 'No se pudo conectar.');
 
 /**
@@ -298,14 +305,31 @@ export class Game {
         this.toggleMusic();
         this.showMenu();
       },
-      install: this.installPrompt
-        ? () => {
-            const prompt = this.installPrompt;
-            this.installPrompt = null;
-            void prompt?.prompt().finally(() => this.showMenu());
-          }
-        : undefined,
+      // Siempre disponible mientras no esté instalado: con el aviso del navegador o con instrucciones.
+      install: isInstalled() ? undefined : () => this.install(),
     });
+  }
+
+  /** Instala el juego: con el aviso del navegador si lo ofrece; si no, se explican los pasos para este dispositivo. */
+  private install(): void {
+    const prompt = this.installPrompt;
+    if (prompt) {
+      this.installPrompt = null;
+      void prompt.prompt().finally(() => this.showMenu());
+      return;
+    }
+    const ua = navigator.userAgent;
+    const ios = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    const browser: InstallBrowser = ios
+      ? 'ios'
+      : /SamsungBrowser/.test(ua)
+        ? 'samsung'
+        : /Firefox|FxiOS/.test(ua)
+          ? 'firefox'
+          : /Android/.test(ua)
+            ? 'android'
+            : 'desktop';
+    this.screens.installHelp({ browser, secure: window.isSecureContext, host: location.host }, () => this.showMenu());
   }
 
   /** Garaje: el vehículo elegido se guarda (y en línea se avisa al anfitrión). */

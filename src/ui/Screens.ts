@@ -460,6 +460,30 @@ export class Screens {
     mark();
   }
 
+  /** Cómo instalar el juego cuando el navegador no ofrece el aviso automático. */
+  installHelp(o: { browser: 'ios' | 'android' | 'samsung' | 'firefox' | 'desktop'; secure: boolean; host: string }, back: Action): void {
+    const steps: Record<typeof o.browser, string[]> = {
+      ios: ['Abre el juego en <b>Safari</b> (en iPhone y iPad solo se instala desde el navegador, con la página abierta).', 'Toca <b>Compartir</b> (el cuadrado con la flecha hacia arriba).', 'Elige <b>Añadir a pantalla de inicio</b> y luego <b>Añadir</b>.'],
+      android: ['Toca el menú <b>⋮</b> de Chrome (arriba a la derecha).', 'Elige <b>Instalar app</b> o <b>Agregar a la pantalla principal</b>.', 'Confirma con <b>Instalar</b>.'],
+      samsung: ['Toca el menú <b>≡</b> de Samsung Internet (abajo).', 'Elige <b>Añadir página a</b> › <b>Pantalla de inicio</b>.'],
+      firefox: ['Toca el menú <b>⋮</b> de Firefox.', 'Elige <b>Instalar</b> o <b>Añadir a la pantalla de inicio</b>.', 'Si no aparece, abre el juego en Chrome o Safari.'],
+      desktop: ['En Chrome o Edge, toca el ícono de <b>instalar</b> al final de la barra de direcciones (una pantalla con una flecha).', 'O abre el menú <b>⋮</b> › <b>Transmitir, guardar y compartir</b> › <b>Instalar página como app</b>.'],
+    };
+    const warning = o.secure
+      ? ''
+      : `<p class="net-status bad">Esta dirección (<b>http://${esc(o.host)}</b>) no permite instalar ni guardar el juego sin internet. Ábrelo desde la versión segura (https), por ejemplo la publicada en Vercel, e instálalo desde ahí.</p>`;
+    this.show(
+      `<h2>Instalar el juego</h2>
+      <p class="muted">Instalado, el juego queda guardado en el dispositivo: abre desde su ícono, a pantalla completa y sin internet (por ejemplo, para jugar por hotspot).</p>
+      ${warning}
+      <ol class="qr-steps">${steps[o.browser].map((s) => `<li>${s}</li>`).join('')}</ol>
+      <p class="muted small">Si el navegador dice que ya está instalado, búscalo entre tus apps. Si cerraste antes el aviso de instalación, el navegador puede tardar en volver a ofrecerlo: usa los pasos de arriba.</p>
+      <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button></div>`,
+      { back },
+      [[['Escape', 'Enter', 'Backspace'], 'back']],
+    );
+  }
+
   controls(back: Action): void {
     this.show(
       `<h2>Controles</h2>
