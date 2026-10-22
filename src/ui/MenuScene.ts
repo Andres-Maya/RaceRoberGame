@@ -73,7 +73,8 @@ export class MenuScene {
   private car = new THREE.Group();
   private carId = '';
   private chasers: Chaser[] = [];
-  private mutant: PursuerMesh;
+  /** Mutantes corriendo por la arena: carril, ventaja y velocidad. */
+  private mutants: { mesh: PursuerMesh; z: number; lead: number; speed: number }[] = [];
   private heli: HeliMesh;
   private barrels: THREE.Object3D[] = [];
   private fade: HTMLElement;
@@ -109,17 +110,33 @@ export class MenuScene {
     this.fx = new Effects(s);
 
     // Perseguidores: patrulla (en el carril de los bidones), auto de la banda y, por la arena, un mutante.
+    // Carriles: negativo = derecha de la toma congelada (detrás de la explosión), positivo = izquierda.
+    // Ninguno pasa por la rampa (|carril| > 3.3); los de más de 6 m van por la arena levantando polvo.
     this.chasers = [
       { mesh: pursuerMesh('patrol'), lane: -3.8, lag: 3.5 },
+      { mesh: pursuerMesh('swat'), lane: -8, lag: 13 },
       { mesh: pursuerMesh('suv'), lane: 3.6, lag: 15 },
-      { mesh: pursuerMesh('muscle'), lane: -1.8, lag: 24 },
+      { mesh: pursuerMesh('muscle'), lane: 3.6, lag: 25 },
+      // A la izquierda de la toma congelada, repartidos en profundidad para llenar el espacio junto al menú.
+      { mesh: pursuerMesh('moto'), lane: 4.8, lag: 7 },
+      { mesh: pursuerMesh('biker'), lane: 6.6, lag: 2 },
+      { mesh: pursuerMesh('raider'), lane: 8.4, lag: -1.5 },
+      { mesh: pursuerMesh('buggy'), lane: 9.4, lag: 8 },
+      { mesh: pursuerMesh('pickup'), lane: 7.4, lag: 14 },
     ];
     for (const c of this.chasers) {
       c.mesh.group.rotation.order = 'YXZ';
       s.add(c.mesh.group);
     }
-    this.mutant = pursuerMesh('mutant');
-    s.add(this.mutant.group);
+    for (const [z, lead, speed] of [
+      [-13, -6, 10.5],
+      [7.6, -10, 11.5],
+      [10.5, -18, 12],
+    ]) {
+      const m = { mesh: pursuerMesh('mutant'), z, lead, speed };
+      s.add(m.mesh.group);
+      this.mutants.push(m);
+    }
     this.heli = helicopter();
     s.add(this.heli.group, this.heli.shadow, this.heli.spot);
 
@@ -215,9 +232,9 @@ export class MenuScene {
   }
 
   /** Congela la escena directamente en su momento culminante (sin la aproximación). */
-  holdNow(): void {
+  holdNow(fade = true): void {
     this.holding = true;
-    this.fadeIn = 1;
+    this.fadeIn = fade ? 1 : 0;
     this.jumpTo(HOLD_AT);
   }
 
@@ -392,6 +409,7 @@ export class MenuScene {
       const x = START_X - c.lag + (SPEED - 1.2) * t;
       g.position.set(x, 0, c.lane);
       g.rotation.set(0, FACE_X, 0);
+      if (Math.abs(c.lane) > 6 && Math.random() < step * 14) this.fx.dust(x - 2, c.lane, 0xd9b98a, 2, 1.6);
     }
     if (!this.blasted && t >= BLAST_AT) {
       this.blasted = true;
@@ -417,11 +435,12 @@ export class MenuScene {
       this.flash.intensity = Math.max(0, 900 * (1 - k * 1.4));
     }
 
-    // Mutante corriendo por la arena del fondo.
-    const mx = START_X - 6 + 10.5 * t;
-    this.mutant.group.position.set(mx, 0, -13);
-    this.mutant.group.rotation.y = FACE_X;
-    if (this.mutant.rig) animateMutant(this.mutant.rig, this.clock * 9, 1);
+    // Mutantes corriendo por la arena.
+    this.mutants.forEach((m, i) => {
+      m.mesh.group.position.set(START_X + m.lead + m.speed * t, 0, m.z);
+      m.mesh.group.rotation.y = FACE_X;
+      if (m.mesh.rig) animateMutant(m.mesh.rig, this.clock * 9 + i * 1.7, 1);
+    });
 
     // Helicóptero detrás, con el reflector sobre la carretera.
     const hx = car.x - 18 + Math.sin(this.clock * 0.6) * 4;

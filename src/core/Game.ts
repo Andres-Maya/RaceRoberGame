@@ -229,7 +229,7 @@ export class Game {
     this.cinema.classList.add('hidden');
     this.menuScene.setVehicle(this.chosenVehicles()[0].id);
     // t < 0: el instante congelado que queda detrás del menú.
-    if (t < 0) this.menuScene.holdNow();
+    if (t < 0) this.menuScene.holdNow(false);
     else this.menuScene.freezeAt(t);
     if (withMenu) this.showMenu();
   }
