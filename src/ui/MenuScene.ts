@@ -41,6 +41,10 @@ const PEAK = 5.5;
 /** Explosión de los bidones (s) y fin del ciclo (s). */
 const BLAST_AT = TAKEOFF + 0.32;
 const LOOP_END = TAKEOFF + FLIGHT + 2.6;
+/** Instante que queda congelado detrás del menú: el vehículo en lo alto y la explosión detrás. */
+const HOLD_AT = TAKEOFF + 0.62;
+/** Velocidad del tiempo mientras está congelado (el humo apenas se mueve). */
+const HOLD_SPEED = 0.025;
 /** Bidones pasada la rampa, en el carril de la patrulla: estallan detrás del vehículo en vuelo. */
 const BARRELS: [number, number][] = [
   [5.2, -6.2],
@@ -76,6 +80,8 @@ export class MenuScene {
   /** Bola de fuego de la explosión y su destello de luz. */
   private fireball: THREE.Mesh;
   private flash: THREE.PointLight;
+  /** Luz de relleno desde la cámara en el plano congelado (el sol queda a contraluz). */
+  private fill = new THREE.DirectionalLight(0xffc896, 0);
   private blastT = -1;
   /** Tiempo dentro del ciclo (con cámara lenta) y tiempo real total. */
   private t = 0;
@@ -123,7 +129,7 @@ export class MenuScene {
     );
     this.fireball.visible = false;
     this.flash = new THREE.PointLight(0xff8a3a, 0, 60, 1.6);
-    s.add(this.fireball, this.flash);
+    s.add(this.fireball, this.flash, this.fill, this.fill.target);
 
     this.car.rotation.order = 'YXZ';
     s.add(this.car);
@@ -193,19 +199,51 @@ export class MenuScene {
     }
   }
 
-  /** Empieza la cinemática desde el principio (al abrir la aplicación). */
-  restart(): void {
+  /**
+   * Con el menú en pantalla la escena queda congelada en su momento culminante
+   * (vehículo suspendido en el aire, explosión detrás, perseguidores en la
+   * vía) mientras la cámara gira despacio. Si la cinemática ya pasó de ese
+   * momento, se vuelve a él tras un fundido.
+   */
+  hold(): void {
+    if (this.holding) return;
+    this.holding = true;
+    if (this.t > HOLD_AT) {
+      this.fadeIn = 1;
+      this.jumpTo(HOLD_AT);
+    }
+  }
+
+  /** Congela la escena directamente en su momento culminante (sin la aproximación). */
+  holdNow(): void {
+    this.holding = true;
+    this.fadeIn = 1;
+    this.jumpTo(HOLD_AT);
+  }
+
+  /** Vuelve a reproducir la cinemática completa (al abrir la aplicación). */
+  play(): void {
+    this.holding = false;
+    this.fill.intensity = 0;
     this.reset();
+  }
+
+  /** Avanza la simulación desde el principio hasta el instante `t` (sin dibujar). */
+  private jumpTo(t: number): void {
+    this.reset();
+    while (this.t < t) this.simulate(1 / 60);
   }
 
   /** Solo desarrollo: congela la cinemática en el instante `t` para revisarla. */
   freezeAt(t: number): void {
-    this.reset();
-    for (let k = 0; k < t; k += 1 / 60) this.update(1 / 60, this.camera.aspect);
+    this.jumpTo(t);
     this.frozen = true;
   }
 
   private frozen = false;
+  private holding = false;
+  /** Fundido desde negro al volver al instante congelado (1 → 0). */
+  private fadeIn = 0;
 
   /** Vuelve todo al principio del ciclo. */
   private reset(): void {
@@ -255,7 +293,57 @@ export class MenuScene {
       this.shoot(this.t, this.carAt(this.t), aspect);
       return;
     }
+    if (this.holding) {
+      this.updateHold(dt, aspect);
+      return;
+    }
+    const car = this.simulate(dt);
+    this.shoot(this.t, car, aspect);
+    // Fundido al cerrar y abrir cada ciclo.
+    const fade = Math.max(0, 1 - this.t / 0.35, (this.t - (LOOP_END - 0.45)) / 0.45);
+    this.fade.style.opacity = Math.min(1, fade).toFixed(3);
+  }
+
+  /**
+   * Tiempo congelado: la cinemática avanza a la velocidad de un suspiro hasta el
+   * instante elegido y se queda ahí; la cámara gira alrededor y las sirenas y
+   * el rotor siguen vivos.
+   */
+  private updateHold(dt: number, aspect: number): void {
     this.clock += dt;
+    if (this.t < HOLD_AT) this.simulate(dt);
+    else {
+      // Todo quieto salvo un leve movimiento del humo y del fuego.
+      this.fx.update(dt * HOLD_SPEED);
+      const siren = Math.floor(this.clock * 6) % 2 === 0;
+      for (const c of this.chasers) setSiren(c.mesh, siren);
+      this.heli.rotor.rotation.y += dt * 2;
+    }
+    const car = this.carAt(this.t);
+    const cam = this.camera;
+    cam.aspect = aspect;
+    cam.fov = aspect < 1 ? 64 : 42;
+    cam.updateProjectionMatrix();
+    // De frente: la cámara está delante del vehículo y mira hacia atrás, así salta hacia ella con la
+    // explosión y los perseguidores detrás. Mirando hacia -X, la derecha de la pantalla es -Z: el punto de
+    // mira se corre hacia +Z para que la acción quede a la derecha, libre del menú.
+    // A media altura del salto: se ve el frente (cofre y faros) y la explosión queda debajo y detrás.
+    const portrait = aspect < 1;
+    const ahead = portrait ? 21 : 16;
+    const swing = Math.sin(this.clock * 0.14) * 3;
+    cam.position.set(car.x + ahead, car.y * 0.78 + 0.9 + Math.sin(this.clock * 0.23) * 0.4, 0.8 + swing);
+    cam.lookAt(car.x - 6, car.y * 0.55, portrait ? 0 : 4.6 + swing * 0.3);
+    // Relleno cálido desde la cámara: el frente del vehículo no queda en sombra.
+    this.fill.intensity = Math.min(2.2, this.fill.intensity + dt * 3);
+    this.fill.position.set(cam.position.x, cam.position.y + 8, cam.position.z + 4);
+    this.fill.target.position.set(car.x, car.y, 0);
+    this.fadeIn = Math.max(0, this.fadeIn - dt * 2.2);
+    this.fade.style.opacity = this.fadeIn.toFixed(3);
+  }
+
+  /** Avanza la cinemática `dt` segundos reales (con su cámara lenta); devuelve la posición del vehículo. */
+  private simulate(dt: number): { x: number; y: number; pitch: number } {
+    this.clock += this.holding ? 0 : dt;
     const step = dt * this.timeScale(this.t);
     this.t += step;
     if (this.t >= LOOP_END) this.reset();
@@ -344,11 +432,7 @@ export class MenuScene {
     this.heli.spot.position.set(car.x - 4, 0.07, -1);
 
     this.fx.update(step);
-    this.shoot(t, car, aspect);
-
-    // Fundido al cerrar y abrir cada ciclo.
-    const fade = Math.max(0, 1 - t / 0.35, (t - (LOOP_END - 0.45)) / 0.45);
-    this.fade.style.opacity = Math.min(1, fade).toFixed(3);
+    return car;
   }
 
   /** Planos: seguimiento lateral, contrapicado en la rampa durante el salto y plano abierto al escapar. */

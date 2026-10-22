@@ -13,11 +13,11 @@ async function boot(): Promise<void> {
     if (import.meta.env.DEV) (window as unknown as { game: Game }).game = game;
     // Los navegadores no dejan sonar una página hasta que se toca: si la bloquean,
     // se pide "toca para empezar" y ese toque enciende la música del menú.
-    // Solo desarrollo: ?cine=3.2 muestra la cinemática congelada en ese instante (para revisarla).
+    // Solo desarrollo: ?cine=3.2 muestra la cinemática congelada en ese instante; ?cine=hold, la escena detrás del menú.
     const freeze = import.meta.env.DEV ? new URLSearchParams(location.search).get('cine') : null;
     if (freeze !== null) {
       loader.hide();
-      game.debugCinema(Number(freeze) || 0, new URLSearchParams(location.search).has('menu'));
+      game.debugCinema(freeze === 'hold' ? -1 : Number(freeze) || 0, new URLSearchParams(location.search).has('menu'));
       return;
     }
     if (await game.tryAutoplay()) loader.hide();

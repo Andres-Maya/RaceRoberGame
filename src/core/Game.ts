@@ -211,7 +211,7 @@ export class Game {
   start(): void {
     if (this.state !== 'cinema') return;
     this.menuScene.setVehicle(this.chosenVehicles()[0].id);
-    this.menuScene.restart();
+    this.menuScene.play();
     this.cinema.classList.remove('hidden');
   }
 
@@ -228,7 +228,9 @@ export class Game {
     this.screens.hide();
     this.cinema.classList.add('hidden');
     this.menuScene.setVehicle(this.chosenVehicles()[0].id);
-    this.menuScene.freezeAt(t);
+    // t < 0: el instante congelado que queda detrás del menú.
+    if (t < 0) this.menuScene.holdNow();
+    else this.menuScene.freezeAt(t);
     if (withMenu) this.showMenu();
   }
 
@@ -307,7 +309,8 @@ export class Game {
       view.update(dt, this.camera, 1);
       if (render) this.renderer.render(view.scene, this.camera);
     } else {
-      // Sin partida: la cinemática de fondo (detrás del menú y las demás pantallas).
+      // Sin partida: la cinemática de fondo. Fuera de la presentación queda congelada en su mejor momento.
+      if (this.state !== 'cinema') this.menuScene.hold();
       const size = this.renderer.getSize(new THREE.Vector2());
       this.menuScene.update(dt, size.x / Math.max(1, size.y));
       if (render) this.renderer.render(this.menuScene.scene, this.menuScene.camera);
