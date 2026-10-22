@@ -129,6 +129,15 @@ const OBSTACLE_HARDNESS: Record<string, number> = {
 /** Cómo anuncia El Analista los refuerzos de cada facción. */
 const REINFORCEMENTS = { police: 'La policía envía', gang: 'Los Cuervos mandan', wasteland: 'De las ruinas salen' };
 
+/**
+ * Aguante de un bidón de combustible frente a un jugador: un choque le quita
+ * como mucho BARREL_HIT (nunca estalla de un solo golpe) y empujarlo lo gasta
+ * a BARREL_PUSH por segundo (estalla tras 2-3 s de llevarlo por delante).
+ */
+const BARREL_HP = 100;
+const BARREL_HIT = 45;
+const BARREL_PUSH = 34;
+
 /** Qué tan adelante en la carretera apunta la flecha mientras la meta está lejos (m). */
 const GOAL_LOOKAHEAD = 70;
 
@@ -506,6 +515,7 @@ export class Level {
 
     // ---- jugadores
     for (const p of this.players) this.updatePlayer(p, running ? inputs[p.index] : null, dt);
+    if (running) this.pushBarrels(dt);
 
     // ---- perseguidores, tráfico, helicóptero
     if (this.config.pursuers && running) this.updatePursuers(dt);
@@ -1001,6 +1011,49 @@ export class Level {
   }
 
   /** Barril de combustible que estalla. */
+  /** Gasta el aguante de un bidón; al agotarse, estalla. */
+  private wearBarrel(o: ObstacleRecord, amount: number): void {
+    if (o.dead || amount <= 0) return;
+    o.hp = (o.hp ?? BARREL_HP) - amount;
+    if (o.hp <= 0) this.explodeBarrel(o, 0.04);
+  }
+
+  /**
+   * Bidones que un jugador lleva empujando: se van gastando y avisan antes de
+   * estallar (chispas, luego humo, temblor y pitidos cada vez más seguidos).
+   */
+  private pushBarrels(dt: number): void {
+    for (const o of this.chunks.obstacles()) {
+      if (o.kind !== 'fuelBarrel' || o.dead) continue;
+      const t = o.body.translation();
+      let pushed = false;
+      for (const p of this.alivePlayers) {
+        const v = p.vehicle;
+        // Su posición actual (o.d es donde apareció; empujado, ya está en otra parte).
+        if (p.ghost || Math.abs(-t.z - v.d) > 8 || Math.abs(v.speed) < 3) continue;
+        // Posición del bidón en el sistema del vehículo: pegado a su frente o costados.
+        const dx = t.x - v.px;
+        const dz = t.z - v.pz;
+        const fwd = -dx * Math.sin(v.heading) - dz * Math.cos(v.heading);
+        const side = dx * Math.cos(v.heading) - dz * Math.sin(v.heading);
+        if (Math.abs(side) < v.spec.hx + 0.75 && Math.abs(fwd) < v.spec.hz + 0.75) pushed = true;
+      }
+      const hp = o.hp ?? BARREL_HP;
+      if (pushed) {
+        this.wearBarrel(o, BARREL_PUSH * dt);
+        if (o.dead) continue;
+      }
+      // Avisos según lo gastado (también mientras se enfría tras dejar de empujarlo).
+      if (hp < BARREL_HP * 0.6 && this.rng.chance(dt * (hp < BARREL_HP * 0.3 ? 14 : 6))) this.fx.sparks(t.x, t.z, 3);
+      if (hp < BARREL_HP * 0.35) {
+        if (this.rng.chance(dt * 8)) this.fx.smokeTrail(t.x, t.z);
+        const k = 1 - hp / (BARREL_HP * 0.35);
+        o.mesh.scale.setScalar(1 + Math.sin(this.elapsed * (30 + k * 30)) * 0.05 * (0.4 + k));
+        if (pushed && this.rng.chance(dt * (3 + k * 9))) this.audio.blip(900 + k * 900);
+      }
+    }
+  }
+
   private explodeBarrel(o: ObstacleRecord, delay: number): void {
     if (o.dead) return;
     const t = o.body.translation();
@@ -1486,9 +1539,9 @@ export class Level {
           const o = b.ref as ObstacleRecord;
           if (o.dead) return;
           o.hitMask |= 1 << p.index;
-          if (o.kind === 'fuelBarrel' && impact > 4) {
-            // El daño lo hace la explosión (y a la moto le llega reducido).
-            this.explodeBarrel(o, 0.04);
+          if (o.kind === 'fuelBarrel') {
+            // Un choque lo abolla pero no lo hace estallar: hay que llevarlo empujando un rato.
+            this.wearBarrel(o, Math.min(BARREL_HIT, impact * 1.6));
             break;
           }
           const hard = OBSTACLE_HARDNESS[o.kind] ?? 1;

@@ -47,6 +47,8 @@ export interface ObstacleRecord {
   drift: { x: number; z: number } | null;
   /** Zombis atropellados: quedan tendidos y sin colisión. */
   dead?: boolean;
+  /** Bidón de combustible: aguante antes de estallar (lo gastan los choques y empujarlo). */
+  hp?: number;
 }
 
 /** Zona que termina el nivel (puerta del banco, boca del túnel, planta, línea de meta). */
