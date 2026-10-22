@@ -1560,70 +1560,60 @@ body.touch #hud-toasts {
   letter-spacing: 0;
 }
 
-/* ------------------------------------------------------------ flecha de la meta */
+/* ------------------------------------------------------------ indicador de la meta */
 
+/* Usa el mismo círculo, flecha y distancia que el indicador del compañero (.offscreen-mark). */
 #goal-arrow {
-  position: absolute;
-  left: 0;
-  top: 0;
   z-index: 4;
   pointer-events: none;
-  will-change: transform;
 }
 
-#goal-arrow .goal-icon {
+#goal-arrow .offscreen-circle {
+  background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.95), rgba(214, 240, 222, 0.92));
+}
+
+.goal-flag {
   position: absolute;
-  left: -22px;
-  top: -22px;
-  width: 44px;
-  height: 44px;
-  filter: drop-shadow(0 0 8px rgba(76, 211, 123, 0.75)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.8));
+  inset: 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
 }
 
-#goal-arrow svg {
-  width: 100%;
-  height: 100%;
-  fill: #4cd37b;
-  stroke: #0b3a1c;
-  stroke-width: 2;
-  stroke-linejoin: round;
-  animation: goal-pulse 0.9s ease-in-out infinite;
+.goal-pole {
+  fill: #5a4a3a;
 }
 
-.goal-label {
-  position: absolute;
-  top: 24px;
-  left: 0;
-  transform: translateX(-50%);
-  padding: 2px 9px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #9be7a1;
-  font: 0.8rem var(--display);
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+.goal-cloth {
+  fill: #ffffff;
+  stroke: #111111;
+  stroke-width: 1.5;
 }
 
-/* Con la meta a la vista, la flecha rebota encima de ella. */
-#goal-arrow.near .goal-icon {
+.goal-checks rect {
+  fill: #111111;
+}
+
+/* La bandera ondea un poco. */
+.goal-flag .goal-cloth,
+.goal-flag .goal-checks {
+  transform-origin: 17px 24px;
+  animation: goal-wave 1.1s ease-in-out infinite alternate;
+}
+
+/* Con la meta a la vista, el indicador rebota encima de ella. */
+#goal-arrow.near .offscreen-circle,
+#goal-arrow.near .offscreen-arrow {
   animation: goal-bounce 0.7s ease-in-out infinite alternate;
 }
 
-#goal-arrow.near .goal-label {
-  top: -52px;
-  color: #fff;
-  background: rgba(46, 139, 87, 0.85);
-}
-
-@keyframes goal-pulse {
-  50% {
-    transform: scale(0.86);
+@keyframes goal-wave {
+  to {
+    transform: skewY(-6deg) scaleX(0.94);
   }
 }
 
 @keyframes goal-bounce {
   to {
-    translate: 0 -10px;
+    translate: 0 -8px;
   }
 }

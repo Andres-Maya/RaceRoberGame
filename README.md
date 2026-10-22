@@ -67,7 +67,7 @@ El juego detecta la pantalla táctil y muestra controles en pantalla. El vehícu
 
 Los niveles 0 a 3 terminan **por distancia**: el HUD muestra cuánto falta para la meta. Cada disparo que recibes te quita $2.500 del botín.
 
-Una **flecha verde** en el borde de la pantalla indica hacia dónde queda la meta, con la distancia que falta: mientras está lejos sigue la carretera (útil en las curvas) y, cuando la meta ya está cerca, apunta a ella; al verla en pantalla rebota encima con el texto «META». En el nivel infinito no aparece.
+Un **círculo verde con una bandera a cuadros** en el borde de la pantalla (como el del compañero que sale de cámara) indica hacia dónde queda la meta, con una flecha y la distancia que falta: mientras está lejos sigue la carretera (útil en las curvas) y, cuando la meta ya está cerca, apunta a ella; al verla en pantalla rebota encima con el texto «META». En el nivel infinito no aparece.
 
 El juego recuerda tu campaña. Al tocar **JUGAR** con una campaña empezada puedes elegir **Continuar** (vuelves al nivel en que quedaste, con el botín y el puntaje acumulados; si superaste un nivel y volviste al menú, al siguiente; tras ganar la campaña, al nivel infinito) o **Nueva partida** (empieza en el prólogo sin botín, conservando los niveles y vehículos desbloqueados). Desde **Seleccionar nivel** puedes empezar en cualquier nivel, y la campaña sigue desde ahí (el prólogo es una partida nueva); cada nivel calibra tu habilidad por su cuenta.
 
