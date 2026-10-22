@@ -144,7 +144,8 @@ export class Screens {
 
   // ------------------------------------------------------------ menú
 
-  menu(save: SaveData, a: { play: Action; select: Action; online: Action; garage: Action; controls: Action; stats: Action; sound: Action; mute: Action; music: Action; install?: Action }): void {
+  /** `enter`: animación de entrada (al terminar la cinemática de inicio). */
+  menu(save: SaveData, a: { play: Action; select: Action; online: Action; garage: Action; controls: Action; stats: Action; sound: Action; mute: Action; music: Action; install?: Action }, enter = false): void {
     this.show(
       `
       <div class="logo">
@@ -160,7 +161,7 @@ export class Screens {
         <button data-action="garage">GARAJE <kbd>3</kbd> <small>${esc(vehicleById(save.vehicles[0]).name)}</small></button>
         <button data-action="controls">CONTROLES</button>
         <button data-action="stats">PERFIL DE LA IA Y ESTADÍSTICAS</button>
-        ${a.install ? '<button data-action="install">INSTALAR EN ESTE DISPOSITIVO <small>para jugar sin internet</small></button>' : ''}
+        ${a.install ? '<button data-action="install">INSTALAR <small>jugar sin internet</small></button>' : ''}
         <button data-action="sound">SONIDO <kbd>4</kbd> <small>${save.muted ? '(silenciado)' : `general ${Math.round(save.volumes.master * 100)}% · música ${save.musicOn ? `${Math.round(save.volumes.music * 100)}%` : 'apagada'}`}</small></button>
       </div>
       <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)} · Récord infinito: ${(save.bestEndless / 1000).toFixed(2)} km</div>`,
@@ -174,7 +175,7 @@ export class Screens {
         [['KeyM'], 'mute'],
         [['KeyN'], 'music'],
       ],
-      'menu',
+      enter ? 'menu enter' : 'menu',
     );
   }
 

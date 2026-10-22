@@ -328,6 +328,8 @@ kbd {
 .screen {
   position: absolute;
   inset: 0;
+  /* Encima del fundido de la cinemática de fondo. */
+  z-index: 2;
   display: grid;
   place-items: center;
   padding: 16px;
@@ -336,11 +338,15 @@ kbd {
   backdrop-filter: blur(2px);
 }
 
+/* Menú principal: a la izquierda, sobre un degradado; a la derecha se ve la cinemática. */
 .screen.menu {
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center start;
+  padding: 16px clamp(16px, 6vw, 96px);
+  backdrop-filter: none;
   background:
-    radial-gradient(ellipse at 50% 120%, rgba(255, 120, 40, 0.35), transparent 60%),
-    repeating-linear-gradient(90deg, transparent 0 46%, rgba(255, 255, 255, 0.04) 46% 54%, transparent 54% 100%),
-    linear-gradient(180deg, #1a1d27, #0c0d12);
+    linear-gradient(90deg, rgba(8, 9, 13, 0.92) 0%, rgba(8, 9, 13, 0.78) 34%, rgba(8, 9, 13, 0.2) 62%, transparent 78%),
+    linear-gradient(0deg, rgba(8, 9, 13, 0.55), transparent 30%);
 }
 
 .panel {
@@ -354,10 +360,142 @@ kbd {
 }
 
 .screen.menu .panel {
+  width: 100%;
+  max-width: 470px;
   background: transparent;
   border: none;
   box-shadow: none;
-  text-align: center;
+  text-align: left;
+}
+
+.screen.menu .tagline {
+  margin: 12px 0 16px;
+  max-width: 420px;
+}
+
+.screen.menu .footer {
+  margin-top: 14px;
+  font-size: 0.85rem;
+}
+
+.screen.menu .logo-main {
+  font-size: clamp(3rem, min(13vw, 13vh), 6.5rem);
+}
+
+.screen.menu .menu-buttons {
+  gap: 8px;
+}
+
+.screen.menu .menu-buttons button {
+  padding: 10px 16px;
+  text-align: left;
+  background: rgba(12, 14, 20, 0.62);
+  border-color: rgba(255, 255, 255, 0.14);
+  border-left: 4px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(3px);
+}
+
+.screen.menu .menu-buttons button:hover:not(:disabled) {
+  border-left-color: var(--gold);
+  transform: translateX(4px);
+}
+
+.screen.menu .menu-buttons button.primary {
+  background: linear-gradient(90deg, #ffd84d, #e0a800);
+  border-left-color: #fff3b0;
+  color: #1a1200;
+}
+
+/* Entrada del menú al terminar la cinemática: el logo cae y los botones entran en cascada. */
+.screen.menu.enter .logo {
+  animation: logo-slam 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.screen.menu.enter .tagline,
+.screen.menu.enter .footer {
+  animation: menu-in 0.5s ease-out 0.35s both;
+}
+
+.screen.menu.enter .menu-buttons button {
+  animation: menu-in 0.4s ease-out both;
+}
+
+.screen.menu.enter .menu-buttons button:nth-child(1) { animation-delay: 0.3s; }
+.screen.menu.enter .menu-buttons button:nth-child(2) { animation-delay: 0.36s; }
+.screen.menu.enter .menu-buttons button:nth-child(3) { animation-delay: 0.42s; }
+.screen.menu.enter .menu-buttons button:nth-child(4) { animation-delay: 0.48s; }
+.screen.menu.enter .menu-buttons button:nth-child(5) { animation-delay: 0.54s; }
+.screen.menu.enter .menu-buttons button:nth-child(6) { animation-delay: 0.6s; }
+.screen.menu.enter .menu-buttons button:nth-child(7) { animation-delay: 0.66s; }
+.screen.menu.enter .menu-buttons button:nth-child(8) { animation-delay: 0.72s; }
+
+@keyframes logo-slam {
+  from {
+    opacity: 0;
+    transform: scale(1.8) translateY(-20px);
+    filter: blur(6px);
+  }
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+
+/* Pantallas bajas (laptops de 720 px, celulares en horizontal): menú más compacto para que quepa entero. */
+@media (max-height: 820px) {
+  .screen.menu .tagline {
+    display: none;
+  }
+  .screen.menu .logo-main {
+    font-size: clamp(2.6rem, 11vh, 5.5rem);
+  }
+  .screen.menu .logo-top {
+    font-size: 1.6rem;
+  }
+  .screen.menu .menu-buttons {
+    gap: 6px;
+    margin-top: 14px;
+  }
+  .screen.menu .menu-buttons button {
+    padding: 8px 14px;
+  }
+}
+
+/* En pantallas angostas el menú va abajo y la cinemática arriba. */
+@media (max-aspect-ratio: 1/1) {
+  .screen.menu {
+    place-items: end center;
+    background: linear-gradient(0deg, rgba(8, 9, 13, 0.95) 0%, rgba(8, 9, 13, 0.85) 55%, transparent 80%);
+  }
+  .screen.menu .panel {
+    text-align: center;
+  }
+  /* Vertical: menú compacto abajo para que arriba se vea la cinemática. */
+  .screen.menu .tagline,
+  .screen.menu .footer {
+    display: none;
+  }
+  .screen.menu .logo-top {
+    font-size: 1.4rem;
+  }
+  .screen.menu .logo-main {
+    font-size: clamp(2.6rem, 14vw, 4rem);
+  }
+  .screen.menu .logo-sub {
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+  }
+  .screen.menu .menu-buttons {
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .screen.menu .menu-buttons button {
+    padding: 8px 14px;
+    font-size: 0.95rem;
+  }
 }
 
 .logo {
@@ -1615,5 +1753,62 @@ body.touch #hud-toasts {
 @keyframes goal-bounce {
   to {
     translate: 0 -8px;
+  }
+}
+
+/* ------------------------------------------------------------ cinemática */
+
+/* Fundido entre ciclos de la cinemática de fondo. */
+#cine-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Presentación al abrir el juego: franjas de cine y aviso para saltarla. */
+#cinema {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  cursor: pointer;
+}
+
+.cinema-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 11vh;
+  background: #000;
+  animation: cinema-bar 0.6s ease-out both;
+}
+
+.cinema-bar.top {
+  top: 0;
+  transform-origin: top;
+}
+
+.cinema-bar.bottom {
+  bottom: 0;
+  transform-origin: bottom;
+}
+
+.cinema-skip {
+  position: absolute;
+  right: 18px;
+  bottom: calc(11vh + 12px);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.85rem;
+  animation: menu-in 0.5s ease-out 1.5s both;
+}
+
+@keyframes cinema-bar {
+  from {
+    transform: scaleY(0);
   }
 }

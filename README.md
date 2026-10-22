@@ -71,6 +71,10 @@ Un **círculo verde con una bandera a cuadros** en el borde de la pantalla (como
 
 El juego recuerda tu campaña. Al tocar **JUGAR** con una campaña empezada puedes elegir **Continuar** (vuelves al nivel en que quedaste, con el botín y el puntaje acumulados; si superaste un nivel y volviste al menú, al siguiente; tras ganar la campaña, al nivel infinito) o **Nueva partida** (empieza en el prólogo sin botín, conservando los niveles y vehículos desbloqueados). Desde **Seleccionar nivel** puedes empezar en cualquier nivel, y la campaña sigue desde ahí (el prólogo es una partida nueva); cada nivel calibra tu habilidad por su cuenta.
 
+## Cinemática y menú
+
+Al abrir el juego se ve una cinemática con franjas de cine: en una carretera del desierto al atardecer, tu vehículo (el elegido en el garaje) escapa de una patrulla con sirenas, un auto de la banda, un mutante que corre por la arena y el helicóptero; sube una rampa y salta en cámara lenta mientras la patrulla choca unos bidones y estalla detrás de él (bola de fuego y destello), y aterriza y escapa. Se salta con un toque o una tecla. Después entra el menú (a la izquierda, sobre un degradado; abajo en pantallas verticales) y la cinemática se sigue repitiendo de fondo detrás del menú y de las demás pantallas (`src/ui/MenuScene.ts`). En desarrollo, `?cine=3.5` la congela en ese instante y `&menu=1` le pone el menú encima, para revisarla.
+
 ## Garaje
 
 En el menú principal, **Garaje** (tecla `3`) muestra una tarjeta por vehículo con su foto (renderizada con el mismo modelo 3D del juego), su papel, barras de atributos y habilidades. Se elige con **Elegir** (o las teclas `1`–`7`) y la elección se guarda.

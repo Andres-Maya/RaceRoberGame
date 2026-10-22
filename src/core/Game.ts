@@ -12,6 +12,7 @@ import { QrLink, qrImage, qrKind } from '../net/QrLink';
 import { Hud, hudState, type HudState } from '../ui/Hud';
 import type { Loader } from '../ui/Loader';
 import { GoalArrow } from '../ui/GoalArrow';
+import { MenuScene } from '../ui/MenuScene';
 import { OffscreenMarkers, type Mate } from '../ui/Offscreen';
 import { QrScanner } from '../ui/QrScanner';
 import { Screens } from '../ui/Screens';
@@ -22,7 +23,7 @@ import { Input, type DriveInput } from './Input';
 import type { MusicMode } from './Music';
 import { Storage } from './Storage';
 
-type State = 'menu' | 'intro' | 'loading' | 'playing' | 'paused' | 'results' | 'gameover' | 'victory' | 'online' | 'guest';
+type State = 'cinema' | 'menu' | 'intro' | 'loading' | 'playing' | 'paused' | 'results' | 'gameover' | 'victory' | 'online' | 'guest';
 
 /** Botín obtenido del Banco Central al terminar el nivel 0. */
 const LOOT = 500_000;
@@ -96,6 +97,9 @@ export class Game {
   private screens = new Screens();
   private touch = new TouchControls();
   private offscreen = new OffscreenMarkers();
+  /** Cinemática de fondo del menú (y de presentación al abrir la aplicación). */
+  private menuScene = new MenuScene();
+  private cinema = document.createElement('div');
   private goalArrow = new GoalArrow();
   /** Último estado del HUD de la partida local (también lo usa la flecha de la meta). */
   private lastHud: HudState | null = null;
@@ -126,7 +130,7 @@ export class Game {
       document.body.classList.add('touch');
     }
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.setClearColor(0x14161c);
     container.prepend(this.renderer.domElement);
     window.addEventListener('resize', () => this.resize());
@@ -164,7 +168,23 @@ export class Game {
       if (this.state === 'menu' && !this.net) this.showMenu();
     });
 
-    this.showMenu();
+    // Presentación: franjas de cine y aviso para saltarla. La cinemática empieza con start().
+    this.cinema.id = 'cinema';
+    this.cinema.className = 'hidden';
+    this.cinema.innerHTML = '<div class="cinema-bar top"></div><div class="cinema-bar bottom"></div><div class="cinema-skip">Toca o presiona una tecla para saltar</div>';
+    this.cinema.addEventListener('pointerup', () => this.finishCinema());
+    container.appendChild(this.cinema);
+    this.state = 'cinema';
+    this.audio.playMusic('epic');
+    this.menuScene.onBlast = () => {
+      if (this.state === 'cinema') {
+        this.audio.explosion();
+        this.hud.flash('rgba(255, 190, 110, 0.5)');
+      }
+    };
+    this.menuScene.onLanded = () => {
+      if (this.state === 'cinema') window.setTimeout(() => this.finishCinema(), 1200);
+    };
     // ¿Se abrió desde el servidor de red local? Entonces se ofrece la conexión por IP.
     void lanInfo().then((info) => {
       this.lan = info;
@@ -185,6 +205,31 @@ export class Game {
     if (this.storage.data.muted || !this.storage.data.musicOn) return true;
     await new Promise((r) => window.setTimeout(r, 250));
     return this.audio.running;
+  }
+
+  /** Arranca la cinemática de presentación (cuando ya se quitó la pantalla de carga). */
+  start(): void {
+    if (this.state !== 'cinema') return;
+    this.menuScene.setVehicle(this.chosenVehicles()[0].id);
+    this.menuScene.restart();
+    this.cinema.classList.remove('hidden');
+  }
+
+  /** Termina (o salta) la cinemática y entra el menú. */
+  private finishCinema(): void {
+    if (this.state !== 'cinema') return;
+    this.cinema.classList.add('hidden');
+    this.showMenu(true);
+  }
+
+  /** Solo desarrollo: muestra la cinemática congelada en el instante `t` (sin menú). */
+  debugCinema(t: number, withMenu = false): void {
+    this.state = 'cinema';
+    this.screens.hide();
+    this.cinema.classList.add('hidden');
+    this.menuScene.setVehicle(this.chosenVehicles()[0].id);
+    this.menuScene.freezeAt(t);
+    if (withMenu) this.showMenu();
   }
 
   private resize(): void {
@@ -247,6 +292,8 @@ export class Game {
       }
     } else if (guest) {
       this.updateGuest(dt);
+    } else if (this.state === 'cinema') {
+      if (this.input.anyPressed()) this.finishCinema();
     } else {
       this.touch.consumePause();
       this.screens.handleKeys(this.input);
@@ -259,9 +306,13 @@ export class Game {
     } else if (view) {
       view.update(dt, this.camera, 1);
       if (render) this.renderer.render(view.scene, this.camera);
-    } else if (render) {
-      this.renderer.clear();
+    } else {
+      // Sin partida: la cinemática de fondo (detrás del menú y las demás pantallas).
+      const size = this.renderer.getSize(new THREE.Vector2());
+      this.menuScene.update(dt, size.x / Math.max(1, size.y));
+      if (render) this.renderer.render(this.menuScene.scene, this.menuScene.camera);
     }
+    this.menuScene.setVisible(!this.level && !view);
     this.updateMates(playing, guest, waiting);
     this.input.endFrame();
   }
@@ -296,7 +347,7 @@ export class Game {
 
   // ------------------------------------------------------------ pantallas
 
-  private showMenu(): void {
+  private showMenu(enter = false): void {
     // En una partida en línea, "volver al menú" es volver a la sala.
     if (this.net) {
       if (this.net.role === 'host') this.showRoom();
@@ -309,6 +360,7 @@ export class Game {
     this.hud.hide();
     this.audio.duckMusic(false);
     this.audio.playMusic('calm');
+    this.menuScene.setVehicle(this.chosenVehicles()[0].id);
     this.screens.menu(this.storage.data, {
       play: () => this.play(),
       select: () => this.screens.levelSelect(this.storage.data, (l) => this.startFrom(l), () => this.showMenu()),
@@ -327,7 +379,7 @@ export class Game {
       },
       // Siempre disponible mientras no esté instalado: con el aviso del navegador o con instrucciones.
       install: isInstalled() ? undefined : () => this.install(),
-    });
+    }, enter);
   }
 
   /** Instala el juego: con el aviso del navegador si lo ofrece; si no, se explican los pasos para este dispositivo. */

@@ -78,6 +78,11 @@ export class Input {
     return codes.some((c) => this.pressed.has(c));
   }
 
+  /** Se presionó cualquier tecla en este frame. */
+  anyPressed(): boolean {
+    return this.pressed.size > 0;
+  }
+
   endFrame(): void {
     this.pressed.clear();
   }
