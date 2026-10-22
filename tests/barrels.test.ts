@@ -36,7 +36,11 @@ async function barrelRun(vehicle: string, speed: number, opts: { steerAway?: boo
   const frames = Math.round((opts.seconds ?? 6) / DT);
   for (let i = 0; i < frames; i++) {
     p.invuln = 1;
-    if (touchedAt < 0 && barrel.hp !== undefined) touchedAt = i * DT;
+    // Contacto: el bidón ya está pegado al frente del vehículo (o acaba de estallar).
+    if (touchedAt < 0) {
+      const tr = barrel.body.translation();
+      if (barrel.dead || Math.hypot(tr.x - v.px, tr.z - v.pz) < v.spec.hz + 1.2) touchedAt = i * DT;
+    }
     // Sigue la carretera; si solo se quiere un golpe, tras tocarlo se aparta del bidón.
     const look = L.track.angle(v.d + 10);
     let steer = Math.max(-1, Math.min(1, -(look - v.heading) * 3));
@@ -49,18 +53,19 @@ async function barrelRun(vehicle: string, speed: number, opts: { steerAway?: boo
   return { touchedAt, explodedAt, minHp };
 }
 
-test('un choque a toda velocidad no hace estallar el bidón', async () => {
+test('chocarlo con fuerza lo hace estallar al instante', async () => {
   for (const id of ['cacharro', 'moto', 'armored']) {
-    const r = await barrelRun(id, 30, { steerAway: true, seconds: 3 });
-    assert.ok(r.touchedAt >= 0, `${id} chocó el bidón`);
-    assert.equal(r.explodedAt, -1, `${id}: no estalla de un golpe (aguante mínimo ${r.minHp.toFixed(0)})`);
+    const r = await barrelRun(id, 30, { seconds: 3 });
+    assert.ok(r.explodedAt > 0, `${id} lo hace estallar`);
+    assert.ok(r.touchedAt >= 0 && r.explodedAt - r.touchedAt < 0.3, `${id}: estalla en el choque (contacto ${r.touchedAt.toFixed(2)} s, estalla ${r.explodedAt.toFixed(2)} s)`);
   }
 });
 
-test('empujarlo un buen rato lo hace estallar', async () => {
-  const r = await barrelRun('cacharro', 14, { seconds: 8 });
+test('empujarlo suavemente también lo hace estallar, en poco más de un segundo', async () => {
+  // Se arrima despacio (sin golpe) y lo sigue empujando.
+  const r = await barrelRun('cacharro', 4, { seconds: 10 });
   assert.ok(r.touchedAt >= 0, 'lo alcanzó');
   assert.ok(r.explodedAt > 0, 'termina estallando');
   const pushed = r.explodedAt - r.touchedAt;
-  assert.ok(pushed > 1.2 && pushed < 4.5, `estalla tras empujarlo ${pushed.toFixed(1)} s`);
+  assert.ok(pushed > 0.4 && pushed < 2.5, `estalla tras empujarlo ${pushed.toFixed(1)} s`);
 });

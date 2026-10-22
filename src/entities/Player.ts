@@ -31,6 +31,8 @@ export class Player {
   airTime = 0;
   /** Sin colisiones: la moto atraviesa puertas y escombros durante las escenas. */
   ghost = false;
+  /** Acelera o frena en este cuadro (aunque esté trabado): sirve para saber si empuja algo. */
+  driving = false;
   /** Se desconectó en una partida en línea: no vuelve a aparecer. */
   dropped = false;
   /** Se quedó muy atrás y lo capturaron: reaparece junto al compañero tras la cuenta regresiva. */

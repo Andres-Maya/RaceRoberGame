@@ -130,13 +130,16 @@ const OBSTACLE_HARDNESS: Record<string, number> = {
 const REINFORCEMENTS = { police: 'La policía envía', gang: 'Los Cuervos mandan', wasteland: 'De las ruinas salen' };
 
 /**
- * Aguante de un bidón de combustible frente a un jugador: un choque le quita
- * como mucho BARREL_HIT (nunca estalla de un solo golpe) y empujarlo lo gasta
- * a BARREL_PUSH por segundo (estalla tras 2-3 s de llevarlo por delante).
+ * Bidones de combustible frente a un jugador: chocarlos acercándose a más de
+ * BARREL_BLOW m/s los hace estallar al instante; si apenas se tocan y se
+ * llevan empujando, su aguante se gasta a BARREL_PUSH por segundo y estallan
+ * en poco más de un segundo.
  */
-const BARREL_HP = 100;
-const BARREL_HIT = 45;
-const BARREL_PUSH = 34;
+const BARREL_HP = 60;
+const BARREL_BLOW = 6;
+const BARREL_PUSH = 50;
+/** Aprisionado entre el vehículo y un muro u obstáculo: revienta enseguida (y no traba al vehículo). */
+const BARREL_CRUSH = 200;
 
 /** Qué tan adelante en la carretera apunta la flecha mientras la meta está lejos (m). */
 const GOAL_LOOKAHEAD = 70;
@@ -788,6 +791,7 @@ export class Level {
     p.sinceHit += dt;
     if (this.config.index === 0 && p.sinceHit > 4) p.hp = Math.min(p.maxHp, p.hp + dt * p.maxHp * 0.025);
 
+    p.driving = input.throttle > 0 || input.brake > 0;
     const wantsTurbo = input.turbo && input.throttle > 0 && p.turbo > 0.02;
     p.turboActive = wantsTurbo;
     if (wantsTurbo) {
@@ -1026,21 +1030,29 @@ export class Level {
     for (const o of this.chunks.obstacles()) {
       if (o.kind !== 'fuelBarrel' || o.dead) continue;
       const t = o.body.translation();
+      const lv = o.body.linvel();
+      const barrelSpeed = Math.hypot(lv.x, lv.z);
       let pushed = false;
+      let pinned = false;
       for (const p of this.alivePlayers) {
         const v = p.vehicle;
         // Su posición actual (o.d es donde apareció; empujado, ya está en otra parte).
-        if (p.ghost || Math.abs(-t.z - v.d) > 8 || Math.abs(v.speed) < 3) continue;
+        if (p.ghost || Math.abs(-t.z - v.d) > 8) continue;
+        const moving = Math.abs(v.speed) >= 3;
+        if (!moving && !p.driving) continue;
         // Posición del bidón en el sistema del vehículo: pegado a su frente o costados.
         const dx = t.x - v.px;
         const dz = t.z - v.pz;
         const fwd = -dx * Math.sin(v.heading) - dz * Math.cos(v.heading);
         const side = dx * Math.cos(v.heading) - dz * Math.sin(v.heading);
-        if (Math.abs(side) < v.spec.hx + 0.75 && Math.abs(fwd) < v.spec.hz + 0.75) pushed = true;
+        if (Math.abs(side) >= v.spec.hx + 0.75 || Math.abs(fwd) >= v.spec.hz + 0.75) continue;
+        pushed = true;
+        // Atascado: el vehículo intenta avanzar pero ni él ni el bidón se mueven (contra un muro).
+        if (!moving && barrelSpeed < 2) pinned = true;
       }
       const hp = o.hp ?? BARREL_HP;
       if (pushed) {
-        this.wearBarrel(o, BARREL_PUSH * dt);
+        this.wearBarrel(o, (pinned ? BARREL_CRUSH : BARREL_PUSH) * dt);
         if (o.dead) continue;
       }
       // Avisos según lo gastado (también mientras se enfría tras dejar de empujarlo).
@@ -1540,8 +1552,16 @@ export class Level {
           if (o.dead) return;
           o.hitMask |= 1 << p.index;
           if (o.kind === 'fuelBarrel') {
-            // Un choque lo abolla pero no lo hace estallar: hay que llevarlo empujando un rato.
-            this.wearBarrel(o, Math.min(BARREL_HIT, impact * 1.6));
+            // Un choque con fuerza lo hace estallar (el daño lo hace la explosión, reducido para el jugador);
+            // un toque suave lo abolla y, si se sigue empujando, termina estallando.
+            // La fuerza del choque se mide por la velocidad con que el vehículo se le acerca:
+            // un bidón liviano casi no frena a un vehículo pesado, así que `impact` sería engañoso.
+            const t = o.body.translation();
+            const dx = t.x - p.vehicle.px;
+            const dz = t.z - p.vehicle.pz;
+            const closing = (p.vehicle.vx * dx + p.vehicle.vz * dz) / (Math.hypot(dx, dz) || 1);
+            if (closing > BARREL_BLOW) this.explodeBarrel(o, 0.04);
+            else this.wearBarrel(o, Math.max(0, closing) * 3);
             break;
           }
           const hard = OBSTACLE_HARDNESS[o.kind] ?? 1;
