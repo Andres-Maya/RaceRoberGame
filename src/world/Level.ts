@@ -129,6 +129,9 @@ const OBSTACLE_HARDNESS: Record<string, number> = {
 /** Cómo anuncia El Analista los refuerzos de cada facción. */
 const REINFORCEMENTS = { police: 'La policía envía', gang: 'Los Cuervos mandan', wasteland: 'De las ruinas salen' };
 
+/** Qué tan adelante en la carretera apunta la flecha mientras la meta está lejos (m). */
+const GOAL_LOOKAHEAD = 70;
+
 /** Distancia (m) por detrás del compañero a la que un jugador es capturado. */
 const CAPTURE_GAP = 60;
 /** Segundos que tarda en reaparecer un jugador caído o capturado. */
@@ -438,6 +441,19 @@ export class Level {
   /** Distancia hasta la meta (estructura final). */
   get finishD(): number {
     return this.chunks.finishZone?.d ?? this.config.distance;
+  }
+
+  /**
+   * Hacia dónde señalar la meta. Si ya está generada y cerca, la meta misma
+   * (puerta del banco, túnel, planta o zona segura); si no, la carretera
+   * unos metros más adelante, que es el camino hacia ella. Null sin meta.
+   */
+  get goalPoint(): { x: number; z: number; near: boolean } | null {
+    if (this.config.finish === 'none' || this.state !== 'running') return null;
+    const zone = this.chunks.finishZone;
+    if (zone && zone.d - this.maxD < GOAL_LOOKAHEAD + 120) return { x: zone.x, z: -zone.d, near: true };
+    const d = Math.min(this.finishD, this.maxD + GOAL_LOOKAHEAD);
+    return { x: this.track.centerX(d), z: -d, near: false };
   }
 
   get remainingDistance(): number {

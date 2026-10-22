@@ -52,6 +52,8 @@ export interface HudState {
   countdown: number;
   elapsed: number;
   players: HudPlayer[];
+  /** Punto al que apunta la flecha de la meta (null si no hay meta o ya se llegó). */
+  goal: { x: number; z: number; near: boolean } | null;
 }
 
 /** Estado del HUD a partir del nivel en curso. */
@@ -79,6 +81,7 @@ export function hudState(level: Level): HudState {
     score: level.score,
     countdown: level.countdown,
     elapsed: level.elapsed,
+    goal: level.goalPoint,
     players: level.players.map((p) => ({
       index: p.index,
       name: p.def.name,

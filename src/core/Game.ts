@@ -9,8 +9,9 @@ import { HostSync, packInput, unpackInput } from '../net/HostSync';
 import { lanAddress, lanInfo, PeerLink, WsLink, type LanInfo, type Link } from '../net/Link';
 import { PROTOCOL, type NetMessage, type PackedInput } from '../net/protocol';
 import { QrLink, qrImage, qrKind } from '../net/QrLink';
-import { Hud, hudState } from '../ui/Hud';
+import { Hud, hudState, type HudState } from '../ui/Hud';
 import type { Loader } from '../ui/Loader';
+import { GoalArrow } from '../ui/GoalArrow';
 import { OffscreenMarkers, type Mate } from '../ui/Offscreen';
 import { QrScanner } from '../ui/QrScanner';
 import { Screens } from '../ui/Screens';
@@ -95,6 +96,9 @@ export class Game {
   private screens = new Screens();
   private touch = new TouchControls();
   private offscreen = new OffscreenMarkers();
+  private goalArrow = new GoalArrow();
+  /** Último estado del HUD de la partida local (también lo usa la flecha de la meta). */
+  private lastHud: HudState | null = null;
   private classifier = new RuleBasedClassifier();
   private difficulty = new AdaptiveDifficulty();
   private level: Level | null = null;
@@ -237,7 +241,8 @@ export class Game {
         // En el nivel infinito la música cambia de estilo con cada zona.
         else this.audio.playMusic('level', this.level.musicStyle);
         this.net?.sync?.tick(dt, this.level, this.level.musicIntensity);
-        this.hud.update(hudState(this.level));
+        this.lastHud = hudState(this.level);
+        this.hud.update(this.lastHud);
         if (this.level.state === 'done') this.onLevelDone();
       }
     } else if (guest) {
@@ -264,6 +269,10 @@ export class Game {
   /** Indicadores en el borde de la pantalla para el compañero que quedó fuera de cámara. */
   private updateMates(playing: boolean, guest: boolean, waiting: boolean): void {
     const me = playing ? 0 : 1;
+    // Flecha hacia la meta (en línea, el invitado la recibe con el HUD).
+    const hud = playing && this.level ? this.lastHud : guest ? this.net?.view?.hud : null;
+    if (hud && !waiting) this.goalArrow.update(this.camera, hud.goal ?? null, hud.remainingDistance);
+    else this.goalArrow.hide();
     if (waiting) {
       this.offscreen.hide();
       return;
