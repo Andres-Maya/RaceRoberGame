@@ -57,22 +57,284 @@ function ball(r: number, color: THREE.ColorRepresentation, x = 0, y = 0, z = 0):
   return m;
 }
 
+// ---------------------------------------------------------------- motos y personajes
+
+/** Rueda de moto: llanta y rin, con el eje a lo largo de X (la moto mira hacia -Z). */
+function bikeWheel(r: number, w: number, z: number, rim: number): THREE.Group {
+  const g = new THREE.Group();
+  const tire = new THREE.Mesh(CYL, mat(0x141414));
+  tire.scale.set(2 * r, w, 2 * r);
+  tire.rotation.z = Math.PI / 2;
+  tire.castShadow = true;
+  const hub = new THREE.Mesh(CYL, mat(rim));
+  hub.scale.set(r * 1.05, w * 1.12, r * 1.05);
+  hub.rotation.z = Math.PI / 2;
+  g.add(tire, hub);
+  g.position.set(0, r, z);
+  return g;
+}
+
+/** Tubo cilíndrico orientado a lo largo de Z (escapes, horquillas tumbadas). */
+function pipe(r: number, len: number, color: number, x: number, y: number, z: number, tilt = 0): THREE.Mesh {
+  const m = new THREE.Mesh(CYL, mat(color));
+  m.scale.set(2 * r, len, 2 * r);
+  m.rotation.x = Math.PI / 2 + tilt;
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  return m;
+}
+
+export type BikeStyle = 'sport' | 'police' | 'chopper' | 'dirt';
+
+/**
+ * Moto detallada (mira hacia -Z): ruedas con rin, horquilla, motor con aletas,
+ * escapes cromados, tanque, asiento, guardabarros, faro y piloto trasero.
+ * Cada estilo agrega lo suyo: carenado deportivo, parabrisas y alforjas de
+ * policía, horquilla larga y manubrio alto del chopper, o púas de la moto de cross.
+ */
+export function motorcycle(style: BikeStyle, color: number, accent: number): THREE.Group {
+  const g = new THREE.Group();
+  const chrome = 0xc9ccd1;
+  const chopper = style === 'chopper';
+  const dirt = style === 'dirt';
+  const frontZ = chopper ? -1.0 : -0.8;
+  g.add(bikeWheel(dirt ? 0.37 : 0.34, chopper ? 0.14 : 0.18, frontZ, dirt ? 0x7a5a3a : chrome));
+  g.add(bikeWheel(0.36, chopper ? 0.3 : 0.24, 0.8, dirt ? 0x7a5a3a : chrome));
+  // Chasis, motor con aletas y escapes.
+  g.add(box(0.12, 0.1, 1.35, 0x1d1d1d, 0, 0.42, 0.05));
+  g.add(box(0.4, 0.32, 0.5, dirt ? 0x5a4a3a : 0x4a4d52, 0, 0.24, 0.02));
+  for (let i = 0; i < 3; i++) g.add(box(0.46, 0.04, 0.42, dirt ? 0x7a6a5a : chrome, 0, 0.33 + i * 0.07, 0.02));
+  for (const sx of dirt ? [1] : [-1, 1]) g.add(pipe(0.055, 0.95, dirt ? 0x6b4a2a : chrome, sx * 0.22, dirt ? 0.62 : 0.3, 0.55, dirt ? -0.35 : 0.05));
+  // Tanque, asiento y guardabarros.
+  g.add(box(0.42, 0.24, 0.55, color, 0, 0.6, -0.22));
+  g.add(box(0.36, 0.1, 0.62, 0x161616, 0, 0.64, 0.32));
+  g.add(box(0.3, 0.06, 0.55, color, 0, dirt ? 0.82 : 0.72, 0.78));
+  g.add(box(0.24, 0.05, 0.42, color, 0, dirt ? 0.86 : 0.72, frontZ));
+  const tail = box(0.18, 0.07, 0.05, 0xff2020, 0, 0.74, 1.05);
+  tail.material = mat(0xff2020, 0xaa0000);
+  g.add(tail);
+  // Horquilla (más inclinada y larga en el chopper) y manubrio.
+  const rake = chopper ? 0.62 : 0.32;
+  const forkLen = chopper ? 1.15 : 0.82;
+  for (const sx of [-1, 1]) {
+    const fork = pipe(0.035, forkLen, chrome, sx * 0.11, 0.34 + Math.cos(rake) * forkLen * 0.5, frontZ + Math.sin(rake) * forkLen * 0.5, -Math.PI / 2 + rake);
+    g.add(fork);
+  }
+  const barY = chopper ? 1.32 : 1.0;
+  const barZ = chopper ? -0.55 : -0.58;
+  g.add(box(chopper ? 0.9 : 0.78, 0.05, 0.06, 0x2a2a2a, 0, barY, barZ));
+  for (const sx of [-1, 1]) {
+    g.add(box(0.1, 0.07, 0.08, 0x111111, sx * (chopper ? 0.43 : 0.37), barY - 0.01, barZ));
+    if (chopper) g.add(box(0.05, 0.36, 0.05, chrome, sx * 0.3, barY - 0.34, barZ));
+    if (!dirt) g.add(box(0.12, 0.07, 0.03, chrome, sx * 0.3, barY + 0.16, barZ - 0.02)); // espejos
+  }
+  // Faro encendido.
+  const lamp = box(0.22, 0.17, 0.1, 0xfff4c0, 0, chopper ? 0.98 : 0.84, frontZ - 0.16);
+  lamp.material = mat(0xfff4c0, 0xfff1a0);
+  g.add(lamp);
+
+  switch (style) {
+    case 'sport':
+      // Carenado y colín con el color secundario.
+      g.add(box(0.5, 0.36, 0.42, color, 0, 0.62, -0.68));
+      g.add(box(0.36, 0.22, 0.06, 0x1d2a35, 0, 0.98, -0.72));
+      g.add(box(0.44, 0.03, 0.56, accent, 0, 0.85, -0.22));
+      g.add(box(0.32, 0.16, 0.36, color, 0, 0.74, 0.62));
+      break;
+    case 'police':
+      // Franjas azules, parabrisas, alforjas y torreta sobre un mástil.
+      g.add(box(0.44, 0.06, 0.57, accent, 0, 0.7, -0.22));
+      g.add(box(0.5, 0.36, 0.05, 0xa9c8e6, 0, 0.98, -0.66));
+      for (const sx of [-1, 1]) {
+        g.add(box(0.2, 0.3, 0.46, 0xf2f2f2, sx * 0.3, 0.42, 0.68));
+        g.add(box(0.21, 0.06, 0.47, accent, sx * 0.3, 0.6, 0.68));
+      }
+      g.add(box(0.05, 0.4, 0.05, 0x333333, 0, 0.78, 0.95));
+      break;
+    case 'chopper':
+      // Llamas en el tanque y respaldo alto.
+      for (const [x, w] of [[-0.12, 0.08], [0.05, 0.1], [0.16, 0.06]] as const) g.add(box(w, 0.02, 0.3, accent, x, 0.85, -0.12));
+      g.add(box(0.04, 0.6, 0.04, chrome, -0.14, 0.7, 1.0));
+      g.add(box(0.04, 0.6, 0.04, chrome, 0.14, 0.7, 1.0));
+      g.add(box(0.32, 0.04, 0.04, chrome, 0, 1.28, 1.0));
+      break;
+    case 'dirt': {
+      // Púas al frente, calavera en el faro y placa con número.
+      for (const sx of [-0.15, 0, 0.15]) {
+        const c = new THREE.Mesh(CONE, mat(0xb0b0b0));
+        c.scale.set(0.12, 0.42, 0.12);
+        c.rotation.x = -Math.PI / 2;
+        c.position.set(sx, 0.55, frontZ - 0.35);
+        g.add(c);
+      }
+      g.add(ball(0.12, 0xe8e2c8, 0, 1.05, frontZ - 0.12));
+      g.add(box(0.26, 0.2, 0.03, 0xd8d0b0, 0, 0.95, 1.02));
+      break;
+    }
+  }
+  return g;
+}
+
+export interface RiderLook {
+  /** Chaqueta, pantalón, botas y piel. */
+  jacket: number;
+  pants: number;
+  boots: number;
+  skin: number;
+  /** Casco (null = cabeza descubierta) y su visera. */
+  helmet: number | null;
+  visor?: number;
+  /** Detalles de la cabeza descubierta. */
+  hair?: number;
+  bandana?: number;
+  shades?: boolean;
+  mohawk?: number;
+  goggles?: boolean;
+  mask?: boolean;
+  /** Mochila (el botín del jugador) y hombreras con púas (saqueadores). */
+  backpack?: number;
+  spikes?: boolean;
+  /** Parche en la espalda (chaleco de la banda). */
+  patch?: number;
+}
+
+/** Cabeza con casco o descubierta (pañuelo, gafas, cresta, máscara), mirando hacia -Z. */
+function riderHead(o: RiderLook): THREE.Group {
+  const h = new THREE.Group();
+  if (o.helmet !== null) {
+    h.add(ball(0.25, o.helmet, 0, 0, 0));
+    h.add(box(0.34, 0.14, 0.08, o.visor ?? 0x1b2530, 0, -0.07, -0.21));
+    h.add(box(0.06, 0.04, 0.4, o.visor ?? 0x1b2530, 0, 0.21, 0)); // cresta del casco
+  } else {
+    h.add(box(0.34, 0.38, 0.34, o.skin, 0, -0.17, 0));
+    if (o.hair !== undefined) h.add(box(0.36, 0.1, 0.36, o.hair, 0, 0.14, 0.02));
+    if (o.bandana !== undefined) h.add(box(0.37, 0.09, 0.37, o.bandana, 0, 0.08, 0));
+    if (o.shades) h.add(box(0.34, 0.07, 0.04, 0x0b0b0b, 0, -0.03, -0.18));
+    if (o.goggles) {
+      for (const x of [-0.08, 0.08]) h.add(box(0.12, 0.1, 0.05, 0x7fd0c0, x, -0.02, -0.19));
+      h.add(box(0.38, 0.04, 0.38, 0x3a2a1a, 0, -0.02, 0));
+    }
+    if (o.mask) h.add(box(0.28, 0.14, 0.08, 0x2a2a2a, 0, -0.2, -0.19));
+    if (o.mohawk !== undefined) h.add(box(0.07, 0.2, 0.36, o.mohawk, 0, 0.1, 0));
+  }
+  return h;
+}
+
+/**
+ * Motociclista sentado (mira hacia -Z): piernas a los pedales, torso inclinado
+ * hacia el manubrio, brazos con guantes y la cabeza según su bando.
+ * `lean`: inclinación del torso; `reach` y `barY`: posición de los puños.
+ */
+export function rider(o: RiderLook, barY = 1.0, barZ = -0.58, lean = 0.45): THREE.Group {
+  const g = new THREE.Group();
+  // Cadera sobre el asiento, muslos hacia adelante, piernas a los pedales y botas.
+  g.add(box(0.42, 0.18, 0.32, o.pants, 0, 0.68, 0.3));
+  for (const sx of [-1, 1]) {
+    g.add(box(0.16, 0.15, 0.5, o.pants, sx * 0.18, 0.7, 0.08));
+    g.add(box(0.15, 0.46, 0.16, o.pants, sx * 0.21, 0.28, -0.16));
+    g.add(box(0.17, 0.13, 0.3, o.boots, sx * 0.21, 0.2, -0.22));
+  }
+  // Torso inclinado (pivote en la cadera).
+  const torso = new THREE.Group();
+  torso.position.set(0, 0.84, 0.3);
+  torso.rotation.x = -lean;
+  g.add(torso);
+  torso.add(box(0.5, 0.58, 0.3, o.jacket, 0, 0, 0));
+  torso.add(box(0.52, 0.06, 0.32, 0x2a1d14, 0, 0.02, 0)); // cinturón
+  if (o.patch !== undefined) torso.add(box(0.3, 0.26, 0.02, o.patch, 0, 0.3, 0.16));
+  if (o.backpack !== undefined) {
+    torso.add(box(0.46, 0.4, 0.26, o.backpack, 0, 0.2, 0.26));
+    torso.add(box(0.2, 0.1, 0.02, 0xf1c40f, 0, 0.26, 0.4)); // signo de dinero
+  }
+  if (o.spikes) {
+    for (const sx of [-1, 1]) {
+      const c = new THREE.Mesh(CONE, mat(0xb8b8b8));
+      c.scale.set(0.1, 0.24, 0.1);
+      c.position.set(sx * 0.3, 0.62, 0);
+      c.rotation.z = -sx * 0.6;
+      torso.add(c);
+    }
+  }
+  const head = riderHead(o);
+  head.position.set(0, 0.84, -0.04);
+  head.rotation.x = lean * 0.8; // mira al frente aunque vaya inclinado
+  torso.add(head);
+  // Brazos: del hombro a los puños del manubrio, con guantes.
+  const shoulderY = 0.84 + Math.cos(lean) * 0.5;
+  const shoulderZ = 0.3 - Math.sin(lean) * 0.5;
+  for (const sx of [-1, 1]) {
+    const sxw = sx * 0.3;
+    const hx = sx * 0.36;
+    const dy = barY - shoulderY;
+    const dz = barZ - shoulderZ;
+    const len = Math.hypot(dy, dz, hx - sxw);
+    const arm = new THREE.Mesh(BOX, mat(o.jacket));
+    arm.scale.set(0.13, 0.13, len);
+    arm.position.set((sxw + hx) / 2, (shoulderY + barY) / 2, (shoulderZ + barZ) / 2);
+    arm.rotation.x = Math.atan2(dy, -dz);
+    arm.castShadow = true;
+    g.add(arm);
+    g.add(box(0.13, 0.12, 0.14, 0x1a1a1a, hx, barY - 0.06, barZ));
+  }
+  return g;
+}
+
+/**
+ * Conductor sentado al volante de un vehículo abierto (buggy): torso erguido,
+ * brazos al volante y la cabeza según el personaje. Mira hacia -Z.
+ */
+export function seatedDriver(o: RiderLook, seatY: number, seatZ: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(0.5, 0.5, 0.12, 0x2a2a2a, 0, seatY, seatZ + 0.32)); // respaldo
+  for (const sx of [-1, 1]) g.add(box(0.17, 0.15, 0.55, o.pants, sx * 0.14, seatY + 0.05, seatZ - 0.2));
+  const torso = new THREE.Group();
+  torso.position.set(0, seatY + 0.2, seatZ);
+  torso.rotation.x = -0.12;
+  g.add(torso);
+  torso.add(box(0.5, 0.56, 0.3, o.jacket, 0, 0, 0));
+  if (o.spikes) {
+    for (const sx of [-1, 1]) {
+      const c = new THREE.Mesh(CONE, mat(0xb8b8b8));
+      c.scale.set(0.1, 0.24, 0.1);
+      c.position.set(sx * 0.3, 0.6, 0);
+      c.rotation.z = -sx * 0.6;
+      torso.add(c);
+    }
+  }
+  const head = riderHead(o);
+  head.position.set(0, 0.82, -0.02);
+  torso.add(head);
+  // Volante y brazos.
+  const wheelZ = seatZ - 0.62;
+  const wheelY = seatY + 0.55;
+  const steer = new THREE.Mesh(CYL, mat(0x1a1a1a));
+  steer.scale.set(0.42, 0.05, 0.42);
+  steer.rotation.x = Math.PI / 2 - 0.5;
+  steer.position.set(0, wheelY, wheelZ);
+  g.add(steer);
+  g.add(pipe(0.03, 0.5, 0x333333, 0, wheelY - 0.2, wheelZ - 0.2, 0.6));
+  for (const sx of [-1, 1]) {
+    const arm = box(0.12, 0.12, 0.55, o.jacket, sx * 0.24, wheelY - 0.02, seatZ - 0.32);
+    arm.rotation.x = 0.25;
+    g.add(arm);
+    g.add(box(0.12, 0.12, 0.12, 0x1a1a1a, sx * 0.19, wheelY + 0.02, wheelZ + 0.05));
+  }
+  return g;
+}
+
+/** Aspecto de los motociclistas y conductores de cada bando. */
+export const LOOKS = {
+  police: { jacket: 0x1b2a4a, pants: 0x1b2a4a, boots: 0x111111, skin: 0xd2a07a, helmet: 0xf4f4f4, visor: 0x1b2530 },
+  biker: { jacket: 0x2b1d14, pants: 0x2a3a5a, boots: 0x1a120c, skin: 0xc68a5a, helmet: null, hair: 0x2a1a10, bandana: 0xb03a2e, shades: true, patch: 0xe67e22 },
+  raider: { jacket: 0x4a3626, pants: 0x3a3226, boots: 0x2a1a10, skin: 0x8fb070, helmet: null, mohawk: 0xd62828, goggles: true, mask: true, spikes: true },
+  driver: { jacket: 0x3a2a1a, pants: 0x3a3226, boots: 0x2a1a10, skin: 0x8fb070, helmet: null, goggles: true, mask: true, hair: 0x3a2a1a, spikes: true },
+} satisfies Record<string, RiderLook>;
+
 // ---------------------------------------------------------------- vehículos
 
 export function motorbike(color: number, accent: number): THREE.Group {
-  const g = new THREE.Group();
-  g.add(box(0.28, 0.5, 0.55, 0x111111, 0, 0, -0.85)); // rueda delantera
-  g.add(box(0.32, 0.5, 0.6, 0x111111, 0, 0, 0.8)); // rueda trasera
-  g.add(box(0.5, 0.45, 1.5, color, 0, 0.35, 0)); // chasis
-  g.add(box(0.42, 0.2, 0.5, accent, 0, 0.8, -0.35)); // tanque
-  g.add(box(0.9, 0.08, 0.1, 0x333333, 0, 1.0, -0.65)); // manubrio
-  g.add(box(0.55, 0.55, 0.45, 0x2b2b2b, 0, 0.9, 0.15)); // torso piloto
-  g.add(ball(0.24, accent, 0, 1.6, 0.0)); // casco
-  g.add(box(0.5, 0.35, 0.4, 0x2f7d32, 0, 1.15, 0.5)); // mochila con el botín
-  const light = new THREE.Mesh(BOX, mat(0xfff4c0, 0xfff4c0));
-  light.scale.set(0.25, 0.12, 0.08);
-  light.position.set(0, 0.75, -1.0);
-  g.add(light);
+  const g = motorcycle('sport', color, accent);
+  g.add(rider({ jacket: 0x2b2b2b, pants: 0x1e1e24, boots: 0x111111, skin: 0xd2a07a, helmet: accent, visor: 0x101820, backpack: 0x2f7d32 }));
   return g;
 }
 
@@ -143,7 +405,7 @@ export function playerVehicleMesh(id: string, color: number, accent: number): TH
         g.add(box(0.1, 0.1, 1.3, accent, s * 0.65, 2.0, 0.2));
       }
       g.add(box(1.4, 0.1, 0.1, accent, 0, 2.0, -0.4));
-      g.add(ball(0.25, 0x333333, 0, 1.35, 0.3));
+      g.add(seatedDriver({ jacket: 0x2b2b2b, pants: 0x1e1e24, boots: 0x111111, skin: 0xd2a07a, helmet: accent, visor: 0x101820 }, 0.85, 0.3));
       lights(1.5, 3.2, 0.6);
       break;
     case 'muscle':
@@ -234,13 +496,11 @@ export function policeVehicle(kind: 'patrol' | 'moto' | 'suv' | 'swat'): Pursuer
   let red: THREE.Mesh;
   let blue: THREE.Mesh;
   if (kind === 'moto') {
-    g.add(box(0.28, 0.5, 0.55, 0x111111, 0, 0, -0.85));
-    g.add(box(0.32, 0.5, 0.6, 0x111111, 0, 0, 0.8));
-    g.add(box(0.55, 0.45, 1.55, 0xf2f2f2, 0, 0.35, 0));
-    g.add(box(0.55, 0.55, 0.45, 0x1b2a4a, 0, 0.9, 0.15));
-    g.add(ball(0.24, 0xffffff, 0, 1.6, 0));
-    red = box(0.2, 0.15, 0.15, 0xff0000, -0.18, 0.85, 0.75);
-    blue = box(0.2, 0.15, 0.15, 0x0000ff, 0.18, 0.85, 0.75);
+    g.add(motorcycle('police', 0xf2f2f2, 0x1d4ed8));
+    g.add(rider(LOOKS.police));
+    // Torreta sobre el mástil trasero.
+    red = box(0.16, 0.13, 0.13, 0xff0000, -0.1, 1.18, 0.95);
+    blue = box(0.16, 0.13, 0.13, 0x0000ff, 0.1, 1.18, 0.95);
   } else {
     const dims = { patrol: [2.0, 4.2, 0xf4f4f4, 0x111111], suv: [2.3, 4.8, 0x1a1a1a, 0xf4f4f4], swat: [2.6, 5.6, 0x1c2b45, 0x0f1a2e] }[kind];
     const [w, l, body, trim] = dims as [number, number, number, number];
@@ -404,23 +664,69 @@ export function container(color: number): THREE.Group {
   return g;
 }
 
-/** Figura humanoide (mira hacia -Z). Con brazos al frente es un zombi. */
+/**
+ * Figura humanoide (mira hacia -Z), con zapatos, pantalón, cinturón, camisa,
+ * cuello, cara y manos. Con brazos al frente es un zombi: ropa rota, costillas
+ * a la vista, ojos verdes que brillan y la mandíbula colgando. De pie y con
+ * los brazos abajo es un tirador de la banda: pañuelo, gafas oscuras y rifle.
+ */
 export function humanoid(skin: number, cloth: number, armsForward: boolean, scale: number): THREE.Group {
   const g = new THREE.Group();
-  g.add(box(0.22, 0.8, 0.25, cloth, -0.16, 0, 0));
-  g.add(box(0.22, 0.8, 0.25, cloth, 0.16, 0, 0));
-  g.add(box(0.62, 0.75, 0.36, cloth, 0, 0.8, 0));
-  g.add(ball(0.24, skin, 0, 1.8, 0));
-  for (const s of [-1, 1]) {
-    const arm = box(0.18, 0.7, 0.2, skin, 0, 0, 0);
-    if (armsForward) {
-      arm.rotation.x = -Math.PI / 2;
-      arm.position.set(s * 0.38, 1.4, -0.35);
-    } else {
-      arm.scale.set(0.26, 0.8, 0.26);
-      arm.position.set(s * 0.45, 0.95, 0);
+  const zombie = armsForward;
+  const pants = zombie ? 0x3a3530 : 0x2a3a5a;
+  // Piernas y zapatos (al zombi le falta uno).
+  for (const sx of [-1, 1]) {
+    g.add(box(0.22, 0.74, 0.25, pants, sx * 0.16, 0.08, 0));
+    if (!zombie || sx < 0) g.add(box(0.24, 0.12, 0.34, 0x1e1e1e, sx * 0.16, 0, -0.04));
+    else g.add(box(0.2, 0.1, 0.28, skin, sx * 0.16, 0, -0.04));
+  }
+  g.add(box(0.6, 0.09, 0.34, 0x3a2a1a, 0, 0.8, 0)); // cinturón
+  g.add(box(0.6, 0.72, 0.34, cloth, 0, 0.86, 0)); // camisa
+  if (zombie) {
+    // Rasgones y costillas a la vista.
+    g.add(box(0.2, 0.3, 0.02, skin, 0.14, 1.05, -0.18));
+    for (let i = 0; i < 3; i++) g.add(box(0.16, 0.035, 0.02, 0xe8e2c8, 0.14, 0.98 + i * 0.09, -0.19));
+    g.add(box(0.24, 0.2, 0.02, 0x5e7444, -0.16, 0.95, -0.18));
+  } else {
+    g.add(box(0.1, 0.3, 0.02, 0xd9d9d9, 0, 1.22, -0.18)); // cuello de la camisa
+  }
+  g.add(box(0.16, 0.1, 0.16, skin, 0, 1.58, 0)); // cuello
+  // Cabeza con cara.
+  const head = new THREE.Group();
+  head.position.set(0, 1.68, 0);
+  if (zombie) head.rotation.z = 0.18;
+  g.add(head);
+  head.add(box(0.38, 0.4, 0.36, skin, 0, 0, 0));
+  if (zombie) {
+    for (const x of [-0.09, 0.09]) {
+      const eye = box(0.08, 0.06, 0.03, 0x9dff6a, x, 0.22, -0.19);
+      eye.material = mat(0x9dff6a, 0x39ff14);
+      head.add(eye);
     }
+    head.add(box(0.26, 0.1, 0.06, 0x2a1a1a, 0, 0.04, -0.19)); // boca abierta
+    head.add(box(0.24, 0.08, 0.2, skin, 0, -0.06, -0.12)); // mandíbula colgando
+    head.add(box(0.2, 0.06, 0.38, 0x3a3a2a, -0.08, 0.4, 0)); // mechones
+  } else {
+    head.add(box(0.4, 0.1, 0.38, 0x2a1a10, 0, 0.36, 0.02)); // pelo
+    head.add(box(0.41, 0.09, 0.39, 0xb03a2e, 0, 0.3, 0)); // pañuelo
+    head.add(box(0.36, 0.07, 0.04, 0x0b0b0b, 0, 0.22, -0.18)); // gafas oscuras
+    head.add(box(0.14, 0.03, 0.03, 0x6b3a2a, 0, 0.08, -0.18)); // boca
+  }
+  // Brazos con manos; el tirador sostiene un rifle.
+  for (const sx of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.position.set(sx * 0.4, 1.48, 0);
     g.add(arm);
+    arm.add(box(0.18, 0.62, 0.2, zombie ? skin : cloth, 0, -0.62, 0));
+    arm.add(box(0.15, 0.14, 0.17, skin, 0, -0.76, 0));
+    if (zombie) arm.rotation.x = -Math.PI / 2 + (sx > 0 ? 0.15 : -0.1);
+    else arm.rotation.x = -0.5;
+  }
+  if (!zombie) {
+    const rifle = box(0.1, 0.12, 1.0, 0x1a1a1a, 0.05, 1.02, -0.5);
+    rifle.rotation.x = 0.15;
+    g.add(rifle);
+    g.add(box(0.06, 0.18, 0.08, 0x3a2a1a, 0.05, 0.92, -0.25)); // culata
   }
   g.scale.setScalar(scale);
   return g;
@@ -702,12 +1008,9 @@ export function outlawVehicle(kind: Exclude<PursuerKind, 'patrol' | 'moto' | 'su
       headlights(2, 4.4);
       break;
     case 'biker':
-      g.add(box(0.28, 0.5, 0.55, 0x111111, 0, 0, -0.85));
-      g.add(box(0.32, 0.5, 0.6, 0x111111, 0, 0, 0.8));
-      g.add(box(0.55, 0.45, 1.6, 0x1a1a1a, 0, 0.35, 0));
-      g.add(box(1.0, 0.08, 0.1, 0x999999, 0, 1.0, -0.7));
-      g.add(box(0.6, 0.55, 0.45, 0x2b1d14, 0, 0.9, 0.15));
-      g.add(ball(0.24, 0xb03a2e, 0, 1.6, 0));
+      // Chopper negro con llamas; el motero va casi erguido, con los brazos arriba.
+      g.add(motorcycle('chopper', 0x161616, 0xe67e22));
+      g.add(rider(LOOKS.biker, 1.32, -0.55, 0.12));
       break;
     case 'pickup':
       g.add(box(2.1, 0.8, 4.8, 0x4a5a3a, 0, 0.25, 0));
@@ -754,17 +1057,14 @@ export function outlawVehicle(kind: Exclude<PursuerKind, 'patrol' | 'moto' | 'su
         g.add(box(0.1, 0.1, 1.3, 0x5a3a1a, s * 0.7, 1.9, 0.3));
       }
       g.add(box(1.5, 0.1, 0.1, 0x5a3a1a, 0, 1.9, -0.3));
-      g.add(ball(0.24, 0x5fbf3a, 0, 1.2, 0.4));
+      g.add(seatedDriver(LOOKS.driver, 0.75, 0.45));
+      g.add(box(0.5, 0.3, 0.4, 0x3a5a2a, 0, 0.75, 1.35)); // bidón de combustible atrás
       spikes(1.7, -1.8, 0.6);
       break;
     case 'raider':
-      g.add(box(0.28, 0.5, 0.55, 0x111111, 0, 0, -0.85));
-      g.add(box(0.32, 0.5, 0.6, 0x111111, 0, 0, 0.8));
-      g.add(box(0.6, 0.45, 1.6, 0x6e4a2a, 0, 0.35, 0));
-      g.add(box(0.6, 0.55, 0.45, 0x3a2a1a, 0, 0.9, 0.15));
-      g.add(ball(0.26, 0x5fbf3a, 0, 1.6, 0));
-      g.add(box(0.1, 0.25, 0.5, 0xd62828, 0, 1.85, 0)); // cresta
-      spikes(0.6, -1.15, 0.5);
+      // Moto de cross oxidada; el saqueador lleva cresta, gafas de soldador, máscara y hombreras con púas.
+      g.add(motorcycle('dirt', 0x8a5a2a, 0x5a3a1a));
+      g.add(rider(LOOKS.raider));
       break;
     case 'rig':
       g.add(box(2.8, 1.6, 2.2, 0x5a4632, 0, 0.3, -2.3));

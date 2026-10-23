@@ -6,6 +6,12 @@ import './style.css';
 async function boot(): Promise<void> {
   const app = document.querySelector('#app') as HTMLElement;
   const loader = new Loader();
+  // Solo desarrollo: ?models=1 muestra la galería de modelos (no entra en la versión publicada).
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has('models')) {
+    loader.hide();
+    (await import('./dev/ModelGallery')).showGallery(app);
+    return;
+  }
   try {
     await RAPIER.init();
     const game = new Game(app, loader);
