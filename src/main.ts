@@ -6,10 +6,10 @@ import './style.css';
 async function boot(): Promise<void> {
   const app = document.querySelector('#app') as HTMLElement;
   const loader = new Loader();
-  // Solo desarrollo: ?models=1 muestra la galería de modelos (no entra en la versión publicada).
-  if (import.meta.env.DEV && new URLSearchParams(location.search).has('models')) {
+  // ?models=1: sala de exhibición con todos los vehículos y personajes (se carga aparte, solo si se pide).
+  if (new URLSearchParams(location.search).has('models')) {
     loader.hide();
-    (await import('./dev/ModelGallery')).showGallery(app);
+    (await import('./ui/Showroom')).showShowroom(app);
     return;
   }
   try {

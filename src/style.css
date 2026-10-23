@@ -1812,3 +1812,85 @@ body.touch #hud-toasts {
     transform: scaleY(0);
   }
 }
+
+/* ------------------------------------------------------------ sala de exhibición (?models=1) */
+
+.showroom-labels {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.showroom-tag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #f1f1f1;
+  font: 0.8rem var(--display);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.showroom-ui {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(8, 9, 13, 0.85), transparent);
+  pointer-events: none;
+}
+
+.showroom-ui > * {
+  pointer-events: auto;
+}
+
+.showroom-title {
+  font: 1.3rem var(--display);
+  letter-spacing: 0.06em;
+  color: var(--gold);
+}
+
+.showroom-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.showroom-tabs button {
+  padding: 7px 12px;
+  font-size: 0.85rem;
+}
+
+.showroom-tabs button.on {
+  background: var(--gold);
+  color: #1a1200;
+  border-color: #ffe48a;
+}
+
+.showroom-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: #ddd;
+}
+
+.showroom-tools a {
+  color: var(--gold);
+}
+
+.showroom-help {
+  position: fixed;
+  left: 16px;
+  bottom: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+}
