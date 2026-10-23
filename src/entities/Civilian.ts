@@ -1,5 +1,5 @@
 import { clamp, wrapAngle } from '../core/math';
-import { civilianCar, CIVILIAN_COLORS } from '../fx/Meshes';
+import { trafficCar } from '../fx/Meshes';
 import type { CivilianSpawn } from '../world/ChunkManager';
 import type { Physics } from '../world/Physics';
 import type { Track } from '../world/Track';
@@ -35,7 +35,7 @@ export class Civilian {
     private spawn: CivilianSpawn,
     colorIndex: number,
   ) {
-    const mesh = civilianCar(CIVILIAN_COLORS[colorIndex % CIVILIAN_COLORS.length]);
+    const mesh = trafficCar(colorIndex);
     this.vehicle = new Vehicle(physics, CIVILIAN_SPEC, spawn.x, -spawn.d, spawn.heading, { kind: 'civilian', ref: this }, mesh);
     this.oncoming = spawn.mode === 'lane' && Math.abs(wrapAngle(spawn.heading)) > Math.PI / 2;
     // Arranca ya en movimiento.

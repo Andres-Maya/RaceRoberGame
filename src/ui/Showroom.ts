@@ -7,6 +7,8 @@ import { PLAYER_COLORS } from '../entities/Player';
 import {
   animateMutant,
   CIVILIAN_COLORS,
+  CIVILIAN_NAMES,
+  CIVILIAN_TYPES,
   civilianCar,
   harpy,
   helicopter,
@@ -100,7 +102,7 @@ const CATEGORIES: { title: string; items: () => Item[] }[] = [
       chaser('pickup', 'Pickup armada'),
       chaser('van', 'Furgón blindado'),
       chaser('truck', 'Tráiler'),
-      { name: 'Tirador', build: () => humanoid(0xd2a07a, 0x222222, false, 1) },
+      { name: 'Tirador', build: () => humanoid(0xd2a07a, 0x222222, 'rifle', 1) },
     ],
   },
   {
@@ -131,13 +133,13 @@ const CATEGORIES: { title: string; items: () => Item[] }[] = [
             });
           },
         },
-        { name: 'Zombi', build: () => humanoid(0x7d9a6a, 0x4a3f35, true, 1) },
+        { name: 'Zombi', build: () => humanoid(0x7d9a6a, 0x4a3f35, 'zombie', 1) },
       ];
     },
   },
   {
     title: 'Tráfico',
-    items: () => CIVILIAN_COLORS.slice(0, 5).map((c, i) => ({ name: `Auto civil ${i + 1}`, build: () => civilianCar(c) })),
+    items: () => CIVILIAN_TYPES.map((t, i) => ({ name: CIVILIAN_NAMES[t], build: () => civilianCar(CIVILIAN_COLORS[i], t) })),
   },
   {
     title: 'En el camino',
@@ -231,6 +233,7 @@ export function showShowroom(container: HTMLElement): void {
       return { item, pivot, width: Math.max(3.4, Math.max(size.x, size.z) + 1.4), height: size.y };
     });
     // Con muchos modelos, dos filas (la segunda detrás); cada fila centrada.
+    const turn = Number(new URLSearchParams(location.search).get('turn')) || 0;
     const perRow = built.length > 8 ? Math.ceil(built.length / 2) : built.length;
     const rows = [built.slice(0, perRow), built.slice(perRow)].filter((r) => r.length);
     const total = Math.max(...rows.map((r) => r.reduce((s, b) => s + b.width, 0)));
@@ -245,7 +248,7 @@ export function showShowroom(container: HTMLElement): void {
     for (const { b, x, z } of placed) {
       const root = new THREE.Group();
       root.position.set(x, 0, z);
-      b.pivot.rotation.y = -0.7;
+      b.pivot.rotation.y = -0.7 + turn;
       root.add(b.pivot);
       // Peana y nombre.
       const base = new THREE.Mesh(new THREE.CylinderGeometry(b.width * 0.42, b.width * 0.45, 0.12, 40), new THREE.MeshLambertMaterial({ color: 0x3a3e4a }));
@@ -286,15 +289,20 @@ export function showShowroom(container: HTMLElement): void {
       while (o && o !== s.pivot) o = o.parent;
       return o === s.pivot;
     });
-    if (!owner) return;
-    const box = new THREE.Box3().setFromObject(owner.pivot);
+    if (owner) focusOn(owner.pivot);
+  });
+
+  /** Acerca la cámara a un modelo manteniendo el ángulo de la vista. */
+  const focusOn = (pivot: THREE.Object3D) => {
+    pivot.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(pivot);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3()).length();
     const dir = camera.position.clone().sub(controls.target).normalize();
     controls.target.copy(center);
     camera.position.copy(center).addScaledVector(dir, Math.max(3, size * 1.6));
     controls.update();
-  });
+  };
 
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
@@ -303,8 +311,12 @@ export function showShowroom(container: HTMLElement): void {
     labels.setSize(innerWidth, innerHeight);
   });
 
-  // `&cat=2` abre directamente esa categoría.
-  show(Math.min(CATEGORIES.length - 1, Math.max(0, Number(new URLSearchParams(location.search).get('cat')) || 0)));
+  // `&cat=2` abre directamente esa categoría, `&focus=3` enfoca su cuarto modelo y `&spin=0` los deja quietos y `&turn=3` los gira (radianes).
+  const params = new URLSearchParams(location.search);
+  show(Math.min(CATEGORIES.length - 1, Math.max(0, Number(params.get('cat')) || 0)));
+  const focused = shown[Number(params.get('focus') ?? -1)];
+  if (focused) focusOn(focused.pivot);
+  if (params.get('spin') === '0') spinBox.checked = false;
   const start = performance.now();
   let last = start;
   const frame = () => {
