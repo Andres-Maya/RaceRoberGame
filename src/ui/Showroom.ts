@@ -82,13 +82,15 @@ const CATEGORIES: { title: string; items: () => Item[] }[] = [
           name: 'Helicóptero',
           build: () => {
             heli = helicopter();
-            heli.group.position.y = 2;
+            heli.group.position.y = 0.7;
             const g = new THREE.Group();
             g.add(heli.group);
             return g;
           },
           animate: (t) => {
-            if (heli) heli.rotor.rotation.y = t * 20;
+            if (!heli) return;
+            heli.rotor.rotation.y = t * 20;
+            heli.tailRotor.rotation.x = t * 35;
           },
         },
       ];
@@ -131,6 +133,8 @@ const CATEGORIES: { title: string; items: () => Item[] }[] = [
               w.inner.rotation.z = s * Math.sin(t * 7) * 0.6;
               w.outer.rotation.z = s * Math.sin(t * 7 - 0.7) * 0.5;
             });
+            bird.tail.rotation.y = Math.sin(t * 3) * 0.3;
+            bird.jaw.rotation.x = -Math.max(0, Math.sin(t * 2)) * 0.35;
           },
         },
         { name: 'Zombi', build: () => humanoid(0x7d9a6a, 0x4a3f35, 'zombie', 1) },

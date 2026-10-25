@@ -455,7 +455,9 @@ export class ChunkManager {
   private ground(c: Chunk): void {
     const g = box(520, 0.02, CHUNK + 0.4, GROUND[c.biome]);
     g.castShadow = false;
-    g.position.y = -0.02;
+    // Los suelos vecinos se solapan 0,2 m: el río va un poco más abajo para que la
+    // orilla quede limpia en lugar de parpadear entre agua y tierra.
+    g.position.y = c.biome === 'bridge' ? -0.035 : -0.02;
     this.add(c, g, (c.d0 + c.d1) / 2, 0, -this.track.angle((c.d0 + c.d1) / 2));
   }
 
@@ -789,11 +791,16 @@ export class ChunkManager {
   private genBridge(c: Chunk): void {
     const rng = this.ctx.rng;
     const half = HALF_WIDTH.bridge;
-    // Oleaje del río
-    for (let i = 0; i < 10; i++) this.flat(c, rng.range(4, 14), 0.5, 0x4a93bd, rng.range(c.d0, c.d1), rng.sign() * rng.range(half + 4, 70), 0.0, rng.range(-0.2, 0.2));
-    if (this.prevBiome !== 'bridge') {
-      // Estribo de concreto a la entrada del puente
-      this.flat(c, 80, BRIDGE_ABUTMENT, 0x8a8a85, c.d0 + BRIDGE_ABUTMENT / 2, 0, 0.004);
+    const entry = this.prevBiome !== 'bridge';
+    // Oleaje del río (fuera del estribo)
+    const waves0 = entry ? c.d0 + BRIDGE_ABUTMENT + 2 : c.d0;
+    for (let i = 0; i < 10; i++) this.flat(c, rng.range(4, 14), 0.5, 0x4a93bd, rng.range(waves0, c.d1), rng.sign() * rng.range(half + 4, 70), 0.0, rng.range(-0.2, 0.2));
+    if (entry) {
+      // Estribo de concreto a la entrada del puente. Sigue la curva de la vía con
+      // bordes paralelos a la orilla: aunque el puente vaya inclinado, queda pegado
+      // a la tierra sin dejar cuñas de agua, y coincide con la tierra firme de waterEdge.
+      this.strip(c, -70, 70, 0x8a8a85, 0.004, c.d0 - 0.3, c.d0 + BRIDGE_ABUTMENT);
+      this.strip(c, -70, 70, 0x6f6f6a, 0.006, c.d0 + BRIDGE_ABUTMENT - 0.5, c.d0 + BRIDGE_ABUTMENT);
       this.gantry(c, c.d0 + 10, half, 'PUENTE DEL RÍO');
     }
     this.bridgeDeck(c, half);

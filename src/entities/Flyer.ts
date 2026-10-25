@@ -185,7 +185,7 @@ export class Flyer {
       w.outer.rotation.z = s * Math.sin(f - 0.7) * 0.55 * flap;
     });
     this.model.tail.rotation.y = Math.sin(this.t * 3) * 0.3;
-    this.model.jaw.rotation.x = diving ? 0.5 : clamp(Math.sin(this.t * 2) * 0.3, 0, 0.3);
+    this.model.jaw.rotation.x = -(diving ? 0.5 : clamp(Math.sin(this.t * 2) * 0.3, 0, 0.3));
     // La sombra se agranda y oscurece al acercarse al suelo.
     const sh = this.model.shadow;
     sh.position.set(this.x + this.y * 0.25, 0.06, this.z + this.y * 0.2);

@@ -973,22 +973,141 @@ function policeBody(kind: 'patrol' | 'moto' | 'suv' | 'swat'): THREE.Group {
 export interface HeliMesh {
   group: THREE.Group;
   rotor: THREE.Group;
+  /** Rotor de cola: gira sobre el eje X. */
+  tailRotor: THREE.Group;
   shadow: THREE.Mesh;
   spot: THREE.Mesh;
 }
 
-export function helicopter(): HeliMesh {
+/** Elipsoide con centro en (x, y, z) y diámetros sx, sy, sz (fuselajes, cuerpos de criaturas). */
+function blob(sx: number, sy: number, sz: number, color: number, x: number, y: number, z: number): THREE.Mesh {
+  const m = new THREE.Mesh(SPHERE, mat(color));
+  m.scale.set(sx, sy, sz);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  return m;
+}
+
+/** Cono orientado: `rx`/`rz` giran la punta (que de base apunta hacia +Y). */
+function spike(r: number, len: number, color: number, x: number, y: number, z: number, rx: number, rz = 0, emissive?: number): THREE.Mesh {
+  const m = new THREE.Mesh(CONE, mat(color, emissive));
+  m.scale.set(r * 2, len, r * 2);
+  m.rotation.set(rx, 0, rz);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  return m;
+}
+
+/** Botalón de cola: cono truncado que se afina hacia su extremo +Y. */
+const BOOM = shareGeometry(new THREE.CylinderGeometry(0.2, 0.5, 1, 10));
+/** Disco translúcido que simula el barrido del rotor principal. */
+const ROTOR_DISC = shareGeometry(new THREE.CircleGeometry(5.7, 32).rotateX(-Math.PI / 2));
+const ROTOR_BLUR = new THREE.MeshLambertMaterial({ color: 0x2a2d33, transparent: true, opacity: 0.16, depthWrite: false });
+
+/** Fuselaje del helicóptero policial (mira hacia -Z): cabina de cristal, botalón, aletas, patines y armas. */
+function heliBody(): THREE.Group {
+  const navy = 0x1c2b45;
+  const white = 0xeef1f5;
+  const dark = 0x16181c;
+  const glass = 0x4f7898;
+  const metal = 0x2b2d31;
   const g = new THREE.Group();
-  g.add(box(2.2, 1.8, 4.5, 0x1c2b45, 0, 0, 0));
-  g.add(box(1.8, 0.9, 1.4, 0x88aacc, 0, 0.6, -2.0));
-  g.add(box(0.5, 0.5, 4.0, 0x1c2b45, 0, 0.8, 3.8));
-  g.add(box(0.1, 1.2, 0.8, 0xffffff, 0.3, 0.6, 5.6));
-  g.add(box(3.0, 0.15, 0.2, 0x111111, 0, -0.2, -0.5));
+  // Cabina redondeada con franja blanca en la cintura, morro y cúpula de cristal.
+  g.add(blob(2.3, 2.0, 4.6, navy, 0, 1.0, -0.1));
+  g.add(blob(2.42, 0.9, 4.1, white, 0, 0.75, 0.05));
+  g.add(blob(1.7, 1.3, 2.0, navy, 0, 0.75, -2.2));
+  g.add(blob(2.0, 1.45, 2.4, glass, 0, 1.25, -1.75));
+  g.add(blob(2.34, 0.6, 1.2, glass, 0, 1.35, 0.1)); // ventanillas laterales
+  g.add(rod([0, 1.99, -1.5], [0, 1.68, -2.8], 0.08, dark)); // marco central del parabrisas
+  // Turbina sobre el techo, tomas de aire, escapes, mástil y balizas.
+  g.add(prismMesh(1.3, 0.6, 2.6, 1.8, 0.2, navy, 0, 1.75, 0.6));
+  g.add(box(1.32, 0.03, 0.5, white, 0, 2.35, 1.3));
+  for (const sx of [-1, 1]) {
+    g.add(box(0.2, 0.26, 0.45, dark, sx * 0.62, 1.95, 0.05));
+    g.add(pipe(0.15, 0.55, metal, sx * 0.4, 2.08, 1.95));
+  }
+  g.add(cyl(0.16, 0.4, dark, 0, 2.3, 0.3));
+  g.add(lamp(0.22, 0.14, 0.22, 0xd01010, 0x900000, -0.36, 2.33, -0.35));
+  g.add(lamp(0.22, 0.14, 0.22, 0x1848ff, 0x0828b0, 0.36, 2.33, -0.35));
+  // Botalón de cola con franja, deriva, estabilizador y luces de navegación.
+  const boom = new THREE.Mesh(BOOM, mat(navy));
+  boom.scale.set(1, 4.8, 0.9);
+  boom.rotation.x = Math.PI / 2;
+  boom.position.set(0, 1.35, 4.2);
+  g.add(boom);
+  g.add(rod([0, 1.84, 2.0], [0, 1.58, 6.3], 0.14, white, 0.04));
+  g.add(prismMesh(0.12, 1.5, 1.2, 0.75, 0.45, navy, 0, 1.35, 6.25));
+  g.add(prismMesh(0.1, 0.55, 0.5, 0.8, -0.2, navy, 0, 0.85, 6.35));
+  g.add(box(0.14, 0.3, 0.72, white, 0, 2.55, 6.72));
+  g.add(box(2.4, 0.08, 0.55, navy, 0, 1.3, 5.3));
+  for (const sx of [-1, 1]) {
+    g.add(box(0.08, 0.5, 0.55, white, sx * 1.2, 1.1, 5.3));
+    g.add(lamp(0.1, 0.12, 0.14, sx < 0 ? 0xd01010 : 0x20d040, sx < 0 ? 0x900000 : 0x0e8a28, sx * 1.27, 1.2, 5.3));
+  }
+  g.add(lamp(0.12, 0.12, 0.12, 0xffffff, 0xbbbbbb, 0, 2.85, 6.95));
+  // Patines con su curva al frente y los soportes.
+  for (const sx of [-1, 1]) {
+    g.add(pipe(0.07, 4.6, metal, sx * 1.2, -0.45, -0.1));
+    g.add(rod([sx * 1.2, -0.45, -2.38], [sx * 1.2, -0.12, -2.85], 0.14, metal));
+    for (const z of [-1.3, 1.2]) g.add(rod([sx * 0.72, 0.3, z], [sx * 1.2, -0.45, z], 0.12, metal));
+  }
+  // Alas cortas con ametralladoras a cada lado.
+  g.add(box(3.4, 0.12, 0.6, navy, 0, 0.55, 0.3));
+  for (const sx of [-1, 1]) {
+    g.add(pipe(0.17, 1.1, dark, sx * 1.62, 0.42, 0.15));
+    g.add(pipe(0.05, 0.75, 0x0d0d0d, sx * 1.62, 0.42, -0.75));
+    g.add(box(0.12, 0.18, 0.5, metal, sx * 1.62, 0.55, 0.15));
+  }
+  // Reflector bajo el morro y antena.
+  g.add(ball(0.24, dark, 0, 0.18, -2.55));
+  g.add(lamp(0.3, 0.05, 0.3, 0xfff6c0, 0xfff0a0, 0, -0.05, -2.55));
+  g.add(rod([0, 0.08, 0.9], [0, -0.32, 1.4], 0.04, dark));
+  return g;
+}
+
+/** Rotor principal: cuatro palas con puntas amarillas sobre un buje. */
+function heliRotor(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(0.38, 0.28, 0x16181c, 0, -0.12, 0));
+  g.add(cyl(0.2, 0.15, 0x55585e, 0, 0.16, 0));
+  for (let i = 0; i < 4; i++) {
+    const arm = new THREE.Group();
+    arm.rotation.y = Math.PI / 4 + (i * Math.PI) / 2;
+    arm.add(box(0.42, 0.05, 5.4, 0x1b1b1b, 0, 0, 2.95));
+    arm.add(box(0.43, 0.055, 0.45, 0xf1c40f, 0, 0, 5.45));
+    for (const sx of [-1, 1]) arm.add(box(0.06, 0.1, 0.5, 0x55585e, sx * 0.12, -0.02, 0.45));
+    g.add(arm);
+  }
+  return g;
+}
+
+/** Rotor de cola: dos palas cruzadas en el plano YZ. */
+function heliTailRotor(): THREE.Group {
+  const g = new THREE.Group();
+  const hub = new THREE.Mesh(CYL, mat(0x16181c));
+  hub.scale.set(0.22, 0.2, 0.22);
+  hub.rotation.z = Math.PI / 2;
+  g.add(hub);
+  g.add(box(0.05, 1.6, 0.16, 0x1b1b1b, 0.06, -0.8, 0));
+  g.add(box(0.05, 0.16, 1.6, 0x1b1b1b, 0.06, -0.08, 0));
+  for (const y of [-0.82, 0.74]) g.add(box(0.055, 0.08, 0.17, 0xf1c40f, 0.06, y, 0));
+  for (const z of [-0.78, 0.78]) g.add(box(0.055, 0.17, 0.08, 0xf1c40f, 0.06, -0.08, z));
+  return g;
+}
+
+export function helicopter(): HeliMesh {
+  const g = baked('heli', heliBody);
   const rotor = new THREE.Group();
-  rotor.add(box(11, 0.08, 0.45, 0x111111, 0, 0, 0));
-  rotor.add(box(0.45, 0.08, 11, 0x111111, 0, 0, 0));
-  rotor.position.y = 2.0;
+  rotor.add(baked('heli:rotor', heliRotor));
+  const blur = new THREE.Mesh(ROTOR_DISC, ROTOR_BLUR);
+  blur.position.y = 0.03;
+  rotor.add(blur);
+  rotor.position.set(0, 2.62, 0.3);
   g.add(rotor);
+  const tailRotor = new THREE.Group();
+  tailRotor.add(baked('heli:tail', heliTailRotor));
+  tailRotor.position.set(0.12, 2.25, 6.7);
+  g.add(tailRotor);
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(3.2, 20),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }),
@@ -999,7 +1118,7 @@ export function helicopter(): HeliMesh {
     new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
   spot.rotation.x = -Math.PI / 2;
-  return { group: g, rotor, shadow, spot };
+  return { group: g, rotor, tailRotor, shadow, spot };
 }
 
 // ---------------------------------------------------------------- obstáculos
@@ -1371,80 +1490,119 @@ export interface HarpyMesh {
   shadow: THREE.Mesh;
 }
 
+/** Membrana plana (grosor 0,05) con el contorno dado en el plano XZ; se comparte entre harpías. */
+function membrane(points: [number, number][]): THREE.BufferGeometry {
+  const shape = new THREE.Shape(points.map(([x, z]) => new THREE.Vector2(x, z)));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.05, bevelEnabled: false });
+  geo.rotateX(Math.PI / 2);
+  geo.translate(0, 0.025, 0);
+  geo.computeVertexNormals();
+  return shareGeometry(geo);
+}
+
+/** Tramo interior del ala derecha (hombro → codo) y tramo exterior entre los dedos (codo → punta). */
+let wingGeos: { inner: THREE.BufferGeometry; outer: THREE.BufferGeometry } | null = null;
+const WING_ELBOW = 2.5;
+/** Puntas de los tres dedos del ala exterior, relativas al codo (x hacia afuera, z hacia atrás). */
+const WING_FINGERS: [number, number][] = [
+  [3.0, -0.35],
+  [2.6, 0.9],
+  [1.3, 1.55],
+];
+
 /** Harpía mutante: criatura voladora de alas membranosas que escupe ácido. */
 export function harpy(): HarpyMesh {
-  const hide = 0x6b4a6e;
-  const belly = 0xa08a7a;
-  const membrane = 0x8a3f5a;
+  const hide = 0x5e4062;
+  const belly = 0xa8907c;
+  const skin = 0x7d3352;
   const bone = 0x2e2228;
+  const claw = 0xe8e2c8;
+  const acid = 0x39ff14;
+  const glow = 0x2fd10f;
+  wingGeos ??= {
+    inner: membrane([[0, -0.3], [WING_ELBOW, -0.5], [2.4, 0.6], [1.6, 0.95], [0.9, 1.35], [0, 1.4]]),
+    outer: membrane([[0, -0.05], [3.0, -0.35], [2.35, 0.35], [2.6, 0.9], [1.75, 1.0], [1.3, 1.55], [0.6, 1.15], [-0.1, 1.1]]),
+  };
   const group = new THREE.Group();
   const body = new THREE.Group();
   group.add(body);
-  body.add(box(0.9, 0.7, 2.2, hide, 0, -0.35, 0));
-  body.add(box(0.7, 0.3, 1.6, belly, 0, -0.5, 0.1));
-  // Cuello, cabeza con pico y ojos verdes
-  body.add(box(0.45, 0.45, 0.9, hide, 0, -0.2, -1.4));
+  // Torso: pecho, abdomen, vientre claro, hombros musculosos y sacos de ácido que brillan.
+  body.add(blob(1.1, 0.9, 1.7, hide, 0, -0.05, -0.35));
+  body.add(blob(0.85, 0.75, 1.5, hide, 0, -0.1, 0.6));
+  body.add(blob(0.8, 0.5, 1.9, belly, 0, -0.3, 0.05));
+  for (const sx of [-1, 1]) {
+    body.add(blob(0.6, 0.5, 0.8, hide, sx * 0.42, 0.08, -0.45));
+    body.add(blob(0.3, 0.26, 0.4, acid, sx * 0.24, -0.46, -0.25));
+    (body.children[body.children.length - 1] as THREE.Mesh).material = mat(acid, glow);
+  }
+  // Púas a lo largo del lomo
+  for (let i = 0; i < 5; i++) body.add(spike(0.07, 0.42 - i * 0.05, bone, 0, 0.42 - i * 0.04, -0.8 + i * 0.38, 1.1));
+  // Cuello y cabeza: cráneo alargado, pico ganchudo con dientes, cuatro ojos verdes y cuernos hacia atrás.
+  body.add(blob(0.5, 0.45, 1.0, hide, 0, 0.02, -1.35));
+  body.add(blob(0.32, 0.26, 0.5, acid, 0, -0.18, -1.3));
+  (body.children[body.children.length - 1] as THREE.Mesh).material = mat(acid, glow);
   const head = new THREE.Group();
-  head.position.set(0, 0, -2.0);
+  head.position.set(0, 0.12, -1.85);
   body.add(head);
-  head.add(box(0.6, 0.5, 0.7, hide, 0, -0.25, 0));
-  const beak = new THREE.Mesh(CONE, mat(0xd8c08a));
-  beak.scale.set(0.35, 0.9, 0.3);
-  beak.rotation.x = -Math.PI / 2;
-  beak.position.set(0, 0.05, -0.75);
-  head.add(beak);
+  head.add(blob(0.62, 0.5, 0.85, hide, 0, 0, -0.05));
+  head.add(spike(0.19, 0.95, 0xd8c08a, 0, -0.02, -0.75, -Math.PI / 2));
+  head.add(spike(0.05, 0.2, 0xd8c08a, 0, -0.12, -1.15, Math.PI));
+  for (const sx of [-1, 1]) {
+    for (const z of [-0.45, -0.68]) head.add(spike(0.03, 0.14, claw, sx * (0.13 + z * 0.1), -0.13, z, Math.PI));
+    head.add(lamp(0.1, 0.09, 0.06, acid, glow, sx * 0.18, 0.04, -0.4));
+    head.add(lamp(0.06, 0.06, 0.05, acid, glow, sx * 0.12, 0.14, -0.33));
+    head.add(spike(0.06, 0.75, bone, sx * 0.3, 0.3, 0.42, 1.2, -sx * 0.4));
+    head.add(spike(0.04, 0.45, bone, sx * 0.3, 0.05, 0.3, 1.4, -sx * 0.9));
+  }
+  for (let i = 0; i < 3; i++) head.add(spike(0.06, 0.45 - i * 0.1, bone, 0, 0.28, 0.05 + i * 0.22, 1.2));
+  // Mandíbula (gira en X; negativo la abre) con baba de ácido.
   const jaw = new THREE.Group();
-  jaw.position.set(0, -0.1, -0.3);
+  jaw.position.set(0, -0.12, -0.25);
   head.add(jaw);
-  const lower = new THREE.Mesh(CONE, mat(0xb8a070));
-  lower.scale.set(0.28, 0.6, 0.2);
-  lower.rotation.x = -Math.PI / 2;
-  lower.position.set(0, -0.08, -0.35);
-  jaw.add(lower);
-  for (const x of [-0.2, 0.2]) {
-    const eye = box(0.1, 0.1, 0.06, 0x39ff14, x, 0.1, -0.34);
-    eye.material = mat(0x39ff14, 0x2fd10f);
-    head.add(eye);
-  }
-  // Cresta ósea
-  for (let i = 0; i < 3; i++) {
-    const c = new THREE.Mesh(CONE, mat(bone));
-    c.scale.set(0.12, 0.5 - i * 0.1, 0.12);
-    c.rotation.x = 1.2;
-    c.position.set(0, 0.25, 0.1 + i * 0.25);
-    head.add(c);
-  }
-  // Alas: pivote en el hombro y segunda articulación en el "codo"
+  jaw.add(spike(0.15, 0.7, 0xb8a070, 0, -0.06, -0.38, -Math.PI / 2));
+  jaw.add(spike(0.04, 0.3, acid, 0, -0.2, -0.5, Math.PI, 0, glow));
+  // Alas de murciélago: brazo y membrana hasta el codo; después tres dedos con la membrana entre ellos.
   const wings = [-1, 1].map((s) => {
     const inner = new THREE.Group();
-    inner.position.set(s * 0.45, 0, -0.3);
+    inner.position.set(s * 0.5, 0.1, -0.45);
     body.add(inner);
-    inner.add(box(2.4, 0.06, 1.5, membrane, s * 1.2, 0, 0.2));
-    inner.add(box(2.4, 0.12, 0.12, bone, s * 1.2, 0.03, -0.5));
+    const innerSkin = new THREE.Mesh(wingGeos!.inner, mat(skin));
+    innerSkin.scale.x = s;
+    innerSkin.castShadow = true;
+    inner.add(innerSkin);
+    inner.add(rod([0, 0.04, -0.3], [s * WING_ELBOW, 0.04, -0.5], 0.18, bone));
+    inner.add(blob(1.1, 0.3, 0.45, hide, s * 0.55, 0.04, -0.25));
     const outer = new THREE.Group();
-    outer.position.set(s * 2.4, 0, 0);
+    outer.position.set(s * WING_ELBOW, 0, -0.5);
     inner.add(outer);
-    outer.add(box(2.3, 0.05, 1.2, membrane, s * 1.15, 0, 0.35));
-    outer.add(box(2.4, 0.1, 0.1, bone, s * 1.2, 0.03, -0.2));
-    const talon = new THREE.Mesh(CONE, mat(0xe8e2c8));
-    talon.scale.set(0.12, 0.4, 0.12);
-    talon.rotation.z = s * -Math.PI / 2;
-    talon.position.set(s * 2.5, 0, -0.2);
-    outer.add(talon);
+    const outerSkin = new THREE.Mesh(wingGeos!.outer, mat(skin));
+    outerSkin.scale.x = s;
+    outerSkin.castShadow = true;
+    outer.add(outerSkin);
+    for (const [fx, fz] of WING_FINGERS) outer.add(rod([0, 0.04, 0], [s * fx, 0.04, fz], 0.1, bone));
+    outer.add(ball(0.13, bone, 0, 0.04, 0));
+    outer.add(spike(0.06, 0.38, claw, 0, 0.05, -0.25, -Math.PI / 2)); // garra del pulgar
+    outer.add(spike(0.06, 0.4, claw, s * 3.15, 0.04, -0.37, 0, -s * Math.PI / 2));
     return { inner, outer };
   });
-  // Cola larga terminada en púa
+  // Patas colgantes con tres garras cada una.
+  for (const sx of [-1, 1]) {
+    body.add(rod([sx * 0.28, -0.35, 0.55], [sx * 0.32, -0.75, 0.95], 0.18, hide));
+    body.add(rod([sx * 0.32, -0.75, 0.95], [sx * 0.3, -0.88, 1.45], 0.11, bone));
+    for (const k of [-1, 0, 1]) body.add(spike(0.04, 0.3, claw, sx * 0.3 + k * 0.08, -0.98, 1.38, Math.PI * 0.75));
+  }
+  // Cola larga y segmentada con púas, terminada en una punta de flecha.
   const tail = new THREE.Group();
-  tail.position.set(0, -0.3, 1.1);
+  tail.position.set(0, -0.1, 1.2);
   body.add(tail);
-  tail.add(box(0.2, 0.15, 1.8, hide, 0, 0, 0.9));
-  const spade = new THREE.Mesh(CONE, mat(bone));
-  spade.scale.set(0.4, 0.6, 0.15);
-  spade.rotation.x = Math.PI / 2;
-  spade.position.set(0, 0, 2.0);
+  tail.add(blob(0.42, 0.36, 1.1, hide, 0, 0, 0.45));
+  tail.add(blob(0.3, 0.26, 1.0, hide, 0, -0.02, 1.3));
+  tail.add(blob(0.2, 0.17, 0.9, hide, 0, -0.04, 2.05));
+  for (let i = 0; i < 3; i++) tail.add(spike(0.05, 0.28 - i * 0.05, bone, 0, 0.2 - i * 0.05, 0.5 + i * 0.75, 1.2));
+  const spade = box(0.42, 0.06, 0.42, bone, 0, -0.07, 2.65);
+  spade.rotation.y = Math.PI / 4;
   tail.add(spade);
-  // Garras colgantes
-  for (const x of [-0.25, 0.25]) body.add(box(0.12, 0.5, 0.12, bone, x, -1.0, 0.3));
+  for (const sx of [-1, 1]) tail.add(spike(0.05, 0.35, bone, sx * 0.3, -0.04, 2.45, 1.9, -sx * 1.0));
 
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(2.6, 18),

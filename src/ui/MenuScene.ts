@@ -335,6 +335,7 @@ export class MenuScene {
       const siren = Math.floor(this.clock * 6) % 2 === 0;
       for (const c of this.chasers) setSiren(c.mesh, siren);
       this.heli.rotor.rotation.y += dt * 2;
+      this.heli.tailRotor.rotation.x += dt * 4;
     }
     const car = this.carAt(this.t);
     const cam = this.camera;
@@ -447,6 +448,7 @@ export class MenuScene {
     this.heli.group.position.set(hx, 24 + Math.sin(this.clock * 1.7) * 0.4, -34);
     this.heli.group.rotation.set(0, FACE_X, 0.12);
     this.heli.rotor.rotation.y += dt * 25;
+    this.heli.tailRotor.rotation.x += dt * 45;
     this.heli.shadow.position.set(hx + 5, 0.06, -28);
     this.heli.spot.position.set(car.x - 4, 0.07, -1);
 

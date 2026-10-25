@@ -76,6 +76,7 @@ export class Helicopter {
     g.position.set(this.x, alt, this.z);
     g.rotation.x = damp(g.rotation.x, -0.32, 3, dt);
     this.model.rotor.rotation.y += dt * 38;
+    this.model.tailRotor.rotation.x += dt * 60;
     // El reflector se apaga en un momento; la sombra crece, se aleja y se desvanece con la altura.
     const spot = this.model.spot.material as THREE.MeshBasicMaterial;
     spot.opacity = Math.max(0, 0.22 * (1 - k / 0.7));
@@ -110,6 +111,7 @@ export class Helicopter {
     g.position.set(this.x, ALTITUDE + Math.sin(this.t * 2) * 0.3, this.z);
     g.rotation.y += wrapAngle(heading - g.rotation.y) * (1 - Math.exp(-3 * dt));
     this.model.rotor.rotation.y += dt * 25;
+    this.model.tailRotor.rotation.x += dt * 45;
     this.model.shadow.position.set(this.x + 3, 0.06, this.z + 3);
 
     this.spotX = damp(this.spotX, tv.px, 3, dt);
