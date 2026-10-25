@@ -15,6 +15,12 @@ async function boot(): Promise<void> {
   try {
     await RAPIER.init();
     const game = new Game(app, loader);
+    // Arrancó bien: si más adelante vuelve a faltar un archivo, index.html puede repararlo otra vez.
+    try {
+      sessionStorage.removeItem('rr-healed');
+    } catch {
+      /* ignorado */
+    }
     // Acceso de depuración desde la consola durante el desarrollo.
     if (import.meta.env.DEV) (window as unknown as { game: Game }).game = game;
     // Los navegadores no dejan sonar una página hasta que se toca: si la bloquean,
