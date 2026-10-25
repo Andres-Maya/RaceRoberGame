@@ -29,6 +29,9 @@ export class Civilian {
   private dodge = 0;
   private dodgeTimer = 0;
   readonly oncoming: boolean;
+  /** Cayó al río: segundos que lleva hundiéndose. */
+  sinking = false;
+  sinkTime = 0;
 
   constructor(
     physics: Physics,
@@ -47,8 +50,22 @@ export class Civilian {
     return this.spawn.mode;
   }
 
+  /** Cae al río: deja de chocar con nada y se hunde. */
+  sink(): void {
+    this.sinking = true;
+    this.vehicle.body.collider(0).setSensor(true);
+  }
+
   update(dt: number, track: Track, physics: Physics, probe?: ObstacleProbe): void {
     const v = this.vehicle;
+    if (this.sinking) {
+      // Se hunde lentamente, inclinándose hacia adelante.
+      this.sinkTime += dt;
+      v.halt(dt, 60);
+      v.mesh.position.y = -this.sinkTime * 1.4;
+      v.mesh.rotation.x = Math.min(0.6, this.sinkTime * 0.5);
+      return;
+    }
     if (this.panic > 0) {
       this.panic -= dt;
       v.halt(dt);

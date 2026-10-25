@@ -28,6 +28,9 @@ export const HALF_WIDTH: Record<Biome, number> = {
   safeZone: 10,
 };
 
+/** Largo del estribo de concreto a la entrada del puente (tierra firme sobre el río). */
+export const BRIDGE_ABUTMENT = 6;
+
 /** Biomas donde salirse del asfalto frena la moto (tierra, arena, escombros). */
 export const ROUGH_BIOMES = new Set<Biome>(['desert', 'outskirts', 'wasteland', 'safeZone']);
 
@@ -99,7 +102,12 @@ export class Track {
    */
   waterEdge(d: number): number | null {
     const biome = this.biomeAt(d);
-    if (biome === 'bridge') return HALF_WIDTH.bridge + 1.3;
+    if (biome === 'bridge') {
+      // El estribo de concreto (los primeros metros del puente) es tierra firme.
+      const i = Math.floor(d / CHUNK);
+      if (this.biomes.get(i - 1) !== 'bridge' && d - i * CHUNK < BRIDGE_ABUTMENT) return null;
+      return HALF_WIDTH.bridge + 1.3;
+    }
     // El túnel final empieza con 10 m de puente.
     if (biome === 'tunnelEnd' && d - Math.floor(d / CHUNK) * CHUNK < 10) return HALF_WIDTH.tunnelEnd + 1.3;
     return null;

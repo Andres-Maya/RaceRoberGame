@@ -16,7 +16,7 @@ npm run dev:lan    # servidor de desarrollo visible en la red local (también ad
 npm test           # pruebas automáticas (unos 10 s)
 ```
 
-Las pruebas (`tests/`) corren la lógica real del juego en Node, con física y azar con semilla para que siempre den lo mismo: desbloqueos de vehículos, rampas (saltos normales, torcidos, rozones y que nunca se atraviesen), la réplica de la escena del modo en línea, los códigos QR de conexión y el servidor de red local.
+Las pruebas (`tests/`) corren la lógica real del juego en Node, con física y azar con semilla para que siempre den lo mismo: desbloqueos de vehículos, rampas (saltos normales, torcidos, rozones y que nunca se atraviesen), caer al río, la réplica de la escena del modo en línea, los códigos QR de conexión y el servidor de red local.
 
 ### Desplegar en Vercel
 
@@ -231,7 +231,7 @@ Notas técnicas:
 - **Modelos:** todos los vehículos se arman con un mismo juego de piezas (ruedas con llanta, rin y tapacubos; cabina con parabrisas y luneta inclinados, techo y pilares; parachoques, parrilla, matrícula, faros y pilotos encendidos, espejos y líneas de puertas) más los detalles propios de cada uno. El tráfico tiene 8 tipos de auto (sedán, hatchback, familiar, compacto, camioneta, taxi, minivan y cupé) que se alternan con los colores. Cada modelo se **hornea** una sola vez en una geometría por material y todas sus copias la comparten: mucho detalle cuesta pocas llamadas de dibujo y, en línea, la geometría viaja una sola vez. Las luces de sirena quedan aparte porque destellan.
 - **Contenido diferido:** el paisaje se crea con anticipación, pero los obstáculos, el tráfico, los zombis y los retenes aparecen cuando la moto está a ~85 m. Así nada los choca antes de que llegues, y los autos de los cruces se programan para atravesarse justo delante de ti.
 - **Formaciones de obstáculos:** además del reparto suelto hay slaloms, muros con un hueco reservado, chicanes, derrames de carga, filas de autos estacionados, hordas de zombis y tramos de respiro. Los huecos siempre dejan paso.
-- **Río:** bajo los puentes hay agua de verdad: los enemigos terrestres que caen en ella se hunden (y cuentan como derribados), y los mutantes nunca aparecen sobre el río. Los extremos del puente están cerrados para que nadie rodee la baranda; si aun así la moto toca el agua, cae al río (−30) y vuelve al puente.
+- **Río:** bajo los puentes hay agua de verdad y no hay paredes invisibles: cualquier vehículo que entra al agua (rodeando la baranda desde la orilla) se hunde. Los enemigos terrestres cuentan como derribados, el tráfico desaparece bajo el agua y los mutantes nunca aparecen sobre el río. Si cae el jugador, pierde 30 de vida, se hunde y reaparece en la vía 12 m antes de donde cayó (si esos 30 lo dejan sin vida, se hunde destruido). El estribo de concreto a la entrada del puente es tierra firme.
 - **Réplica en línea:** el anfitrión recorre su escena y envía solo lo que cambió: objetos nuevos (con su geometría y material la primera vez), posiciones, visibilidad, materiales y luces. Las partículas no viajan: el invitado repite las llamadas a los efectos con su propio sistema. Los mensajes grandes se parten en fragmentos de 16 KB, y el HTML de las pantallas que llega al invitado se limpia antes de mostrarse.
 - **Ciudad variable:** cruces a intervalos irregulares y parques o estacionamientos entre los edificios. En el desierto aparecen mesetas y oasis.
 

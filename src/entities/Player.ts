@@ -53,6 +53,10 @@ export class Player {
   airLift = 1;
   /** Rozón con la esquina de una rampa: segundos en que pasa de largo sin quedar enganchado. */
   graze = 0;
+  /** Cayó al río y se está hundiendo: segundos que lleva bajo el agua y dónde cayó. */
+  sinking = false;
+  sinkTime = 0;
+  sinkD = 0;
   /** Enfriamiento de daño por cada objeto contra el que choca. */
   readonly hitCooldown = new Map<unknown, number>();
 

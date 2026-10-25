@@ -40,7 +40,7 @@ export class Jumps {
   tick(p: Player, dt: number): void {
     if (p.graze <= 0) return;
     p.graze -= dt;
-    if (p.graze <= 0 && p.air <= 0 && !p.cutscene) p.setGhost(false);
+    if (p.graze <= 0 && p.air <= 0 && !p.cutscene && !p.sinking) p.setGhost(false);
   }
 
   /**

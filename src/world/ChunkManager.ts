@@ -31,7 +31,7 @@ import {
   type PursuerMesh,
 } from '../fx/Meshes';
 import type { Physics } from './Physics';
-import { BOUND, CHUNK, HALF_WIDTH, SIDEWALK, Track, WIDE_BOUND } from './Track';
+import { BOUND, BRIDGE_ABUTMENT, CHUNK, HALF_WIDTH, SIDEWALK, Track, WIDE_BOUND } from './Track';
 
 export interface ObstacleRecord {
   kind: ObstacleKind;
@@ -786,23 +786,14 @@ export class ChunkManager {
     }
   }
 
-  /** Cierra el río a los costados del puente en d (nadie puede rodear la baranda). */
-  private riverCaps(c: Chunk, d: number, half: number): void {
-    const inner = half + 2.1;
-    const outer = BOUND + 1;
-    for (const s of [-1, 1]) this.solid(c, d, s * (inner + outer) / 2, (outer - inner) / 2, 0.5);
-  }
-
   private genBridge(c: Chunk): void {
     const rng = this.ctx.rng;
     const half = HALF_WIDTH.bridge;
-    this.riverCaps(c, c.d0 + 0.5, half);
-    this.riverCaps(c, c.d1 - 0.5, half);
     // Oleaje del río
     for (let i = 0; i < 10; i++) this.flat(c, rng.range(4, 14), 0.5, 0x4a93bd, rng.range(c.d0, c.d1), rng.sign() * rng.range(half + 4, 70), 0.0, rng.range(-0.2, 0.2));
     if (this.prevBiome !== 'bridge') {
       // Estribo de concreto a la entrada del puente
-      this.flat(c, 80, 6, 0x8a8a85, c.d0 + 3, 0, 0.004);
+      this.flat(c, 80, BRIDGE_ABUTMENT, 0x8a8a85, c.d0 + BRIDGE_ABUTMENT / 2, 0, 0.004);
       this.gantry(c, c.d0 + 10, half, 'PUENTE DEL RÍO');
     }
     this.bridgeDeck(c, half);
@@ -825,8 +816,8 @@ export class ChunkManager {
     const face = c.d0 + 22;
     const depth = 30;
     this.bridgeDeck(c, half, c.d0, c.d0 + 10);
-    this.riverCaps(c, c.d0 + 0.5, half);
-    this.riverCaps(c, c.d0 + 10, half);
+    // Los últimos 10 m del río, a los costados del puente.
+    for (const s of [-1, 1]) this.strip(c, s > 0 ? half + 1.6 : -70, s > 0 ? 70 : -half - 1.6, GROUND.bridge, 0.004, c.d0, c.d0 + 10);
     this.strip(c, -half - 1.6, half + 1.6, 0x6a5a48, 0.006, c.d0 + 10, face);
     this.road(c, half, 0x34353a, c.d0 + 10, face);
     const mountain = tunnelMountain(96, depth, half * 2);

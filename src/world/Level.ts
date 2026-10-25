@@ -148,6 +148,10 @@ const GOAL_LOOKAHEAD = 70;
 const CAPTURE_GAP = 60;
 /** Segundos que tarda en reaparecer un jugador caído o capturado. */
 const RESPAWN_TIME = 10;
+/** Caer al río: vida que cuesta, segundos que tarda en hundirse y metros que retrocede al reaparecer. */
+const RIVER_DAMAGE = 30;
+const SINK_TIME = 1.6;
+const RIVER_SETBACK = 12;
 
 /**
  * Una partida de un nivel: escena, física, mapa procedural, jugadores,
@@ -697,13 +701,19 @@ export class Level {
     if (!p.alive) {
       const marker = this.targetMarkers[p.index];
       if (marker) marker.visible = false;
-      v.halt(dt);
+      // Destruido al caer al río: termina de hundirse y desaparece.
+      if (p.sinking && this.sinkPlayer(p, dt)) p.mesh.visible = false;
+      else if (!p.sinking) v.halt(dt);
       const t = this.respawnTimers.get(p);
       if (t !== undefined) {
         const left = t - dt;
         if (left <= 0) this.respawn(p);
         else this.respawnTimers.set(p, left);
       }
+      return;
+    }
+    if (p.sinking) {
+      if (this.sinkPlayer(p, dt)) this.surfaceFromRiver(p);
       return;
     }
     if (p.cutscene) {
@@ -715,17 +725,17 @@ export class Level {
       this.jumps.updateAir(p, dt);
       return;
     }
+    // Quien entra al agua cae al río y se hunde.
+    if (this.track.isWater(v.px, v.d)) {
+      this.fallInRiver(p);
+      return;
+    }
     if (!input) {
       v.halt(dt, 14);
       return;
     }
     // Joystick del celular: girar hacia donde apunta la bolita (o retroceder si apunta atrás).
     input = steerToward(input, v.heading, v.speed);
-    // Red de seguridad: la moto nunca circula sobre el río.
-    if (this.track.isWater(v.px, v.d)) {
-      this.fallInRiver(p);
-      return;
-    }
 
     const offroad = this.track.isOffroad(v.px, v.d);
     p.offroad = offroad;
@@ -982,7 +992,7 @@ export class Level {
       return true;
     }
     for (const c of this.civilians) {
-      if (segmentDistance(x0, z0, x1, z1, c.vehicle.px, c.vehicle.pz) > 1.4) continue;
+      if (c.sinking || segmentDistance(x0, z0, x1, z1, c.vehicle.px, c.vehicle.pz) > 1.4) continue;
       this.fx.sparks(c.vehicle.px, c.vehicle.pz, 4);
       c.panic = 2;
       return true;
@@ -990,16 +1000,51 @@ export class Level {
     return false;
   }
 
-  /** Si la moto toca el agua, cae al río y vuelve al centro del puente. */
+  /** El vehículo del jugador cae al río: pierde vida y se hunde (si sobrevive, reaparece unos metros atrás). */
   private fallInRiver(p: Player): void {
     const v = p.vehicle;
     this.fx.splash(v.px, v.pz, 30);
     this.audio.crash(0.6);
-    this.damagePlayer(p, 30);
+    this.shake = Math.max(this.shake, 0.4);
+    // El agua no perdona: cuesta vida aunque acabe de recibir un golpe.
+    p.invuln = 0;
+    this.damagePlayer(p, RIVER_DAMAGE);
+    p.sinking = true;
+    p.sinkTime = 0;
+    p.sinkD = v.d;
+    p.graze = 0;
+    p.setGhost(true);
     if (!p.alive) return;
-    v.teleport(this.track.centerX(v.d), v.pz, this.track.angle(v.d));
-    p.invuln = Math.max(p.invuln, 1.5);
-    this.hooks.message(`${this.who(p)}¡Al río! Vuelves al puente (−30)`, '#7fc8ff', 1.5);
+    p.invuln = SINK_TIME + 2;
+    this.hooks.message(`${this.who(p)}¡Al río! −${RIVER_DAMAGE} de vida`, '#7fc8ff', 1.5);
+  }
+
+  /** Avanza el hundimiento (inclinándose hacia adelante); devuelve true al terminar. */
+  private sinkPlayer(p: Player, dt: number): boolean {
+    const v = p.vehicle;
+    v.halt(dt, 60);
+    p.sinkTime = Math.min(SINK_TIME, p.sinkTime + dt);
+    p.mesh.position.y = -p.sinkTime * 1.8;
+    p.mesh.rotation.x = Math.min(0.6, p.sinkTime * 0.5);
+    if (p.mesh.visible && this.rng.chance(dt * 5)) this.fx.splash(v.px, v.pz, 5);
+    return p.sinkTime >= SINK_TIME;
+  }
+
+  /** Saca al jugador del río: reaparece en la vía unos metros antes de donde cayó. */
+  private surfaceFromRiver(p: Player): void {
+    this.resetSinking(p);
+    const d = Math.max(this.maxD - 110, p.sinkD - RIVER_SETBACK);
+    p.vehicle.teleport(this.track.centerX(d), -d, this.track.angle(d));
+    p.invuln = 2;
+    this.fx.splash(p.vehicle.px, p.vehicle.pz, 10);
+  }
+
+  private resetSinking(p: Player): void {
+    p.sinking = false;
+    p.mesh.position.y = 0;
+    p.mesh.rotation.x = 0;
+    p.mesh.visible = true;
+    p.setGhost(false);
   }
 
   // ------------------------------------------------------------ explosiones
@@ -1342,6 +1387,7 @@ export class Level {
       p.setGhost(false);
       p.mesh.visible = true;
     }
+    if (p.sinking) this.resetSinking(p);
     const d = partner.vehicle.d - 5;
     p.vehicle.teleport(this.track.centerX(d) + (partner.vehicle.px > this.track.centerX(d) ? -2.5 : 2.5), -d, 0);
     p.alive = true;
@@ -1669,8 +1715,12 @@ export class Level {
     for (let i = this.civilians.length - 1; i >= 0; i--) {
       const c = this.civilians[i];
       const v = c.vehicle;
-      const sank = this.track.isWater(v.px, v.d);
-      if (sank) this.fx.splash(v.px, v.pz);
+      if (!c.sinking && this.track.isWater(v.px, v.d)) {
+        c.sink();
+        this.fx.splash(v.px, v.pz);
+        this.audio.crash(0.4);
+      }
+      const sank = c.sinkTime > 2.2;
       if (sank || v.d < minD - 70 || v.d > this.maxD + 340 || Math.abs(this.track.lateral(v.px, v.d)) > 70) {
         this.removeVehicle(v.body, v.mesh);
         this.civilians.splice(i, 1);
