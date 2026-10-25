@@ -11,7 +11,7 @@ import { clamp, clamp01, wrapAngle } from '../core/math';
 import { Rng } from '../core/Rng';
 import { Civilian } from '../entities/Civilian';
 import { Flyer } from '../entities/Flyer';
-import { Helicopter } from '../entities/Helicopter';
+import { Helicopter, type HeliWorld } from '../entities/Helicopter';
 import { Player } from '../entities/Player';
 import { Lobs, type Lob } from '../entities/Lobs';
 import { Projectiles, segmentDistance } from '../entities/Projectiles';
@@ -176,6 +176,12 @@ export class Level {
   readonly pursuers: Pursuer[] = [];
   readonly civilians: Civilian[] = [];
   heli: Helicopter | null = null;
+  /** El helicóptero vuela sobre la calle y sube por encima de edificios, chimeneas y torres. */
+  private readonly heliWorld: HeliWorld = {
+    ceiling: (x, z, r) => this.chunks.ceiling(x, z, r),
+    // Margen para que el rotor (5,7 m) no llegue a las fachadas, que empiezan pasada la acera.
+    corridor: (z) => ({ cx: this.track.centerX(-z), half: this.track.halfWidth(-z) - 3.5 }),
+  };
   readonly flyers: Flyer[] = [];
   storm: Sandstorm | null = null;
 
@@ -536,7 +542,7 @@ export class Level {
       this.heli = null;
     }
     if (this.heli && this.config.pursuers) {
-      const shot = this.heli.update(dt, this.players, this.config.pursuers, this.rng);
+      const shot = this.heli.update(dt, this.players, this.config.pursuers, this.rng, this.heliWorld);
       if (shot) this.fire(shot, true);
     }
 

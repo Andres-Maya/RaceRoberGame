@@ -109,7 +109,22 @@ interface Chunk {
   placed: { x: number; d: number; r: number }[];
   /** Contenido diferido (obstáculos, tráfico, zombis): se crea al acercarse la moto. */
   pending: { d: number; run: () => void }[];
+  /** Huellas de las estructuras altas (edificios, chimeneas, torres) para lo que vuela. */
+  roofs: Roof[];
 }
+
+/** Caja alineada a los ejes del mundo que ocupa una estructura alta, con la altura de su techo. */
+interface Roof {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  top: number;
+}
+
+/** Altura mínima para que una estructura cuente como obstáculo aéreo. */
+const ROOF_MIN = 6;
+const roofBox = new THREE.Box3();
 
 /**
  * Distancia por delante de la moto a la que se activa el contenido diferido:
@@ -340,6 +355,7 @@ export class ChunkManager {
       pickups: [],
       placed: [],
       pending: [],
+      roofs: [],
     };
     this.chunks.set(index, c);
     this.ground(c);
@@ -408,7 +424,23 @@ export class ChunkManager {
     obj.rotation.y = this.track.angle(d) + rotOffset;
     this.ctx.scene.add(obj);
     c.objects.push(obj);
+    // Solo lo que se levanta desde el suelo: las vigas y letreros elevados se pueden pasar por debajo.
+    roofBox.setFromObject(obj);
+    if (roofBox.min.y < 1 && roofBox.max.y > ROOF_MIN) {
+      c.roofs.push({ minX: roofBox.min.x, maxX: roofBox.max.x, minZ: roofBox.min.z, maxZ: roofBox.max.z, top: roofBox.max.y });
+    }
     return obj;
+  }
+
+  /** Techo más alto de las estructuras que tocan el cuadrado de semilado `r` alrededor de (x, z); 0 si no hay. */
+  ceiling(x: number, z: number, r: number): number {
+    let top = 0;
+    for (const c of this.chunks.values()) {
+      for (const f of c.roofs) {
+        if (f.top > top && x + r > f.minX && x - r < f.maxX && z + r > f.minZ && z - r < f.maxZ) top = f.top;
+      }
+    }
+    return top;
   }
 
   private solid(c: Chunk, d: number, off: number, hx: number, hz: number, rotOffset = 0): void {
