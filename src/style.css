@@ -378,6 +378,25 @@ kbd {
   font-size: 0.85rem;
 }
 
+/* Teclas para moverse por el menú (en celular no aplica). */
+.nav-hint {
+  margin-top: 12px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.nav-hint kbd {
+  font-size: 0.72rem;
+}
+
+body.touch .nav-hint {
+  display: none;
+}
+
+.screen.menu.enter .nav-hint {
+  animation: menu-in 0.5s ease-out 0.45s both;
+}
+
 /* Récords del pie del menú: tres tarjetas pequeñas. */
 .menu-records {
   display: grid;
@@ -652,7 +671,8 @@ kbd {
   }
   /* Vertical: menú compacto abajo para que arriba se vea la cinemática. */
   .screen.menu .tagline,
-  .screen.menu .footer {
+  .screen.menu .footer,
+  .screen.menu .nav-hint {
     display: none;
   }
   .screen.menu .logo-top {

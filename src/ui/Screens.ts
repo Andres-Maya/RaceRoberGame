@@ -281,7 +281,8 @@ export class Screens {
         <div><b>${save.bestScore.toLocaleString('es-CO')}</b><span>mejor puntaje</span></div>
         <div><b>${formatMoney(save.bestCash)}</b><span>botín récord</span></div>
         <div><b>${(save.bestEndless / 1000).toFixed(2)} km</b><span>récord infinito</span></div>
-      </div>`,
+      </div>
+      <div class="nav-hint"><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> moverte · <kbd>Enter</kbd> elegir · <kbd>M</kbd> silencio</div>`,
       a,
       [
         [['Digit1', 'Numpad1', 'Enter'], 'play'],
