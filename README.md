@@ -109,8 +109,8 @@ Al empezar cada nivel aparece una pantalla de carga con una llanta rodando mient
 |---|---|
 | Acelerar / frenar-reversa | `W` / `S` o `↑` / `↓` |
 | Girar | `A` / `D` o `←` / `→` |
-| Turbo | `Espacio`, `Shift` o `Enter` |
-| Disparar al objetivo más cercano | `F` o `Ctrl der.` |
+| Disparar al objetivo más cercano | `Espacio`, `F` o `Ctrl der.` |
+| Turbo | `Shift` o `Enter` |
 | Celular | Joystick de dirección (el vehículo va hacia donde apunta), botones TURBO y DISPARO, pausa abajo al centro |
 
 `Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen.
