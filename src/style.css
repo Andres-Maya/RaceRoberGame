@@ -424,15 +424,92 @@ kbd {
   grid-column: 1 / -1;
 }
 
+.screen.menu .menu-buttons button {
+  position: relative;
+  overflow: hidden;
+  padding-right: 34px;
+  transition: transform 0.12s ease-out, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+/* Flecha a la derecha que aparece en la opción resaltada. */
+.screen.menu .menu-buttons button::after {
+  content: '›';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  font: 1.5rem var(--display);
+  line-height: 1;
+  color: var(--gold);
+  opacity: 0;
+  transform: translate(-8px, -50%);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
 .screen.menu .menu-buttons button:hover:not(:disabled) {
+  background: rgba(30, 32, 42, 0.85);
   border-left-color: var(--gold);
   transform: translateX(4px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.screen.menu .menu-buttons button:hover:not(:disabled)::after {
+  opacity: 1;
+  transform: translate(0, -50%);
 }
 
 .screen.menu .menu-buttons button.primary {
   background: linear-gradient(90deg, #ffd84d, #e0a800);
   border-left-color: #fff3b0;
   color: #1a1200;
+}
+
+.screen.menu .menu-buttons button.primary::after {
+  color: #1a1200;
+}
+
+.screen.menu .menu-buttons button.primary:hover:not(:disabled) {
+  background: linear-gradient(90deg, #ffe066, #f0b800);
+  box-shadow: 0 6px 22px rgba(244, 208, 63, 0.35);
+}
+
+/* JUGAR: más grande y con un destello que lo recorre cada tanto. */
+.screen.menu .menu-buttons button.play {
+  padding-top: 13px;
+  padding-bottom: 13px;
+  font-size: 1.45rem;
+  letter-spacing: 0.1em;
+}
+
+.screen.menu .menu-buttons button.play small {
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  opacity: 0.8;
+}
+
+.screen.menu .menu-buttons button.play::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: play-shine 3.6s ease-in-out 1.2s infinite;
+  pointer-events: none;
+}
+
+@keyframes play-shine {
+  0%,
+  70% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.menu .menu-buttons button.play::before {
+    animation: none;
+  }
 }
 
 /* Entrada del menú al terminar la cinemática: el logo cae y los botones entran en cascada. */
