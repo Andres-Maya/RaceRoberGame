@@ -102,9 +102,15 @@ export class Screens {
       this.select(this.selected, true);
       return;
     }
+    // Posición de maquetación (sin transformaciones): el resaltado se desplaza unos px y no debe sesgar la elección.
     const center = (b: HTMLElement) => {
-      const r = b.getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      let x = b.offsetWidth / 2;
+      let y = b.offsetHeight / 2;
+      for (let n: HTMLElement | null = b; n; n = n.offsetParent as HTMLElement | null) {
+        x += n.offsetLeft;
+        y += n.offsetTop;
+      }
+      return { x, y };
     };
     const c = center(cur);
     let best: HTMLButtonElement | null = null;
