@@ -36,7 +36,7 @@ El juego es 100 % estático (HTML, CSS y JS; el WASM de Rapier va incrustado en 
 
 ## En línea · 2 jugadores
 
-En el menú, **En línea** (tecla `5`). Un jugador crea la partida y el otro se une; cada uno juega con el vehículo de su propio garaje. El anfitrión elige el nivel y simula la partida completa; el invitado envía sus controles y recibe la escena, los efectos, los sonidos y el HUD unas 30 veces por segundo (~60–100 KB/s), así que los dos ven exactamente lo mismo. Las pantallas de historia, pausa y resultados del anfitrión aparecen también en el invitado.
+En el menú, **En línea**. Un jugador crea la partida y el otro se une; cada uno juega con el vehículo de su propio garaje. El anfitrión elige el nivel y simula la partida completa; el invitado envía sus controles y recibe la escena, los efectos, los sonidos y el HUD unas 30 veces por segundo (~60–100 KB/s), así que los dos ven exactamente lo mismo. Las pantallas de historia, pausa y resultados del anfitrión aparecen también en el invitado.
 
 | Modo | Cómo se conecta | Qué necesita |
 |---|---|---|
@@ -85,7 +85,7 @@ Para ver todos los modelos de cerca, abre el juego con **`?models=1`** al final 
 
 ## Garaje
 
-En el menú principal, **Garaje** (tecla `3`) muestra una tarjeta por vehículo con su foto (renderizada con el mismo modelo 3D del juego), su papel, barras de atributos y habilidades. Se elige con **Elegir** (o las teclas `1`–`7`) y la elección se guarda.
+En el menú principal, **Garaje** muestra una tarjeta por vehículo con su foto (renderizada con el mismo modelo 3D del juego), su papel, barras de atributos y habilidades. Se elige con **Elegir** (o las teclas `1`–`7`) y la elección se guarda.
 
 Se empieza con el **Cacharro**; cada uno de los demás se desbloquea con un objetivo distinto. Las tarjetas bloqueadas muestran el objetivo y el progreso (por ejemplo, «12/40»), y al conseguirlo aparece un aviso en la pantalla de resultados. En línea, el invitado también suma a su propio progreso.
 
@@ -109,15 +109,19 @@ Al empezar cada nivel aparece una pantalla de carga con una llanta rodando mient
 |---|---|
 | Acelerar / frenar-reversa | `W` / `S` o `↑` / `↓` |
 | Girar | `A` / `D` o `←` / `→` |
-| Turbo | `Espacio`, `Shift` o `Enter` |
-| Disparar al objetivo más cercano | `F` o `Ctrl der.` |
+| Disparar al objetivo más cercano | `Espacio`, `F` o `Ctrl der.` |
+| Turbo | `Shift` o `Enter` |
 | Celular | Joystick de dirección (el vehículo va hacia donde apunta), botones TURBO y DISPARO, pausa abajo al centro |
 
 `Esc`/`P` pausa, `M` silencia todo el sonido, `N` activa o desactiva la música y `-` / `+` cambian su volumen.
 
+**Menús con teclado:** las flechas (o `WASD`) mueven el resaltado entre las opciones de cualquier pantalla y `Enter` o `Espacio` eligen la resaltada; el mouse y `Tab` también mueven el resaltado. Los atajos de cada pantalla (`Esc` para volver, etc.) siguen funcionando.
+
+**Tutorial en vivo:** la primera vez que juegas con teclado, al terminar la cuenta regresiva aparece abajo una tarjeta que enseña una acción a la vez (acelerar, girar, frenar, disparar y turbo) sin detener la partida. Las teclas se iluminan mientras las presionas y cada paso avanza cuando lo practicas; `T` lo salta. Se puede repetir desde **Controles › Repetir el tutorial**.
+
 ### Sonido
 
-En el menú principal, **Sonido** (tecla `4`) abre un apartado con volúmenes independientes. Cada control reproduce una muestra al moverlo, se guardan entre partidas y también están en la pausa:
+En el menú principal, **Sonido** abre un apartado con volúmenes independientes. Cada control reproduce una muestra al moverlo, se guardan entre partidas y también están en la pausa:
 
 | Canal | Qué controla |
 |---|---|

@@ -17,6 +17,7 @@ import { OffscreenMarkers, type Mate } from '../ui/Offscreen';
 import { QrScanner } from '../ui/QrScanner';
 import { Screens } from '../ui/Screens';
 import { enterFullscreen, IS_TOUCH, TouchControls } from '../ui/Touch';
+import { Tutorial } from '../ui/Tutorial';
 import { Level, type LevelHooks } from '../world/Level';
 import { Audio, type SoundChannel } from './Audio';
 import { Input, type DriveInput } from './Input';
@@ -101,6 +102,10 @@ export class Game {
   private menuScene = new MenuScene();
   private cinema = document.createElement('div');
   private goalArrow = new GoalArrow();
+  /** Tutorial en vivo de los controles (con teclado, hasta completarlo una vez). */
+  private tutorial = new Tutorial();
+  /** El tutorial empieza cuando termine la cuenta regresiva del nivel. */
+  private tutorialPending = false;
   /** Último estado del HUD de la partida local (también lo usa la flecha de la meta). */
   private lastHud: HudState | null = null;
   private classifier = new RuleBasedClassifier();
@@ -280,8 +285,10 @@ export class Game {
         this.pause();
       } else {
         // El jugador 1 es el de este dispositivo; en línea, el 2 llega por la red.
-        const inputs = this.net?.role === 'host' ? [this.localInput(), this.net.remote] : [this.localInput()];
+        const local = this.localInput();
+        const inputs = this.net?.role === 'host' ? [local, this.net.remote] : [local];
         this.level.update(dt, inputs);
+        this.updateTutorial(dt, local);
         this.audio.musicIntensity(this.level.musicIntensity);
         // Cuando caen todos los vehículos, el metal se corta y entra el réquiem.
         if (this.level.outcome === 'failed') this.audio.playMusic('death');
@@ -348,6 +355,27 @@ export class Game {
     else this.offscreen.hide();
   }
 
+  /** Avanza el tutorial en vivo con los controles del jugador de este dispositivo; `T` lo salta. */
+  private updateTutorial(dt: number, drive: DriveInput): void {
+    if (!this.tutorial.active) {
+      if (!this.tutorialPending || this.level?.state !== 'running') return;
+      this.tutorialPending = false;
+      this.tutorial.start();
+    }
+    if (this.input.wasPressed('KeyT')) {
+      this.tutorial.stop();
+      this.finishTutorial();
+    } else if (this.tutorial.update(dt, this.input, drive)) {
+      this.finishTutorial();
+    }
+  }
+
+  private finishTutorial(): void {
+    if (this.storage.data.tutorialDone) return;
+    this.storage.data.tutorialDone = true;
+    this.storage.save();
+  }
+
   // ------------------------------------------------------------ pantallas
 
   private showMenu(enter = false): void {
@@ -369,7 +397,7 @@ export class Game {
       select: () => this.screens.levelSelect(this.storage.data, (l) => this.startFrom(l), () => this.showMenu()),
       online: () => this.showOnline(),
       garage: () => this.showGarage(() => this.showMenu()),
-      controls: () => this.screens.controls(() => this.showMenu()),
+      controls: () => this.showControls(),
       stats: () => this.showStats(),
       sound: () => this.showSound(),
       mute: () => {
@@ -442,6 +470,21 @@ export class Game {
       const def = vehicleById(id);
       return isUnlocked(def, this.storage.data) ? def : VEHICLES[0];
     });
+  }
+
+  /** Controles; con teclado se puede volver a activar el tutorial en vivo. */
+  private showControls(): void {
+    const replay = IS_TOUCH
+      ? null
+      : !this.storage.data.tutorialDone
+      ? 'pending'
+      : () => {
+          this.storage.data.tutorialDone = false;
+          this.storage.save();
+          this.audio.blip(760);
+          this.showControls();
+        };
+    this.screens.controls(() => this.showMenu(), replay);
   }
 
   private showStats(): void {
@@ -619,6 +662,8 @@ export class Game {
             this.hud.show(hudState(level), this.campaign.cash);
             this.audio.duckMusic(false);
             this.audio.playMusic('level', level.musicStyle);
+            // Con teclado, el tutorial en vivo aparece al arrancar hasta que se complete una vez.
+            this.tutorialPending = !IS_TOUCH && !this.storage.data.tutorialDone;
             this.state = 'playing';
             this.last = performance.now();
           },
@@ -647,6 +692,7 @@ export class Game {
   }
 
   private onLevelDone(): void {
+    this.tutorial.stop();
     const before = unlockedIds(this.storage.data);
     this.levelDone();
     // Lo que se desbloqueó con este nivel aparece sobre la pantalla de resultados.
@@ -737,6 +783,8 @@ export class Game {
   }
 
   private disposeLevel(): void {
+    this.tutorial.stop();
+    this.tutorialPending = false;
     if (!this.level) return;
     this.level.dispose();
     this.level = null;

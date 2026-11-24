@@ -47,8 +47,8 @@ const KEYS: Scheme = {
   down: ['KeyS', 'ArrowDown'],
   left: ['KeyA', 'ArrowLeft'],
   right: ['KeyD', 'ArrowRight'],
-  turbo: ['Space', 'ShiftLeft', 'ShiftRight', 'Enter', 'NumpadEnter', 'Numpad0'],
-  shoot: ['KeyF', 'ControlRight', 'Period', 'NumpadDecimal'],
+  turbo: ['ShiftLeft', 'ShiftRight', 'Enter', 'NumpadEnter', 'Numpad0'],
+  shoot: ['Space', 'KeyF', 'ControlRight', 'Period', 'NumpadDecimal'],
 };
 
 const BLOCKED = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);

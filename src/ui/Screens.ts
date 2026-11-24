@@ -22,6 +22,10 @@ export class Screens {
   private el = document.querySelector('#screen') as HTMLElement;
   private actions = new Map<string, Action>();
   private keys: [string[], string][] = [];
+  /** Botón resaltado: las flechas lo mueven y Enter o Espacio lo activan. */
+  private selected: HTMLButtonElement | null = null;
+  /** El jugador eligió el resaltado (con flechas, mouse o Tab): Enter activa ese y no el atajo de la pantalla. */
+  private chosen = false;
   /** Recibe canal y volumen (0..1) cuando se mueve un control deslizante. */
   onVolume: ((channel: SoundChannel, v: number) => void) | null = null;
   /** Cada pantalla que se muestra (el anfitrión en línea la reenvía al invitado). */
@@ -40,6 +44,95 @@ export class Screens {
       this.showVolume(channel, v);
       this.onVolume?.(channel, v);
     });
+    // El mouse y la tecla Tab también mueven el resaltado, para que haya uno solo.
+    this.el.addEventListener('pointermove', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');
+      if (b && b !== this.selected && !b.disabled) this.select(b, true);
+    });
+    this.el.addEventListener('focusin', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');
+      if (b && !b.disabled) this.select(b, true);
+    });
+    // Enter o Espacio sobre un botón con el foco del navegador lo activarían dos veces (clic nativo + atajo).
+    const stopNative = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (this.visible && t?.tagName === 'BUTTON' && this.el.contains(t) && ['Enter', 'NumpadEnter', 'Space'].includes(e.code)) e.preventDefault();
+    };
+    window.addEventListener('keydown', stopNative, true);
+    window.addEventListener('keyup', stopNative, true);
+  }
+
+  // ------------------------------------------------------------ navegación con teclado
+
+  /** Botones visibles y habilitados de la pantalla actual (los de un desplegable cerrado no cuentan). */
+  private navButtons(): HTMLButtonElement[] {
+    return [...this.el.querySelectorAll<HTMLButtonElement>('button[data-action]')].filter((b) => !b.disabled && b.getClientRects().length > 0);
+  }
+
+  /** Resalta un botón (y lo deja a la vista si la pantalla tiene desplazamiento). */
+  private select(b: HTMLButtonElement | null, chosen: boolean): void {
+    if (this.selected !== b) {
+      this.selected?.classList.remove('nav-on');
+      this.selected = b;
+      b?.classList.add('nav-on');
+      if (b && chosen) b.scrollIntoView?.({ block: 'nearest' });
+    }
+    this.chosen = chosen && !!b;
+  }
+
+  /** Resaltado inicial: el botón que activa Enter en esta pantalla, el principal o el primero. */
+  private selectDefault(): void {
+    const list = this.navButtons();
+    const enter = this.keys.find(([codes]) => codes.includes('Enter'))?.[1];
+    const pick = list.find((b) => b.dataset.action === enter) ?? list.find((b) => b.classList.contains('primary')) ?? list[0] ?? null;
+    this.select(pick, false);
+  }
+
+  /**
+   * Mueve el resaltado hacia (dx, dy): al botón más cercano en esa dirección
+   * (sirve para listas, filas y rejillas). Si no hay ninguno, pasa al
+   * siguiente o al anterior en orden y da la vuelta en los extremos.
+   */
+  private move(dx: number, dy: number): void {
+    const list = this.navButtons();
+    if (!list.length) return;
+    const cur = this.selected && list.includes(this.selected) ? this.selected : null;
+    if (!cur) {
+      this.selectDefault();
+      this.select(this.selected, true);
+      return;
+    }
+    // Posición de maquetación (sin transformaciones): el resaltado se desplaza unos px y no debe sesgar la elección.
+    const center = (b: HTMLElement) => {
+      let x = b.offsetWidth / 2;
+      let y = b.offsetHeight / 2;
+      for (let n: HTMLElement | null = b; n; n = n.offsetParent as HTMLElement | null) {
+        x += n.offsetLeft;
+        y += n.offsetTop;
+      }
+      return { x, y };
+    };
+    const c = center(cur);
+    let best: HTMLButtonElement | null = null;
+    let bestScore = Infinity;
+    for (const b of list) {
+      if (b === cur) continue;
+      const p = center(b);
+      const along = (p.x - c.x) * dx + (p.y - c.y) * dy;
+      if (along <= 4) continue;
+      const across = Math.abs((p.x - c.x) * dy) + Math.abs((p.y - c.y) * dx);
+      const score = along + across * 2;
+      if (score < bestScore) {
+        bestScore = score;
+        best = b;
+      }
+    }
+    if (!best) {
+      const i = list.indexOf(cur);
+      const step = dx + dy > 0 ? 1 : -1;
+      best = list[(i + step + list.length) % list.length];
+    }
+    this.select(best, true);
   }
 
   /** Controles deslizantes de todos los canales de sonido. */
@@ -105,6 +198,8 @@ export class Screens {
     this.el.innerHTML = `<div class="panel">${html}</div>`;
     this.actions = new Map(Object.entries(actions));
     this.keys = keys;
+    this.selected = null;
+    this.selectDefault();
     this.onShow?.(html, variant);
   }
 
@@ -129,17 +224,41 @@ export class Screens {
     this.el.innerHTML = '';
     this.actions.clear();
     this.keys = [];
+    this.selected = null;
+    this.chosen = false;
   }
 
-  /** Atajos de teclado de la pantalla activa. */
+  /**
+   * Teclado de la pantalla activa: flechas (o WASD) para moverse entre las
+   * opciones, Enter o Espacio para elegir la resaltada y los atajos propios.
+   */
   handleKeys(input: Input): void {
     if (!this.visible) return;
+    const dirs: [string[], number, number][] = [
+      [['ArrowUp', 'KeyW'], 0, -1],
+      [['ArrowDown', 'KeyS'], 0, 1],
+      [['ArrowLeft', 'KeyA'], -1, 0],
+      [['ArrowRight', 'KeyD'], 1, 0],
+    ];
+    for (const [codes, dx, dy] of dirs) {
+      if (input.wasPressed(...codes)) {
+        this.move(dx, dy);
+        return;
+      }
+    }
+    const confirm = input.wasPressed('Enter', 'NumpadEnter', 'Space');
+    const sel = this.selected && !this.selected.disabled && this.el.contains(this.selected) ? this.selected : null;
+    if (confirm && sel && this.chosen) {
+      this.run(sel.dataset.action!);
+      return;
+    }
     for (const [codes, id] of this.keys) {
       if (input.wasPressed(...codes)) {
         this.run(id);
         return;
       }
     }
+    if (confirm && sel) this.run(sel.dataset.action!);
   }
 
   // ------------------------------------------------------------ menú
@@ -168,7 +287,8 @@ export class Screens {
         <div><b>${save.bestScore.toLocaleString('es-CO')}</b><span>mejor puntaje</span></div>
         <div><b>${formatMoney(save.bestCash)}</b><span>botín récord</span></div>
         <div><b>${(save.bestEndless / 1000).toFixed(2)} km</b><span>récord infinito</span></div>
-      </div>`,
+      </div>
+      <div class="nav-hint"><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> moverte · <kbd>Enter</kbd> elegir · <kbd>M</kbd> silencio</div>`,
       a,
       [
         [['Digit1', 'Numpad1', 'Enter'], 'play'],
@@ -324,6 +444,8 @@ export class Screens {
     line.classList.toggle('wait', !guest);
     const play = this.el.querySelector<HTMLButtonElement>('[data-action="play"]');
     if (play) play.disabled = !guest;
+    // Si el jugador no eligió otra opción, el resaltado sigue al botón que activa Enter.
+    if (!this.chosen || this.selected?.disabled) this.selectDefault();
   }
 
   /**
@@ -430,6 +552,8 @@ export class Screens {
     this.el.innerHTML = `<div class="panel">${holder.innerHTML}<p class="net-status wait">Esperando al anfitrión…</p><div class="menu-buttons"><button data-action="leave" class="ghost danger">Salir de la partida</button></div></div>`;
     this.actions = new Map(Object.entries({ leave }));
     this.keys = [];
+    this.selected = null;
+    this.selectDefault();
   }
 
   /**
@@ -527,14 +651,19 @@ export class Screens {
     );
   }
 
-  controls(back: Action): void {
+  /**
+   * `tutorial`: 'pending' si el tutorial en vivo saldrá en la próxima partida, una acción
+   * para volver a activarlo o null si no aplica (controles táctiles).
+   */
+  controls(back: Action, tutorial: Action | 'pending' | null): void {
+    const replay = typeof tutorial === 'function' ? tutorial : null;
     this.show(
       `<h2>Controles</h2>
       <div class="ctrl-card" style="--pc:#ff4d4d">
         <p><kbd>W</kbd> / <kbd>↑</kbd> acelerar · <kbd>S</kbd> / <kbd>↓</kbd> frenar / reversa</p>
         <p><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> girar</p>
-        <p><kbd>Espacio</kbd> / <kbd>Shift</kbd> / <kbd>Enter</kbd> turbo</p>
-        <p><kbd>F</kbd> / <kbd>Ctrl der.</kbd> disparar al objetivo más cercano</p>
+        <p><kbd>Espacio</kbd> / <kbd>F</kbd> disparar al objetivo más cercano</p>
+        <p><kbd>Shift</kbd> / <kbd>Enter</kbd> turbo</p>
       </div>
       <div class="ctrl-card" style="--pc:#4d9dff">
         <p><b>En celular:</b> el vehículo va hacia donde apuntes el joystick de la izquierda (arriba = hacia arriba de la pantalla; si apuntas hacia atrás, retrocede) y se detiene al soltarlo. Botones de <b>TURBO</b> y <b>DISPARO</b> a la derecha y pausa abajo al centro. Mejor con el teléfono en horizontal.</p>
@@ -552,9 +681,14 @@ export class Screens {
         <li>Los barriles rojos explotan: atrae a los perseguidores hacia ellos. Los incineradores queman de frente: no te quedes delante.</li>
         <li>Cada disparo que recibes rompe la mochila: pierdes $2.500 del botín.</li>
       </ul>
-      <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button></div>`,
-      { back },
-      [[['Escape', 'Enter', 'Backspace'], 'back']],
+      <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button>${
+        replay ? '<button data-action="replay">Repetir el tutorial <kbd>T</kbd></button>' : tutorial === 'pending' ? '<button disabled>El tutorial aparecerá al empezar la partida</button>' : ''
+      }</div>`,
+      { back, ...(replay ? { replay } : {}) },
+      [
+        [['Escape', 'Enter', 'Backspace'], 'back'],
+        [['KeyT'], 'replay'],
+      ],
     );
   }
 
