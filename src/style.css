@@ -382,17 +382,46 @@ kbd {
   font-size: clamp(3rem, min(13vw, 13vh), 6.5rem);
 }
 
+/* Opciones principales a lo ancho; las secundarias (.minor), en dos columnas. */
 .screen.menu .menu-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
 .screen.menu .menu-buttons button {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
   padding: 10px 16px;
   text-align: left;
   background: rgba(12, 14, 20, 0.62);
   border-color: rgba(255, 255, 255, 0.14);
   border-left: 4px solid rgba(255, 255, 255, 0.25);
   backdrop-filter: blur(3px);
+}
+
+.screen.menu .menu-buttons button small {
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.screen.menu .menu-buttons button.minor {
+  grid-column: auto;
+  padding: 8px 14px;
+  font-size: 0.92rem;
+}
+
+/* Si una opción secundaria queda sola en su fila, ocupa todo el ancho. */
+.screen.menu .menu-buttons button.minor:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 .screen.menu .menu-buttons button:hover:not(:disabled) {
@@ -493,6 +522,7 @@ kbd {
     margin-top: 12px;
   }
   .screen.menu .menu-buttons button {
+    align-items: center;
     padding: 8px 14px;
     font-size: 0.95rem;
   }

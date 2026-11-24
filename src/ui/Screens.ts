@@ -155,14 +155,14 @@ export class Screens {
       </div>
       <p class="tagline">Un golpe al Banco Central. Tres niveles de persecución. Una IA que estudia cómo manejas.</p>
       <div class="menu-buttons">
-        <button data-action="play" class="primary">JUGAR${save.campaign && save.campaign.level > 0 ? ` <small>vas en el ${campaignLabel(save.campaign.level)}</small>` : ''}</button>
-        <button data-action="select">SELECCIONAR NIVEL</button>
+        <button data-action="play" class="primary play">JUGAR${save.campaign && save.campaign.level > 0 ? ` <small>vas en el ${campaignLabel(save.campaign.level)}</small>` : ' <small>empieza el golpe</small>'}</button>
+        <button data-action="select">SELECCIONAR NIVEL <small>prólogo, niveles 1-3 e infinito</small></button>
         <button data-action="online">EN LÍNEA · 2 JUGADORES <small>código, hotspot o IP</small></button>
         <button data-action="garage">GARAJE <small>${esc(vehicleById(save.vehicles[0]).name)}</small></button>
-        <button data-action="controls">CONTROLES</button>
-        <button data-action="stats">PERFIL DE LA IA Y ESTADÍSTICAS</button>
-        ${a.install ? '<button data-action="install">INSTALAR <small>jugar sin internet</small></button>' : ''}
-        <button data-action="sound">SONIDO <small>${save.muted ? '(silenciado)' : `general ${Math.round(save.volumes.master * 100)}% · música ${save.musicOn ? `${Math.round(save.volumes.music * 100)}%` : 'apagada'}`}</small></button>
+        <button data-action="controls" class="minor">CONTROLES <small>teclado y táctil</small></button>
+        <button data-action="stats" class="minor">PERFIL DE LA IA <small>y estadísticas</small></button>
+        ${a.install ? '<button data-action="install" class="minor">INSTALAR <small>jugar sin internet</small></button>' : ''}
+        <button data-action="sound" class="minor">SONIDO <small>${save.muted ? 'silenciado' : `general ${Math.round(save.volumes.master * 100)}% · música ${save.musicOn ? `${Math.round(save.volumes.music * 100)}%` : 'apagada'}`}</small></button>
       </div>
       <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)} · Récord infinito: ${(save.bestEndless / 1000).toFixed(2)} km</div>`,
       a,
