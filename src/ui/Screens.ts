@@ -185,12 +185,12 @@ export class Screens {
       `<h2>Jugar</h2>
       <div class="play-choice">
         <button data-action="resume" class="primary">
-          CONTINUAR <kbd>1</kbd>
+          CONTINUAR
           <small>${campaignLabel(campaign.level)} · ${esc(LEVEL_NAMES[campaign.level] ?? '')}</small>
           <small>Botín ${formatMoney(campaign.cash)} · ${Math.round(campaign.score).toLocaleString('es-CO')} pts</small>
         </button>
         <button data-action="fresh">
-          NUEVA PARTIDA <kbd>2</kbd>
+          NUEVA PARTIDA
           <small>Empieza en el prólogo, sin botín. Conservas los niveles y vehículos desbloqueados.</small>
         </button>
       </div>
