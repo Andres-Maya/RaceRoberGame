@@ -645,7 +645,8 @@ export class Screens {
     );
   }
 
-  controls(back: Action): void {
+  /** `replay`: vuelve a activar el tutorial en vivo para la próxima partida (null si ya está pendiente o es táctil). */
+  controls(back: Action, replay: Action | null): void {
     this.show(
       `<h2>Controles</h2>
       <div class="ctrl-card" style="--pc:#ff4d4d">
@@ -670,9 +671,14 @@ export class Screens {
         <li>Los barriles rojos explotan: atrae a los perseguidores hacia ellos. Los incineradores queman de frente: no te quedes delante.</li>
         <li>Cada disparo que recibes rompe la mochila: pierdes $2.500 del botín.</li>
       </ul>
-      <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button></div>`,
-      { back },
-      [[['Escape', 'Enter', 'Backspace'], 'back']],
+      <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button>${
+        replay ? '<button data-action="replay">Repetir el tutorial <kbd>T</kbd></button>' : '<button disabled>El tutorial aparecerá al empezar la partida</button>'
+      }</div>`,
+      { back, ...(replay ? { replay } : {}) },
+      [
+        [['Escape', 'Enter', 'Backspace'], 'back'],
+        [['KeyT'], 'replay'],
+      ],
     );
   }
 

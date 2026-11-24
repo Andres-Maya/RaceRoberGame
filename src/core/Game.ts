@@ -397,7 +397,7 @@ export class Game {
       select: () => this.screens.levelSelect(this.storage.data, (l) => this.startFrom(l), () => this.showMenu()),
       online: () => this.showOnline(),
       garage: () => this.showGarage(() => this.showMenu()),
-      controls: () => this.screens.controls(() => this.showMenu()),
+      controls: () => this.showControls(),
       stats: () => this.showStats(),
       sound: () => this.showSound(),
       mute: () => {
@@ -470,6 +470,19 @@ export class Game {
       const def = vehicleById(id);
       return isUnlocked(def, this.storage.data) ? def : VEHICLES[0];
     });
+  }
+
+  /** Controles; con teclado se puede volver a activar el tutorial en vivo. */
+  private showControls(): void {
+    const replay = IS_TOUCH || !this.storage.data.tutorialDone
+      ? null
+      : () => {
+          this.storage.data.tutorialDone = false;
+          this.storage.save();
+          this.audio.blip(760);
+          this.showControls();
+        };
+    this.screens.controls(() => this.showMenu(), replay);
   }
 
   private showStats(): void {
