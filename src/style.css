@@ -2119,10 +2119,11 @@ body.touch #hud-toasts {
 
 /* ------------------------------------------------------------ tutorial en vivo */
 
+/* Abajo al centro, entre las tarjetas de los jugadores, para no tapar el vehículo. */
 #tutorial {
   position: absolute;
   left: 50%;
-  bottom: 110px;
+  bottom: 14px;
   width: min(440px, calc(100vw - 32px));
   transform: translateX(-50%);
   pointer-events: none;
@@ -2147,7 +2148,7 @@ body.touch #hud-toasts {
   border-radius: 14px;
   border: 1px solid rgba(244, 208, 63, 0.45);
   border-top: 3px solid var(--gold);
-  background: rgba(10, 11, 16, 0.86);
+  background: rgba(10, 11, 16, 0.8);
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
   text-align: center;
 }
@@ -2258,10 +2259,14 @@ body.touch #hud-toasts {
   }
 }
 
-@media (max-height: 560px) {
+/* Sin espacio entre las tarjetas de los jugadores: va encima de ellas. */
+@media (max-width: 1060px) {
   #tutorial {
-    bottom: 96px;
+    bottom: 104px;
   }
+}
+
+@media (max-height: 560px) {
   .tut-title {
     font-size: 1.3rem;
     margin: 4px 0 6px;
