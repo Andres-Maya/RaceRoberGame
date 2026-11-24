@@ -474,8 +474,10 @@ export class Game {
 
   /** Controles; con teclado se puede volver a activar el tutorial en vivo. */
   private showControls(): void {
-    const replay = IS_TOUCH || !this.storage.data.tutorialDone
+    const replay = IS_TOUCH
       ? null
+      : !this.storage.data.tutorialDone
+      ? 'pending'
       : () => {
           this.storage.data.tutorialDone = false;
           this.storage.save();

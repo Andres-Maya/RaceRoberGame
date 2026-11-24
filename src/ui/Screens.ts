@@ -645,8 +645,12 @@ export class Screens {
     );
   }
 
-  /** `replay`: vuelve a activar el tutorial en vivo para la próxima partida (null si ya está pendiente o es táctil). */
-  controls(back: Action, replay: Action | null): void {
+  /**
+   * `tutorial`: 'pending' si el tutorial en vivo saldrá en la próxima partida, una acción
+   * para volver a activarlo o null si no aplica (controles táctiles).
+   */
+  controls(back: Action, tutorial: Action | 'pending' | null): void {
+    const replay = typeof tutorial === 'function' ? tutorial : null;
     this.show(
       `<h2>Controles</h2>
       <div class="ctrl-card" style="--pc:#ff4d4d">
@@ -672,7 +676,7 @@ export class Screens {
         <li>Cada disparo que recibes rompe la mochila: pierdes $2.500 del botín.</li>
       </ul>
       <div class="menu-buttons"><button data-action="back" class="primary">Volver <kbd>Esc</kbd></button>${
-        replay ? '<button data-action="replay">Repetir el tutorial <kbd>T</kbd></button>' : '<button disabled>El tutorial aparecerá al empezar la partida</button>'
+        replay ? '<button data-action="replay">Repetir el tutorial <kbd>T</kbd></button>' : tutorial === 'pending' ? '<button disabled>El tutorial aparecerá al empezar la partida</button>' : ''
       }</div>`,
       { back, ...(replay ? { replay } : {}) },
       [
