@@ -413,6 +413,33 @@ kbd {
 
 .screen.menu .logo-main {
   font-size: clamp(3rem, min(13vw, 13vh), 6.5rem);
+  animation: logo-glow 3.2s ease-in-out infinite alternate;
+}
+
+/* Raya dorada bajo el subtítulo del logo. */
+.screen.menu .logo-sub::after {
+  content: '';
+  display: block;
+  width: 72px;
+  height: 3px;
+  margin-top: 10px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--gold), var(--red));
+}
+
+@keyframes logo-glow {
+  from {
+    text-shadow: 0 6px 0 #6b3a00, 0 0 30px rgba(244, 208, 63, 0.25);
+  }
+  to {
+    text-shadow: 0 6px 0 #6b3a00, 0 0 52px rgba(244, 208, 63, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.menu .logo-main {
+    animation: none;
+  }
 }
 
 /* Opciones principales a lo ancho; las secundarias (.minor), en dos columnas. */
@@ -634,6 +661,9 @@ kbd {
   .screen.menu .logo-sub {
     font-size: 0.7rem;
     letter-spacing: 0.16em;
+  }
+  .screen.menu .logo-sub::after {
+    margin: 8px auto 0;
   }
   .screen.menu .menu-buttons {
     gap: 6px;
