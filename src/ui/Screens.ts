@@ -155,14 +155,14 @@ export class Screens {
       </div>
       <p class="tagline">Un golpe al Banco Central. Tres niveles de persecución. Una IA que estudia cómo manejas.</p>
       <div class="menu-buttons">
-        <button data-action="play" class="primary">JUGAR <kbd>1</kbd>${save.campaign && save.campaign.level > 0 ? ` <small>vas en el ${campaignLabel(save.campaign.level)}</small>` : ''}</button>
-        <button data-action="select">SELECCIONAR NIVEL <kbd>2</kbd></button>
-        <button data-action="online">EN LÍNEA · 2 JUGADORES <kbd>5</kbd> <small>código, hotspot o IP</small></button>
-        <button data-action="garage">GARAJE <kbd>3</kbd> <small>${esc(vehicleById(save.vehicles[0]).name)}</small></button>
+        <button data-action="play" class="primary">JUGAR${save.campaign && save.campaign.level > 0 ? ` <small>vas en el ${campaignLabel(save.campaign.level)}</small>` : ''}</button>
+        <button data-action="select">SELECCIONAR NIVEL</button>
+        <button data-action="online">EN LÍNEA · 2 JUGADORES <small>código, hotspot o IP</small></button>
+        <button data-action="garage">GARAJE <small>${esc(vehicleById(save.vehicles[0]).name)}</small></button>
         <button data-action="controls">CONTROLES</button>
         <button data-action="stats">PERFIL DE LA IA Y ESTADÍSTICAS</button>
         ${a.install ? '<button data-action="install">INSTALAR <small>jugar sin internet</small></button>' : ''}
-        <button data-action="sound">SONIDO <kbd>4</kbd> <small>${save.muted ? '(silenciado)' : `general ${Math.round(save.volumes.master * 100)}% · música ${save.musicOn ? `${Math.round(save.volumes.music * 100)}%` : 'apagada'}`}</small></button>
+        <button data-action="sound">SONIDO <small>${save.muted ? '(silenciado)' : `general ${Math.round(save.volumes.master * 100)}% · música ${save.musicOn ? `${Math.round(save.volumes.music * 100)}%` : 'apagada'}`}</small></button>
       </div>
       <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)} · Récord infinito: ${(save.bestEndless / 1000).toFixed(2)} km</div>`,
       a,
