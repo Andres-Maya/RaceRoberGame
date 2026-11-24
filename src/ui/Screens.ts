@@ -164,7 +164,11 @@ export class Screens {
         ${a.install ? '<button data-action="install" class="minor">INSTALAR <small>jugar sin internet</small></button>' : ''}
         <button data-action="sound" class="minor">SONIDO <small>${save.muted ? 'silenciado' : `general ${Math.round(save.volumes.master * 100)}% · música ${save.musicOn ? `${Math.round(save.volumes.music * 100)}%` : 'apagada'}`}</small></button>
       </div>
-      <div class="footer">Mejor puntaje: ${save.bestScore.toLocaleString('es-CO')} · Botín récord: ${formatMoney(save.bestCash)} · Récord infinito: ${(save.bestEndless / 1000).toFixed(2)} km</div>`,
+      <div class="footer menu-records">
+        <div><b>${save.bestScore.toLocaleString('es-CO')}</b><span>mejor puntaje</span></div>
+        <div><b>${formatMoney(save.bestCash)}</b><span>botín récord</span></div>
+        <div><b>${(save.bestEndless / 1000).toFixed(2)} km</b><span>récord infinito</span></div>
+      </div>`,
       a,
       [
         [['Digit1', 'Numpad1', 'Enter'], 'play'],

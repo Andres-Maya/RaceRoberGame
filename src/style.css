@@ -378,6 +378,39 @@ kbd {
   font-size: 0.85rem;
 }
 
+/* Récords del pie del menú: tres tarjetas pequeñas. */
+.menu-records {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.menu-records div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 14, 20, 0.55);
+}
+
+.menu-records b {
+  font: 1rem var(--display);
+  letter-spacing: 0.04em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-records span {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .screen.menu .logo-main {
   font-size: clamp(3rem, min(13vw, 13vh), 6.5rem);
 }
@@ -566,7 +599,15 @@ kbd {
     margin-top: 14px;
   }
   .screen.menu .menu-buttons button {
-    padding: 8px 14px;
+    padding: 8px 34px 8px 14px;
+  }
+  .screen.menu .menu-buttons button.play {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    font-size: 1.25rem;
+  }
+  .screen.menu .menu-records b {
+    font-size: 0.9rem;
   }
 }
 
@@ -600,8 +641,11 @@ kbd {
   }
   .screen.menu .menu-buttons button {
     align-items: center;
-    padding: 8px 14px;
+    padding: 8px 28px;
     font-size: 0.95rem;
+  }
+  .screen.menu .menu-buttons button.play {
+    font-size: 1.2rem;
   }
 }
 
