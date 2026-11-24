@@ -378,15 +378,84 @@ kbd {
   font-size: 0.85rem;
 }
 
-.screen.menu .logo-main {
-  font-size: clamp(3rem, min(13vw, 13vh), 6.5rem);
+/* Récords del pie del menú: tres tarjetas pequeñas. */
+.menu-records {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
+.menu-records div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 14, 20, 0.55);
+}
+
+.menu-records b {
+  font: 1rem var(--display);
+  letter-spacing: 0.04em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-records span {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.screen.menu .logo-main {
+  font-size: clamp(3rem, min(13vw, 13vh), 6.5rem);
+  animation: logo-glow 3.2s ease-in-out infinite alternate;
+}
+
+/* Raya dorada bajo el subtítulo del logo. */
+.screen.menu .logo-sub::after {
+  content: '';
+  display: block;
+  width: 72px;
+  height: 3px;
+  margin-top: 10px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--gold), var(--red));
+}
+
+@keyframes logo-glow {
+  from {
+    text-shadow: 0 6px 0 #6b3a00, 0 0 30px rgba(244, 208, 63, 0.25);
+  }
+  to {
+    text-shadow: 0 6px 0 #6b3a00, 0 0 52px rgba(244, 208, 63, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.menu .logo-main {
+    animation: none;
+  }
+}
+
+/* Opciones principales a lo ancho; las secundarias (.minor), en dos columnas. */
 .screen.menu .menu-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
 .screen.menu .menu-buttons button {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
   padding: 10px 16px;
   text-align: left;
   background: rgba(12, 14, 20, 0.62);
@@ -395,15 +464,112 @@ kbd {
   backdrop-filter: blur(3px);
 }
 
+.screen.menu .menu-buttons button small {
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.screen.menu .menu-buttons button.minor {
+  grid-column: auto;
+  padding: 8px 14px;
+  font-size: 0.92rem;
+}
+
+/* Si una opción secundaria queda sola en su fila, ocupa todo el ancho. */
+.screen.menu .menu-buttons button.minor:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.screen.menu .menu-buttons button {
+  position: relative;
+  overflow: hidden;
+  padding-right: 34px;
+  transition: transform 0.12s ease-out, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+/* Flecha a la derecha que aparece en la opción resaltada. */
+.screen.menu .menu-buttons button::after {
+  content: '›';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  font: 1.5rem var(--display);
+  line-height: 1;
+  color: var(--gold);
+  opacity: 0;
+  transform: translate(-8px, -50%);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
 .screen.menu .menu-buttons button:hover:not(:disabled) {
+  background: rgba(30, 32, 42, 0.85);
   border-left-color: var(--gold);
   transform: translateX(4px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.screen.menu .menu-buttons button:hover:not(:disabled)::after {
+  opacity: 1;
+  transform: translate(0, -50%);
 }
 
 .screen.menu .menu-buttons button.primary {
   background: linear-gradient(90deg, #ffd84d, #e0a800);
   border-left-color: #fff3b0;
   color: #1a1200;
+}
+
+.screen.menu .menu-buttons button.primary::after {
+  color: #1a1200;
+}
+
+.screen.menu .menu-buttons button.primary:hover:not(:disabled) {
+  background: linear-gradient(90deg, #ffe066, #f0b800);
+  box-shadow: 0 6px 22px rgba(244, 208, 63, 0.35);
+}
+
+/* JUGAR: más grande y con un destello que lo recorre cada tanto. */
+.screen.menu .menu-buttons button.play {
+  padding-top: 13px;
+  padding-bottom: 13px;
+  font-size: 1.45rem;
+  letter-spacing: 0.1em;
+}
+
+.screen.menu .menu-buttons button.play small {
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  opacity: 0.8;
+}
+
+.screen.menu .menu-buttons button.play::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: play-shine 3.6s ease-in-out 1.2s infinite;
+  pointer-events: none;
+}
+
+@keyframes play-shine {
+  0%,
+  70% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.menu .menu-buttons button.play::before {
+    animation: none;
+  }
 }
 
 /* Entrada del menú al terminar la cinemática: el logo cae y los botones entran en cascada. */
@@ -460,7 +626,15 @@ kbd {
     margin-top: 14px;
   }
   .screen.menu .menu-buttons button {
-    padding: 8px 14px;
+    padding: 8px 34px 8px 14px;
+  }
+  .screen.menu .menu-buttons button.play {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    font-size: 1.25rem;
+  }
+  .screen.menu .menu-records b {
+    font-size: 0.9rem;
   }
 }
 
@@ -488,13 +662,20 @@ kbd {
     font-size: 0.7rem;
     letter-spacing: 0.16em;
   }
+  .screen.menu .logo-sub::after {
+    margin: 8px auto 0;
+  }
   .screen.menu .menu-buttons {
     gap: 6px;
     margin-top: 12px;
   }
   .screen.menu .menu-buttons button {
-    padding: 8px 14px;
+    align-items: center;
+    padding: 8px 28px;
     font-size: 0.95rem;
+  }
+  .screen.menu .menu-buttons button.play {
+    font-size: 1.2rem;
   }
 }
 
