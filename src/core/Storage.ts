@@ -34,6 +34,8 @@ export interface SaveData {
   totals: { wrecks: number; jumps: number };
   /** Campaña en curso: nivel por jugar, botín y puntaje acumulados (JUGAR continúa desde aquí). */
   campaign: SavedCampaign | null;
+  /** Ya completó (o saltó) el tutorial en vivo de los controles. */
+  tutorialDone: boolean;
 }
 
 export interface SavedCampaign {
@@ -57,6 +59,7 @@ const defaults = (): SaveData => ({
   vehicles: ['cacharro', 'cacharro'],
   totals: { wrecks: 0, jumps: 0 },
   campaign: null,
+  tutorialDone: false,
 });
 
 export class Storage {
