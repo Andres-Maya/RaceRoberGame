@@ -505,14 +505,16 @@ kbd {
   transition: opacity 0.15s, transform 0.15s;
 }
 
-.screen.menu .menu-buttons button:hover:not(:disabled) {
+.screen.menu .menu-buttons button:hover:not(:disabled),
+.screen.menu .menu-buttons button.nav-on {
   background: rgba(30, 32, 42, 0.85);
   border-left-color: var(--gold);
   transform: translateX(4px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
-.screen.menu .menu-buttons button:hover:not(:disabled)::after {
+.screen.menu .menu-buttons button:hover:not(:disabled)::after,
+.screen.menu .menu-buttons button.nav-on::after {
   opacity: 1;
   transform: translate(0, -50%);
 }
@@ -527,7 +529,8 @@ kbd {
   color: #1a1200;
 }
 
-.screen.menu .menu-buttons button.primary:hover:not(:disabled) {
+.screen.menu .menu-buttons button.primary:hover:not(:disabled),
+.screen.menu .menu-buttons button.primary.nav-on {
   background: linear-gradient(90deg, #ffe066, #f0b800);
   box-shadow: 0 6px 22px rgba(244, 208, 63, 0.35);
 }
@@ -807,6 +810,24 @@ button:hover:not(:disabled) {
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Opción resaltada con el teclado en el resto de pantallas: borde dorado que late suave. */
+.screen:not(.menu) button.nav-on {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+  animation: nav-ring 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes nav-ring {
+  to {
+    outline-color: rgba(244, 208, 63, 0.45);
+  }
+}
+
+button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
 }
 
 button.primary {
